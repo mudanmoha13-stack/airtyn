@@ -114,18 +114,8 @@ const MODULE_TABS: Record<BusinessModuleKey, ModuleTab[]> = {
     {
       id: 'normal-sales',
       label: 'Normal Sales',
-      sectionIds: ['sales-quotations', 'crm-workbench', 'subscriptions-hub', 'sales-pricing', 'sales-credit', 'operations'],
+      sectionIds: ['crm-workbench', 'sales-quotations', 'subscriptions-hub', 'sales-pricing', 'sales-credit', 'operations'],
       default: true,
-    },
-    {
-      id: 'crm',
-      label: 'CRM',
-      sectionIds: ['crm-workbench'],
-    },
-    {
-      id: 'subscriptions',
-      label: 'Subscriptions',
-      sectionIds: ['subscriptions-hub'],
     },
     {
       id: 'pos-sales',

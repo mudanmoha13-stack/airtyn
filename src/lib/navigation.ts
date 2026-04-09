@@ -97,8 +97,7 @@ export const BUSINESS_OVERVIEW_ITEMS: NavItemConfig[] = [
 ];
 
 export const BUSINESS_COMMERCIAL_ITEMS: NavItemConfig[] = [
-  { icon: TrendingUp, label: 'CRM', href: '/business/crm', group: 'Commercial' },
-  { icon: ShoppingCart, label: 'Sales', href: '/business/sales', group: 'Commercial' },
+  { icon: ShoppingCart, label: 'Sales & CRM', href: '/business/sales', group: 'Commercial' },
   { icon: Headset, label: 'Support', href: '/business/support', group: 'Commercial' },
   { icon: BarChart3, label: 'Analytics', href: '/business/analytics', group: 'Commercial' },
 ];
@@ -117,7 +116,6 @@ export const BUSINESS_FINANCE_ITEMS: NavItemConfig[] = [
 
 export const BUSINESS_BOTTOM_NAV_ITEMS: NavItemConfig[] = [
   { href: '/business', label: 'HQ', icon: Building2, group: 'Overview' },
-  { href: '/business/crm', label: 'CRM', icon: TrendingUp, group: 'Commercial' },
   { href: '/business/sales', label: 'Sales', icon: ShoppingCart, group: 'Commercial' },
   { href: '/business/finance', label: 'Accounting', icon: CircleDollarSign, group: 'Finance' },
   { href: '/business/inventory', label: 'Stock', icon: Package2, group: 'Operations' },

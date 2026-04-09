@@ -63,6 +63,30 @@ type CreditProfile = {
   used: number;
 };
 
+type CrmOpportunity = {
+  id: string;
+  title: string;
+  customer: string;
+  ownerId: string;
+  ownerName: string;
+  email: string;
+  value: number;
+  stage: 'draft' | 'open' | 'settled';
+  nextFollowUp: string;
+};
+
+type SubscriptionRecord = {
+  id: string;
+  customer: string;
+  plan: string;
+  ownerId: string;
+  ownerName: string;
+  amount: number;
+  cycle: 'monthly' | 'quarterly' | 'yearly';
+  status: 'active' | 'trial' | 'paused' | 'churned';
+  renewalDate: string;
+};
+
 type PaymentSplit = {
   id: string;
   method: 'cash' | 'card' | 'wallet' | 'bank';
@@ -98,6 +122,8 @@ type OfflineSale = {
   }>;
 };
 
+type CompanyNature = 'b2b_services' | 'retail_shop' | 'restaurant' | 'rental_business' | 'mixed';
+
 const CURRENCY_SYMBOL: Record<string, string> = {
   USD: '$',
   EUR: 'EUR ',
@@ -107,6 +133,29 @@ const CURRENCY_SYMBOL: Record<string, string> = {
 };
 
 const SALES_FLOW: Array<'draft' | 'open' | 'settled' | 'closed' | 'canceled'> = ['draft', 'open', 'settled', 'closed', 'canceled'];
+
+const COMPANY_TOOLKIT: Record<CompanyNature, { label: string; tools: string[] }> = {
+  b2b_services: {
+    label: 'B2B Services',
+    tools: ['CRM pipeline', 'Quotations to invoice', 'Subscriptions', 'Renewal management', 'MRR dashboard'],
+  },
+  retail_shop: {
+    label: 'Retail Shop',
+    tools: ['POS Shop', 'Barcode scanning', 'Pricelists', 'Discount rules', 'Offline mode'],
+  },
+  restaurant: {
+    label: 'Restaurant',
+    tools: ['POS Restaurant', 'Table management', 'Kitchen display flow', 'Split bills & tips'],
+  },
+  rental_business: {
+    label: 'Rental Business',
+    tools: ['Rental contracts', 'Delivery tracking', 'Return tracking', 'Availability calendar'],
+  },
+  mixed: {
+    label: 'Mixed Model',
+    tools: ['Normal Sales', 'POS Shop', 'Subscriptions', 'Rental desk', 'Omnichannel stock'],
+  },
+};
 
 export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
@@ -141,6 +190,45 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const [splitPayments, setSplitPayments] = useState<PaymentSplit[]>([{ id: 'p1', method: 'cash', amount: 0 }]);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [companyNature, setCompanyNature] = useState<CompanyNature>('mixed');
+
+  const [restaurantTable, setRestaurantTable] = useState('T-01');
+  const [restaurantGuests, setRestaurantGuests] = useState('2');
+  const [restaurantTips, setRestaurantTips] = useState('0');
+
+  const [rentalProduct, setRentalProduct] = useState('');
+  const [rentalCustomer, setRentalCustomer] = useState('');
+  const [rentalStart, setRentalStart] = useState('');
+  const [rentalEnd, setRentalEnd] = useState('');
+  const [rentalContracts, setRentalContracts] = useState<Array<{ id: string; product: string; customer: string; start: string; end: string; status: string }>>([]);
+
+  const [quoteEmployeeId, setQuoteEmployeeId] = useState('');
+  const [quoteProductId, setQuoteProductId] = useState('');
+  const [quoteQty, setQuoteQty] = useState('1');
+  const [quotePrice, setQuotePrice] = useState('0');
+
+  const [crmOpportunities, setCrmOpportunities] = useState<CrmOpportunity[]>([]);
+  const [crmTitle, setCrmTitle] = useState('');
+  const [crmCustomer, setCrmCustomer] = useState('');
+  const [crmOwnerId, setCrmOwnerId] = useState('');
+  const [crmEmail, setCrmEmail] = useState('');
+  const [crmValue, setCrmValue] = useState('0');
+  const [crmFollowUp, setCrmFollowUp] = useState('');
+  const [crmStageFilter, setCrmStageFilter] = useState<'all' | 'draft' | 'open' | 'settled'>('all');
+
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
+  const [subscriptionCustomer, setSubscriptionCustomer] = useState('');
+  const [subscriptionPlan, setSubscriptionPlan] = useState('');
+  const [subscriptionOwnerId, setSubscriptionOwnerId] = useState('');
+  const [subscriptionAmount, setSubscriptionAmount] = useState('0');
+  const [subscriptionCycle, setSubscriptionCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [subscriptionRenewalDate, setSubscriptionRenewalDate] = useState('');
+  const [subscriptionFilter, setSubscriptionFilter] = useState<'all' | 'active' | 'trial' | 'paused' | 'churned'>('all');
+
+  const [pricingBaseAmount, setPricingBaseAmount] = useState('100');
+  const [selectedPricingRuleId, setSelectedPricingRuleId] = useState('');
+
+  const [selectedCreditId, setSelectedCreditId] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -191,9 +279,20 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
       }
 
       if (typeof window !== 'undefined') {
+        const natureRaw = window.localStorage.getItem('pinkplan:sales:company-nature');
         const rulesRaw = window.localStorage.getItem('pinkplan:sales:pricing-rules');
         const creditsRaw = window.localStorage.getItem('pinkplan:sales:credits');
         const queueRaw = window.localStorage.getItem('pinkplan:sales:offline-queue');
+
+        if (
+          natureRaw === 'b2b_services' ||
+          natureRaw === 'retail_shop' ||
+          natureRaw === 'restaurant' ||
+          natureRaw === 'rental_business' ||
+          natureRaw === 'mixed'
+        ) {
+          setCompanyNature(natureRaw);
+        }
 
         if (rulesRaw) setPricingRules(JSON.parse(rulesRaw) as PricingRule[]);
         else {
@@ -212,6 +311,30 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
         }
 
         if (queueRaw) setOfflineQueue(JSON.parse(queueRaw) as OfflineSale[]);
+
+        const crmRaw = window.localStorage.getItem('pinkplan:sales:crm-opportunities');
+        if (crmRaw) {
+          setCrmOpportunities(JSON.parse(crmRaw) as CrmOpportunity[]);
+        }
+
+        const subscriptionsRaw = window.localStorage.getItem('pinkplan:sales:subscriptions');
+        if (subscriptionsRaw) {
+          setSubscriptions(JSON.parse(subscriptionsRaw) as SubscriptionRecord[]);
+        } else {
+          setSubscriptions([
+            {
+              id: 'sub-seed-1',
+              customer: 'Northwind B2B',
+              plan: 'Growth',
+              ownerId: 'seed-owner-1',
+              ownerName: 'Account Team',
+              amount: 299,
+              cycle: 'monthly',
+              status: 'active',
+              renewalDate: new Date().toISOString().slice(0, 10),
+            },
+          ]);
+        }
       }
     };
 
@@ -236,6 +359,21 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('pinkplan:sales:offline-queue', JSON.stringify(offlineQueue));
   }, [offlineQueue]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('pinkplan:sales:company-nature', companyNature);
+  }, [companyNature]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('pinkplan:sales:crm-opportunities', JSON.stringify(crmOpportunities));
+  }, [crmOpportunities]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('pinkplan:sales:subscriptions', JSON.stringify(subscriptions));
+  }, [subscriptions]);
 
   useEffect(() => {
     if (!selectedProductId) return;
@@ -285,6 +423,124 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
       };
     });
   }, [employees, rows]);
+
+  const draftOrders = useMemo(() => rows.filter((row) => row.status === 'draft'), [rows]);
+  const openOrders = useMemo(() => rows.filter((row) => row.status === 'open'), [rows]);
+  const settledOrders = useMemo(() => rows.filter((row) => row.status === 'settled'), [rows]);
+
+  const crmDraftCount = useMemo(() => crmOpportunities.filter((item) => item.stage === 'draft').length, [crmOpportunities]);
+  const crmOpenCount = useMemo(() => crmOpportunities.filter((item) => item.stage === 'open').length, [crmOpportunities]);
+  const crmSettledCount = useMemo(() => crmOpportunities.filter((item) => item.stage === 'settled').length, [crmOpportunities]);
+
+  const crmForecast = useMemo(() => crmOpportunities.reduce((sum, item) => {
+    const weight = item.stage === 'settled' ? 1 : item.stage === 'open' ? 0.65 : 0.3;
+    return sum + (item.value * weight);
+  }, 0), [crmOpportunities]);
+
+  const dueFollowUps = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return crmOpportunities.filter((item) => item.nextFollowUp && item.nextFollowUp <= today);
+  }, [crmOpportunities]);
+
+  const visibleCrmOpportunities = useMemo(() => {
+    if (crmStageFilter === 'all') return crmOpportunities;
+    return crmOpportunities.filter((item) => item.stage === crmStageFilter);
+  }, [crmOpportunities, crmStageFilter]);
+
+  const toolkit = COMPANY_TOOLKIT[companyNature];
+
+  const activeSubscriptions = useMemo(
+    () => subscriptions.filter((item) => item.status === 'active').length,
+    [subscriptions]
+  );
+
+  const estimatedMrr = useMemo(
+    () => subscriptions
+      .filter((item) => item.status === 'active' || item.status === 'trial')
+      .reduce((sum, item) => {
+        const monthlyValue = item.cycle === 'monthly' ? item.amount : item.cycle === 'quarterly' ? item.amount / 3 : item.amount / 12;
+        return sum + monthlyValue;
+      }, 0),
+    [subscriptions]
+  );
+
+  const renewalsDueThisCycle = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    return subscriptions.filter((item) => {
+      if (item.status !== 'active' && item.status !== 'trial') return false;
+      if (!item.renewalDate) return false;
+      const renewal = new Date(item.renewalDate);
+      return renewal.getFullYear() === year && renewal.getMonth() === month;
+    }).length;
+  }, [subscriptions]);
+
+  const churnRate = useMemo(() => {
+    if (subscriptions.length === 0) return 0;
+    const churned = subscriptions.filter((item) => item.status === 'churned').length;
+    return Math.round((churned / subscriptions.length) * 100);
+  }, [subscriptions]);
+
+  const visibleSubscriptions = useMemo(() => {
+    if (subscriptionFilter === 'all') return subscriptions;
+    return subscriptions.filter((item) => item.status === subscriptionFilter);
+  }, [subscriptions, subscriptionFilter]);
+
+  const selectedPricingRule = useMemo(
+    () => pricingRules.find((rule) => rule.id === selectedPricingRuleId) ?? pricingRules[0] ?? null,
+    [pricingRules, selectedPricingRuleId]
+  );
+
+  const pricingPreview = useMemo(() => {
+    const base = Number(pricingBaseAmount);
+    if (Number.isNaN(base) || base < 0) return { base: 0, effect: 0, final: 0 };
+    const rule = selectedPricingRule;
+    if (!rule) return { base, effect: 0, final: base };
+    const effect = (base * rule.value) / 100;
+    return { base, effect, final: Math.max(base - effect, 0) };
+  }, [pricingBaseAmount, selectedPricingRule]);
+
+  const selectedCreditProfile = useMemo(
+    () => credits.find((profile) => profile.id === selectedCreditId) ?? null,
+    [credits, selectedCreditId]
+  );
+
+  const selectedCreditAvailable = selectedCreditProfile ? Math.max(selectedCreditProfile.limit - selectedCreditProfile.used, 0) : 0;
+
+  const nextConfirmationAmount = useMemo(() => {
+    const next = draftOrders[0];
+    return next ? next.total : 0;
+  }, [draftOrders]);
+
+  const confirmationAllowed = selectedCreditProfile ? selectedCreditAvailable >= nextConfirmationAmount : false;
+
+  const bookedRevenue = useMemo(() => settledOrders.reduce((sum, row) => sum + row.total, 0), [settledOrders]);
+
+  const conversionRate = useMemo(() => {
+    const created = draftOrders.length + openOrders.length + settledOrders.length;
+    if (created === 0) return 0;
+    return Math.round((settledOrders.length / created) * 100);
+  }, [draftOrders.length, openOrders.length, settledOrders.length]);
+
+  const averageOrderValue = useMemo(() => {
+    if (rows.length === 0) return 0;
+    return rows.reduce((sum, row) => sum + row.total, 0) / rows.length;
+  }, [rows]);
+
+  const scrollToSection = (sectionId: string) => {
+    if (typeof window === 'undefined') return;
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const openOperationsView = (filter: string) => {
+    setStatusFilter(filter);
+    scrollToSection('operations');
+  };
 
   const addPricingRule = () => {
     const value = Number(ruleValue);
@@ -432,6 +688,50 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     return response.ok;
   };
 
+  const refreshOrders = async () => {
+    const refresh = await fetch('/api/business/sales/orders', { cache: 'no-store' });
+    const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
+    if (data.ok && data.orders) {
+      setRows(data.orders);
+    }
+  };
+
+  const createQuotation = async () => {
+    const qty = Number(quoteQty);
+    const price = Number(quotePrice);
+    if (!quoteEmployeeId || !quoteProductId || Number.isNaN(qty) || qty <= 0 || Number.isNaN(price) || price < 0) return;
+
+    const response = await fetch('/api/business/sales/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employeeId: quoteEmployeeId,
+        currency,
+        channel: 'ecommerce',
+        status: 'draft',
+        lines: [{ productId: quoteProductId, quantity: qty, unitPrice: price }],
+        payments: [],
+      }),
+    });
+
+    if (response.ok) {
+      await refreshOrders();
+      setQuoteQty('1');
+    }
+  };
+
+  const updateOrderStatus = async (id: string, status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled') => {
+    const response = await fetch('/api/business/sales/orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    });
+
+    if (response.ok) {
+      await refreshOrders();
+    }
+  };
+
   const checkout = async () => {
     if (cart.length === 0 || posTotal <= 0 || !selectedEmployeeId) return;
 
@@ -457,11 +757,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     } else {
       const saved = await persistSale(sale);
       if (saved) {
-        const refresh = await fetch('/api/business/sales/orders', { cache: 'no-store' });
-        const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
-        if (data.ok && data.orders) {
-          setRows(data.orders);
-        }
+        await refreshOrders();
       } else {
         setOfflineQueue((prev) => [sale, ...prev]);
       }
@@ -493,16 +789,481 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     }
 
     setOfflineQueue(stillQueued);
+    await refreshOrders();
+  };
 
-    const refresh = await fetch('/api/business/sales/orders', { cache: 'no-store' });
-    const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
-    if (data.ok && data.orders) {
-      setRows(data.orders);
-    }
+  const addRentalContract = () => {
+    if (!rentalProduct.trim() || !rentalCustomer.trim() || !rentalStart || !rentalEnd) return;
+
+    const next = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      product: rentalProduct.trim(),
+      customer: rentalCustomer.trim(),
+      start: rentalStart,
+      end: rentalEnd,
+      status: 'reserved',
+    };
+
+    setRentalContracts((prev) => [next, ...prev]);
+    setRentalProduct('');
+    setRentalCustomer('');
+    setRentalStart('');
+    setRentalEnd('');
+  };
+
+  const addCrmOpportunity = () => {
+    const parsedValue = Number(crmValue);
+    if (!crmTitle.trim() || !crmCustomer.trim() || !crmOwnerId || Number.isNaN(parsedValue) || parsedValue <= 0) return;
+    const owner = employees.find((employee) => employee.id === crmOwnerId);
+    if (!owner) return;
+
+    const next: CrmOpportunity = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      title: crmTitle.trim(),
+      customer: crmCustomer.trim(),
+      ownerId: owner.id,
+      ownerName: owner.name,
+      email: crmEmail.trim(),
+      value: parsedValue,
+      stage: 'draft',
+      nextFollowUp: crmFollowUp,
+    };
+
+    setCrmOpportunities((prev) => [next, ...prev]);
+    setCrmTitle('');
+    setCrmCustomer('');
+    setCrmOwnerId('');
+    setCrmEmail('');
+    setCrmValue('0');
+    setCrmFollowUp('');
+  };
+
+  const advanceCrmOpportunity = (id: string) => {
+    setCrmOpportunities((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      const nextStage = item.stage === 'draft' ? 'open' : item.stage === 'open' ? 'settled' : 'draft';
+      return { ...item, stage: nextStage };
+    }));
+  };
+
+  const runFollowUpAutomation = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setCrmOpportunities((prev) => prev.map((item) => {
+      if (!item.nextFollowUp || item.nextFollowUp > today) return item;
+      const nextDate = new Date(item.nextFollowUp);
+      nextDate.setDate(nextDate.getDate() + 7);
+      const nextFollowUp = nextDate.toISOString().slice(0, 10);
+      return { ...item, nextFollowUp };
+    }));
+  };
+
+  const addSubscription = () => {
+    const parsedAmount = Number(subscriptionAmount);
+    if (!subscriptionCustomer.trim() || !subscriptionPlan.trim() || !subscriptionOwnerId || Number.isNaN(parsedAmount) || parsedAmount <= 0) return;
+    const owner = employees.find((employee) => employee.id === subscriptionOwnerId);
+    if (!owner) return;
+
+    const next: SubscriptionRecord = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      customer: subscriptionCustomer.trim(),
+      plan: subscriptionPlan.trim(),
+      ownerId: owner.id,
+      ownerName: owner.name,
+      amount: parsedAmount,
+      cycle: subscriptionCycle,
+      status: 'active',
+      renewalDate: subscriptionRenewalDate,
+    };
+
+    setSubscriptions((prev) => [next, ...prev]);
+    setSubscriptionCustomer('');
+    setSubscriptionPlan('');
+    setSubscriptionOwnerId('');
+    setSubscriptionAmount('0');
+    setSubscriptionCycle('monthly');
+    setSubscriptionRenewalDate('');
+  };
+
+  const cycleSubscriptionStatus = (id: string) => {
+    setSubscriptions((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      const nextStatus = item.status === 'active' ? 'paused' : item.status === 'paused' ? 'churned' : item.status === 'churned' ? 'trial' : 'active';
+      return { ...item, status: nextStatus };
+    }));
+  };
+
+  const renewSubscription = (id: string) => {
+    setSubscriptions((prev) => prev.map((item) => {
+      if (item.id !== id || !item.renewalDate) return item;
+      const nextDate = new Date(item.renewalDate);
+      if (item.cycle === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
+      if (item.cycle === 'quarterly') nextDate.setMonth(nextDate.getMonth() + 3);
+      if (item.cycle === 'yearly') nextDate.setFullYear(nextDate.getFullYear() + 1);
+      return {
+        ...item,
+        status: item.status === 'churned' ? 'active' : item.status,
+        renewalDate: nextDate.toISOString().slice(0, 10),
+      };
+    }));
   };
 
   return (
     <>
+      <Card className="glass-card border-white/5">
+        <CardHeader>
+          <CardTitle>Sales Setup by Company Type</CardTitle>
+          <CardDescription>Configure tenant business nature so teams get the right sales tools and workflow focus.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <select
+              value={companyNature}
+              onChange={(event) => setCompanyNature(event.target.value as CompanyNature)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="mixed">Mixed model</option>
+              <option value="b2b_services">B2B services</option>
+              <option value="retail_shop">Retail shop</option>
+              <option value="restaurant">Restaurant</option>
+              <option value="rental_business">Rental business</option>
+            </select>
+            <div className="md:col-span-2 flex items-center rounded-xl border border-white/5 bg-card/40 px-3 py-2 text-sm text-muted-foreground">
+              Active toolkit: {toolkit.label}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {toolkit.tools.map((tool) => (
+              <Badge key={tool} variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                {tool}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-12">
+        <Card id="sales-quotations" className="glass-card border-white/5 xl:col-span-7 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Sales</CardTitle>
+            <CardDescription>Quotations to invoices, pricelists, discount rules, order confirmations, and sales analytics.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p className="text-xs uppercase tracking-[0.14em] text-primary">1. Sales Workflow</p>
+            <div className="grid gap-2">
+              <select
+                value={quoteEmployeeId}
+                onChange={(event) => setQuoteEmployeeId(event.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select employee</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
+              </select>
+              <select
+                value={quoteProductId}
+                onChange={(event) => {
+                  setQuoteProductId(event.target.value);
+                  const product = products.find((item) => item.id === event.target.value);
+                  if (product) setQuotePrice(String(product.basePrice));
+                }}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select product</option>
+                {products.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+              <div className="grid gap-2 md:grid-cols-2">
+                <Input placeholder="Qty" value={quoteQty} onChange={(event) => setQuoteQty(event.target.value)} />
+                <Input placeholder="Unit price" value={quotePrice} onChange={(event) => setQuotePrice(event.target.value)} />
+              </div>
+              <Button className="gradient-amber text-black font-semibold" onClick={createQuotation}>Create Quotation</Button>
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+              <p className="text-xs uppercase tracking-[0.14em] text-primary">1.1 Core Tasks</p>
+              <div className="mt-2 grid gap-2 md:grid-cols-3">
+                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('draft')}>
+                  Draft quotations: {draftOrders.length}
+                </Button>
+                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
+                  Open confirmations: {openOrders.length}
+                </Button>
+                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
+                  Settled invoices: {settledOrders.length}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {draftOrders.slice(0, 2).map((order) => (
+                <div key={order.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                  <p className="text-xs text-foreground">{order.orderNo} • {order.employeeName}</p>
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'open')}>
+                      Confirm Order
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'settled')}>
+                      Convert to Invoice
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {draftOrders.length === 0 ? (
+                <div className="flex items-center justify-between rounded-lg border border-dashed border-white/10 bg-card/30 p-2">
+                  <p className="text-xs">No draft quotations available.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white/10 bg-card/40"
+                    onClick={() => {
+                      scrollToSection('sales-quotations');
+                    }}
+                  >
+                    Start New Quote
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
+            <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">2. Pricing & Discounts</p>
+            <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+              <div className="grid gap-2 md:grid-cols-2">
+                <Input placeholder="Base amount" value={pricingBaseAmount} onChange={(event) => setPricingBaseAmount(event.target.value)} />
+                <select
+                  value={selectedPricingRuleId}
+                  onChange={(event) => setSelectedPricingRuleId(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Auto best rule</option>
+                  {pricingRules.map((rule) => (
+                    <option key={rule.id} value={rule.id}>{rule.name} ({rule.value}%)</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedPricingRule ? `${selectedPricingRule.name}: -${pricingPreview.effect.toFixed(2)}` : 'No pricing rule selected'} | Final: {pricingPreview.final.toFixed(2)}
+              </p>
+              <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-pricing')}>
+                Open Pricing Rules
+              </Button>
+            </div>
+
+            <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">3. Credit Management</p>
+            <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+              <select
+                value={selectedCreditId}
+                onChange={(event) => setSelectedCreditId(event.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select customer profile</option>
+                {credits.map((profile) => (
+                  <option key={profile.id} value={profile.id}>{profile.customer}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Required for next confirmation: {nextConfirmationAmount.toFixed(2)} | Available credit: {selectedCreditAvailable.toFixed(2)}
+              </p>
+              <Badge
+                variant="outline"
+                className={confirmationAllowed ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}
+              >
+                {confirmationAllowed ? 'Confirmation allowed' : 'Confirmation gated by credit'}
+              </Badge>
+              <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-credit')}>
+                Open Customer Credit
+              </Button>
+            </div>
+
+            <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">4. Sales Operations & Analytics</p>
+            <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+              <p className="text-xs text-muted-foreground">Booked revenue: {bookedRevenue.toFixed(2)} | Avg order: {averageOrderValue.toFixed(2)} | Conversion: {conversionRate}%</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('all')}>
+                  Open Feed
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
+                  View Open Orders
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
+                  View Settled Orders
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4 xl:col-span-5">
+          <Card id="crm-workbench" className="glass-card border-white/5 scroll-mt-24">
+            <CardHeader>
+              <CardTitle>CRM</CardTitle>
+              <CardDescription>Visual pipeline, lead management, automated follow-ups, email integration, and sales forecasting.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="grid gap-2">
+                <Input placeholder="Opportunity title" value={crmTitle} onChange={(event) => setCrmTitle(event.target.value)} />
+                <Input placeholder="Customer" value={crmCustomer} onChange={(event) => setCrmCustomer(event.target.value)} />
+                <select
+                  value={crmOwnerId}
+                  onChange={(event) => setCrmOwnerId(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select owner</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>{employee.name}</option>
+                  ))}
+                </select>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Input placeholder="Customer email" type="email" value={crmEmail} onChange={(event) => setCrmEmail(event.target.value)} />
+                  <Input placeholder="Opportunity value" value={crmValue} onChange={(event) => setCrmValue(event.target.value)} />
+                </div>
+                <Input type="date" value={crmFollowUp} onChange={(event) => setCrmFollowUp(event.target.value)} />
+                <Button className="gradient-amber text-black font-semibold" onClick={addCrmOpportunity}>Add Opportunity</Button>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-3">
+                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('open')}>
+                  Open opportunities: {crmOpenCount}
+                </Button>
+                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('draft')}>
+                  Draft opportunities: {crmDraftCount}
+                </Button>
+                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('settled')}>
+                  Settled/won opportunities: {crmSettledCount}
+                </Button>
+              </div>
+
+              <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                <p>Forecasted revenue: {CURRENCY_SYMBOL[currency] ?? ''}{crmForecast.toFixed(2)}</p>
+                <p>Due follow-ups: {dueFollowUps.length}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => setCrmStageFilter('all')}>
+                    Show All
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={runFollowUpAutomation}>
+                    Run Follow-up Automation
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {visibleCrmOpportunities.length === 0 ? (
+                  <p className="text-xs">No opportunities for this view.</p>
+                ) : (
+                  visibleCrmOpportunities.slice(0, 4).map((item) => (
+                    <div key={item.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                      <p className="text-xs text-foreground">{item.title} • {item.customer}</p>
+                      <p className="text-xs">{item.stage} • {CURRENCY_SYMBOL[currency] ?? ''}{item.value.toFixed(2)} • Follow-up: {item.nextFollowUp || 'Not set'}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => advanceCrmOpportunity(item.id)}>
+                          Advance Stage
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-white/10 bg-card/40"
+                          disabled={!item.email}
+                          onClick={() => {
+                            if (!item.email) return;
+                            window.open(`mailto:${item.email}?subject=${encodeURIComponent(`Follow-up: ${item.title}`)}`);
+                          }}
+                        >
+                          Send Follow-up Email
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card id="subscriptions-hub" className="glass-card border-white/5 scroll-mt-24">
+            <CardHeader>
+              <CardTitle>Subscriptions</CardTitle>
+              <CardDescription>Recurring billing, renewal management, churn tracking, and MRR dashboard.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="grid gap-2">
+                <Input placeholder="Customer" value={subscriptionCustomer} onChange={(event) => setSubscriptionCustomer(event.target.value)} />
+                <Input placeholder="Plan" value={subscriptionPlan} onChange={(event) => setSubscriptionPlan(event.target.value)} />
+                <select
+                  value={subscriptionOwnerId}
+                  onChange={(event) => setSubscriptionOwnerId(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select owner</option>
+                  {employees.map((employee) => (
+                    <option key={employee.id} value={employee.id}>{employee.name}</option>
+                  ))}
+                </select>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Input placeholder="Recurring amount" value={subscriptionAmount} onChange={(event) => setSubscriptionAmount(event.target.value)} />
+                  <select
+                    value={subscriptionCycle}
+                    onChange={(event) => setSubscriptionCycle(event.target.value as 'monthly' | 'quarterly' | 'yearly')}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="monthly">monthly</option>
+                    <option value="quarterly">quarterly</option>
+                    <option value="yearly">yearly</option>
+                  </select>
+                </div>
+                <Input type="date" value={subscriptionRenewalDate} onChange={(event) => setSubscriptionRenewalDate(event.target.value)} />
+                <Button className="gradient-amber text-black font-semibold" onClick={addSubscription}>Add Subscription</Button>
+              </div>
+
+              <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                <div>Active subscriptions: {activeSubscriptions}</div>
+                <div>Estimated MRR: {CURRENCY_SYMBOL[currency] ?? ''}{estimatedMrr.toFixed(0)}</div>
+                <div>Renewals due this cycle: {renewalsDueThisCycle}</div>
+                <div>Churn rate: {churnRate}%</div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {['all', 'active', 'trial', 'paused', 'churned'].map((status) => (
+                  <Button
+                    key={status}
+                    type="button"
+                    size="sm"
+                    variant={subscriptionFilter === status ? 'default' : 'outline'}
+                    className={subscriptionFilter === status ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
+                    onClick={() => setSubscriptionFilter(status as 'all' | 'active' | 'trial' | 'paused' | 'churned')}
+                  >
+                    {status}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                {visibleSubscriptions.length === 0 ? (
+                  <p className="text-xs">No subscriptions in this view.</p>
+                ) : (
+                  visibleSubscriptions.slice(0, 4).map((subscription) => (
+                    <div key={subscription.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                      <p className="text-xs text-foreground">{subscription.customer} • {subscription.plan}</p>
+                      <p className="text-xs">
+                        {subscription.status} • {CURRENCY_SYMBOL[currency] ?? ''}{subscription.amount.toFixed(2)} / {subscription.cycle} • Renewal: {subscription.renewalDate || 'Not set'}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => renewSubscription(subscription.id)}>
+                          Renew
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => cycleSubscriptionStatus(subscription.id)}>
+                          Cycle Status
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-12">
         <Card id="sales-pricing" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
           <CardHeader>
@@ -573,9 +1334,9 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
       <div className="grid gap-4 xl:grid-cols-12">
         <Card id="sales-pos" className="glass-card border-white/5 xl:col-span-8 scroll-mt-24">
           <CardHeader>
-            <CardTitle>POS, Barcode, Multi-Currency, Split Payments</CardTitle>
+            <CardTitle>POS Shop</CardTitle>
             <CardDescription>
-              Supports POS checkout, barcode scan add, multi-currency totals, split tender, receipt printing, offline queue, and sync later.
+              Touch-screen retail interface, barcode scanning, loyalty-ready checkout, split payments, and offline mode.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -714,7 +1475,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           </CardContent>
         </Card>
 
-        <Card className="glass-card border-white/5 xl:col-span-4">
+        <Card id="sales-cash-drawer" className="glass-card border-white/5 xl:col-span-4 scroll-mt-24">
           <CardHeader>
             <CardTitle>Cash Drawer Management</CardTitle>
             <CardDescription>Open/close drawer and monitor cash balance from split payments.</CardDescription>
@@ -735,6 +1496,53 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             <div className="grid gap-2 md:grid-cols-2">
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={() => setCashDrawerBalance((prev) => prev + 50)}>+50 Float</Button>
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={() => setCashDrawerBalance((prev) => Math.max(prev - 50, 0))}>-50 Drop</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-12">
+        <Card id="pos-restaurant" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>POS Restaurant</CardTitle>
+            <CardDescription>Table management, kitchen display flow, split bills, and tips for hospitality operations.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-3">
+              <Input placeholder="Table" value={restaurantTable} onChange={(event) => setRestaurantTable(event.target.value)} />
+              <Input placeholder="Guests" value={restaurantGuests} onChange={(event) => setRestaurantGuests(event.target.value)} />
+              <Input placeholder="Tips" value={restaurantTips} onChange={(event) => setRestaurantTips(event.target.value)} />
+            </div>
+            <div className="rounded-xl border border-white/5 bg-card/40 p-3 text-sm text-muted-foreground">
+              Table {restaurantTable || 'T-01'} • Guests {restaurantGuests || '0'} • Tips {restaurantTips || '0'}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card id="rental-desk" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Rental</CardTitle>
+            <CardDescription>Contract creation, delivery/return tracking, and product availability calendar workflow.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input placeholder="Product / Asset" value={rentalProduct} onChange={(event) => setRentalProduct(event.target.value)} />
+              <Input placeholder="Customer" value={rentalCustomer} onChange={(event) => setRentalCustomer(event.target.value)} />
+              <Input type="date" value={rentalStart} onChange={(event) => setRentalStart(event.target.value)} />
+              <Input type="date" value={rentalEnd} onChange={(event) => setRentalEnd(event.target.value)} />
+            </div>
+            <Button className="gradient-amber text-black font-semibold" onClick={addRentalContract}>Create Rental Contract</Button>
+            <div className="space-y-2">
+              {rentalContracts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No rental contracts yet.</p>
+              ) : (
+                rentalContracts.map((contract) => (
+                  <div key={contract.id} className="rounded-xl border border-white/5 bg-card/40 p-3">
+                    <p className="text-sm font-medium text-foreground">{contract.product} • {contract.customer}</p>
+                    <p className="text-xs text-muted-foreground">{contract.start} to {contract.end} • {contract.status}</p>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
