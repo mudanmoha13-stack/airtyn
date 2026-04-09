@@ -168,6 +168,7 @@ export const AppSidebar = () => {
     if (pathname.startsWith('/business/inventory')) return 'Inventory Actions';
     if (pathname.startsWith('/business/finance') || pathname.startsWith('/business/accounting')) return 'Accounting Actions';
     if (pathname.startsWith('/business/hr') || pathname.startsWith('/business/payroll')) return 'HR Actions';
+    if (pathname.startsWith('/business/sales')) return 'Sales Actions';
     if (pathname.startsWith('/business/crm') || pathname.startsWith('/business/sales')) return 'CRM Actions';
     if (pathname.startsWith('/business/procurement') || pathname.startsWith('/business/purchases')) return 'Procurement Actions';
     if (pathname.startsWith('/business/support')) return 'Support Actions';
@@ -178,6 +179,16 @@ export const AppSidebar = () => {
 
   const businessActionItems = useMemo<NavItemConfig[]>(() => {
     if (product !== 'business') return [];
+
+    if (pathname.startsWith('/business/sales')) {
+      return [
+        { label: 'Pricing & Promotions', href: '/business/sales#sales-pricing', icon: ClipboardList, group: 'Module Actions' },
+        { label: 'Credit & Limits', href: '/business/sales#sales-credit', icon: ShieldCheck, group: 'Module Actions' },
+        { label: 'POS & Split Payments', href: '/business/sales#sales-pos', icon: Workflow, group: 'Module Actions' },
+        { label: 'Omnichannel Stock', href: '/business/sales#sales-channels', icon: ListChecks, group: 'Module Actions' },
+        { label: 'Sales Operations Feed', href: '/business/sales#operations', icon: ListChecks, group: 'Module Actions' },
+      ];
+    }
 
     if (pathname.startsWith('/business/inventory')) {
       return [

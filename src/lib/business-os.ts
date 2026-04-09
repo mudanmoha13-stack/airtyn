@@ -15,6 +15,7 @@ import {
 
 export type BusinessModuleKey =
   | 'crm'
+  | 'sales'
   | 'finance'
   | 'hr'
   | 'inventory'
@@ -54,9 +55,9 @@ export type BusinessModuleSpec = {
 export const BUSINESS_EXECUTIVE_SUMMARY = {
   title: 'Unified Business Operating System',
   description:
-    'A modular, multi-tenant operating layer for CRM, Finance, HR, Inventory, Projects, Procurement, Support, and Analytics. Built to reuse the same tenant, auth, caching, navigation, and workflow infrastructure already running inside Pinkplan.',
+    'A modular, multi-tenant operating layer for CRM, Sales, Finance, HR, Inventory, Projects, Procurement, Support, and Analytics. Built to reuse the same tenant, auth, caching, navigation, and workflow infrastructure already running inside Pinkplan.',
   stats: [
-    { label: 'Core domains', value: '8', delta: 'CRM to analytics on one stack' },
+    { label: 'Core domains', value: '9', delta: 'CRM to analytics on one stack' },
     { label: 'Shared platform', value: '100%', delta: 'Auth, tenants, caching, nav reused' },
     { label: 'Automation ready', value: '34 flows', delta: 'Cross-module triggers supported' },
     { label: 'Enterprise posture', value: 'Multi-tenant', delta: 'Isolation-first architecture' },
@@ -99,6 +100,66 @@ export const BUSINESS_MODULE_SPECS: BusinessModuleSpec[] = [
       { title: 'Apex Retail Expansion', subtitle: 'Enterprise deal in proposal stage', meta: '$180k ARR', status: 'Proposal' },
       { title: 'Northwind Inbound', subtitle: 'Lead auto-assigned to West territory', meta: 'Score 82', status: 'Qualified' },
       { title: 'BluePeak Renewal', subtitle: 'Renewal opportunity due this week', meta: '$42k ARR', status: 'Negotiation' },
+    ],
+  },
+  {
+    key: 'sales',
+    title: 'Sales & POS',
+    eyebrow: 'Revenue execution',
+    route: '/business/sales',
+    icon: ShoppingCart,
+    summary:
+      'Run pricing, credit controls, POS transactions, omnichannel checkout, and unified stock visibility across retail and online channels.',
+    coreObjects: [
+      'Pricing Rules',
+      'Customer Credit Profiles',
+      'Salespersons',
+      'POS Sessions',
+      'Sales Receipts',
+      'Payment Splits',
+      'Cash Drawers',
+      'Channel Stock Views',
+    ],
+    features: [
+      'Pricing rules (discounts, tiers, promotions)',
+      'Customer credit & limits',
+      'Salesperson tracking',
+      'Multi-currency',
+      'POS',
+      'Offline mode (sync later)',
+      'Barcode scanning',
+      'Receipt printing',
+      'Split payments',
+      'Cash drawer management',
+      'Omnichannel',
+      'Online store integration',
+      'Unified stock across POS, warehouse, and e-commerce',
+    ],
+    workflows: [
+      'Apply pricing and promo validation during checkout',
+      'Validate customer credit limit before confirmation',
+      'Assign and track salesperson performance per sale',
+      'Queue POS transactions in offline mode and sync later',
+      'Split tender reconciliation and receipt generation',
+      'Cash drawer open/close balancing with transaction feed',
+      'Omnichannel stock visibility for POS, warehouse, and e-commerce',
+    ],
+    governance: [
+      'Credit limit policy checks on each order',
+      'Audit trail for price overrides and drawer operations',
+      'Payment reconciliation controls for split tenders',
+      'Unified stock consistency checks across channels',
+    ],
+    stats: [
+      { label: 'POS orders today', value: '74', delta: '12 queued offline' },
+      { label: 'Avg ticket size', value: '$94', delta: '+6% this week' },
+      { label: 'Cash drawer variance', value: '$0.00', delta: 'Balanced current shift' },
+      { label: 'Omnichannel fulfillment', value: '97%', delta: 'Stock synced across channels' },
+    ],
+    records: [
+      { title: 'POS-204812', subtitle: 'Counter checkout with split tender', meta: '$184.00', status: 'Open' },
+      { title: 'Online Sync Batch', subtitle: 'Queued offline sales waiting sync', meta: '12 transactions', status: 'Queued Offline' },
+      { title: 'Apex Retail Credit Sale', subtitle: 'Credit check passed before invoice', meta: '$2,140.00', status: 'Settled' },
     ],
   },
   {

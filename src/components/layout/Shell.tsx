@@ -119,7 +119,7 @@ const ProjectOSCard = () => {
         )}
 
         {mode === 'setup' && (
-          <form className="grid grid-cols-2 gap-3" onSubmit={onSetup}>
+          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSetup}>
             <div className="space-y-1.5">
               <Label htmlFor="pm-org">Organization</Label>
               <Input id="pm-org" value={tenantName} onChange={e => setTenantName(e.target.value)} required />
@@ -254,7 +254,7 @@ const BusinessOSCard = () => {
         )}
 
         {mode === 'setup' && (
-          <form className="grid grid-cols-2 gap-3" onSubmit={onSetup}>
+          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSetup}>
             <div className="col-span-2 space-y-1.5">
               <Label htmlFor="biz-type">What best describes your business?</Label>
               <Select value={businessType} onValueChange={setBusinessType}>
@@ -300,15 +300,15 @@ const BusinessOSCard = () => {
 // ─── Public gate shown when not authenticated ─────────────────────────────────
 const PublicLandingGate = () => {
   return (
-    <div className="min-h-screen bg-background flex flex-col p-6 lg:p-10">
+    <div className="min-h-screen min-h-[100dvh] overflow-x-hidden overflow-y-auto bg-background p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 sm:p-6 lg:p-10">
       {/* Brand header */}
-      <header className="mb-8 flex items-center gap-2.5">
+      <header className="mb-6 flex flex-wrap items-center gap-2.5 sm:mb-8">
         <Layers className="w-5 h-5 text-primary" />
         <span className="text-lg font-bold tracking-tight">Pinkplan</span>
         <span className="ml-2 text-xs text-muted-foreground">Choose your workspace to get started</span>
       </header>
 
-      <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 lg:grid-cols-2 flex-1 items-start">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 lg:grid-cols-2 items-start">
         <ProjectOSCard />
         <BusinessOSCard />
       </div>
@@ -334,11 +334,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       <NavigationFeedbackProvider>
         <RouteProgressBar />
         <QuickNav />
-        <div data-product={product} className="flex h-screen w-full overflow-hidden bg-background">
+        <div data-product={product} className="flex h-screen min-h-[100dvh] w-full overflow-hidden bg-background">
           <AppSidebar />
           <SidebarInset className="flex flex-col flex-1 overflow-hidden">
             <TopBar />
-            <main className="flex-1 overflow-y-auto px-4 pb-24 pt-4 scrollbar-hide md:p-6 md:pb-6">
+            <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-24 pt-4 scrollbar-hide md:p-6 md:pb-6">
               <div key={pathname} className="animate-in fade-in slide-in-from-bottom-1 duration-200">
                 {children}
               </div>

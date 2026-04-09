@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+@supports (-webkit-touch-callout: none) {
+  html,
+  body {
+    min-height: -webkit-fill-available;
+  }
+}
+
 @layer base {
   :root {
     --background: 240 13% 4%;
@@ -56,6 +90,12 @@
 
 .glass-card {
   @apply bg-white/[0.03] border border-white/[0.06] backdrop-blur-md;
+}
+
+@supports not ((-webkit-backdrop-filter: blur(0)) or (backdrop-filter: blur(0))) {
+  .glass-card {
+    background-color: rgba(17, 17, 24, 0.92);
+  }
 }
 
 .gradient-pink-blue {

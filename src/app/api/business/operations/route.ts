@@ -23,14 +23,26 @@ function toModuleFromReportName(name: string) {
   return 'module';
 }
 
+const SALES_SOURCE_PREFIX = 'sales:';
+
 export async function GET(request: NextRequest) {
   try {
     await ensureBusinessTenant();
     const parsed = operationQuerySchema.parse({ module: request.nextUrl.searchParams.get('module') ?? '' });
 
-    const [leads, expenses, rfqs, tickets, tasks, reports] = await Promise.all([
+    const [crmLeads, salesLeads, expenses, rfqs, tickets, tasks, reports] = await Promise.all([
       parsed.module === 'crm'
         ? businessPrisma.crmLead.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { createdAt: 'desc' }, take: 50 })
+        : Promise.resolve([]),
+      parsed.module === 'sales'
+        ? businessPrisma.crmLead.findMany({
+            where: {
+              tenantId: BUSINESS_DEFAULT_TENANT_ID,
+              source: { startsWith: SALES_SOURCE_PREFIX },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+          })
         : Promise.resolve([]),
       parsed.module === 'finance'
         ? businessPrisma.financeExpense.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { submittedAt: 'desc' }, take: 50 })
@@ -55,19 +67,28 @@ export async function GET(request: NextRequest) {
     ]);
 
     const records = [
-      ...leads.map((lead) => ({
-        id: lead.id,
-        title: `Lead ${lead.id.slice(0, 8)}`,
-        subtitle: lead.source ?? 'Captured lead',
-        meta: `Score ${lead.score}`,
-        status: lead.status,
-      })),
+      ...crmLeads
+        .filter((lead) => !(lead.source ?? '').startsWith(SALES_SOURCE_PREFIX))
+        .map((lead) => ({
+          id: lead.id,
+          title: `Lead ${lead.id.slice(0, 8)}`,
+          subtitle: lead.source ?? 'Captured lead',
+          meta: `Score ${lead.score}`,
+          status: lead.status,
+        })),
       ...expenses.map((expense) => ({
         id: expense.id,
         title: expense.category ?? 'Finance expense',
         subtitle: 'Expense approval workflow',
         meta: `$${expense.amount.toString()}`,
         status: expense.status,
+      })),
+      ...salesLeads.map((sale) => ({
+        id: sale.id,
+        title: `Sale ${sale.id.slice(0, 8)}`,
+        subtitle: (sale.source ?? '').replace(SALES_SOURCE_PREFIX, '') || 'POS transaction',
+        meta: `Score ${sale.score}`,
+        status: sale.status,
       })),
       ...rfqs.map((rfq) => ({
         id: rfq.id,
@@ -138,6 +159,18 @@ export async function POST(request: NextRequest) {
         },
       });
       return NextResponse.json({ ok: true, id: expense.id }, { status: 201 });
+    }
+
+    if (payload.module === 'sales') {
+      const sale = await businessPrisma.crmLead.create({
+        data: {
+          tenantId: BUSINESS_DEFAULT_TENANT_ID,
+          source: `${SALES_SOURCE_PREFIX}${payload.subtitle}`,
+          status: payload.status,
+          score: 0,
+        },
+      });
+      return NextResponse.json({ ok: true, id: sale.id }, { status: 201 });
     }
 
     if (payload.module === 'procurement') {

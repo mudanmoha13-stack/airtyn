@@ -12,6 +12,8 @@ import { BUSINESS_MODULES_BY_KEY } from '@/lib/business-os';
 import type { BusinessModuleKey } from '@/lib/business-os';
 import type { BusinessModuleSpec, BusinessRecord } from '@/lib/business-os';
 import { ProductManagementContent } from '@/components/business/ProductManagementContent';
+import { SalesModuleContent } from '@/components/business/SalesModuleContent';
+import { HrOperationsContent } from '@/components/business/HrOperationsContent';
 
 const MODULE_UI_LABELS: Record<BusinessModuleKey, {
   objectLabel: string;
@@ -28,6 +30,14 @@ const MODULE_UI_LABELS: Record<BusinessModuleKey, {
     governanceLabel: 'Revenue Controls',
     snapshotTitle: 'Pipeline Snapshot',
     snapshotDescription: 'Representative deals, leads, and territory activities.',
+  },
+  sales: {
+    objectLabel: 'Sales Objects',
+    featureLabel: 'Sales Features',
+    workflowLabel: 'Sales Workflows',
+    governanceLabel: 'Sales Controls',
+    snapshotTitle: 'Sales Operations Snapshot',
+    snapshotDescription: 'Representative POS transactions, credit checks, and omnichannel order activity.',
   },
   finance: {
     objectLabel: 'Core Objects',
@@ -999,6 +1009,7 @@ const HrModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
 
 const GENERIC_FORM_TITLES: Record<BusinessModuleKey, string> = {
   crm: 'Create Lead / Deal',
+  sales: 'Create Sales Operation',
   finance: 'Create Finance Record',
   hr: 'Create Employee',
   inventory: 'Create Inventory Record',
@@ -1259,10 +1270,12 @@ export function BusinessModulePage({
 
         {moduleKey === 'finance' ? (
           <FinanceModuleContent module={module} />
+        ) : moduleKey === 'sales' ? (
+          <SalesModuleContent module={module} />
         ) : moduleKey === 'inventory' ? (
           <InventoryModuleContent module={module} />
         ) : moduleKey === 'hr' ? (
-          <HrModuleContent module={module} />
+          <HrOperationsContent module={module} />
         ) : (
           <GenericModuleContent module={module} moduleKey={moduleKey} labels={labels} />
         )}
