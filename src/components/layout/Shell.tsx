@@ -304,7 +304,7 @@ const PublicLandingGate = () => {
       {/* Brand header */}
       <header className="mb-6 flex flex-wrap items-center gap-2.5 sm:mb-8">
         <Layers className="w-5 h-5 text-primary" />
-        <span className="text-lg font-bold tracking-tight">Pinkplan</span>
+        <span className="text-lg font-bold tracking-tight">Airtyn</span>
         <span className="ml-2 text-xs text-muted-foreground">Choose your workspace to get started</span>
       </header>
 

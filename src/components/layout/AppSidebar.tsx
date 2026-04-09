@@ -298,7 +298,7 @@ export const AppSidebar = () => {
             P
           </div>
           <div className="group-data-[collapsible=icon]:hidden">
-            <span className="font-headline text-xl font-bold">Pinkplan</span>
+            <span className="font-headline text-xl font-bold">Airtyn</span>
             <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {product === 'business' ? 'Business OS' : 'Project OS'}
             </p>
