@@ -1,0 +1,16 @@
+{
+  "placeholderImages": [
+    {
+      "id": "alex-avatar",
+      "description": "User profile avatar for Alex Rivera",
+      "imageUrl": "https://picsum.photos/seed/alex/100/100",
+      "imageHint": "profile avatar"
+    },
+    {
+      "id": "dashboard-hero",
+      "description": "Hero background for project dashboard",
+      "imageUrl": "https://picsum.photos/seed/project/1200/600",
+      "imageHint": "abstract workspace"
+    }
+  ]
+}

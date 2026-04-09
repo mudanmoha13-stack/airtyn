@@ -1,0 +1,8 @@
+If you want, next I can add a single executive “Scale Overview” dashboard page that rolls up all Phase 3 KPIs in one screen.
+
+If you want next, I can add alert surfacing on the main dashboard (for example: top 3 risk alerts + top 3 recommendations cards) so these insights are visible without opening the Intelligence page.
+
+
+Clear the Prisma DLL lock again by stopping lingering Node processes and rerun npm run db:generate.
+Run npm run db:push to materialize the redesigned schema in PostgreSQL.
+Add tenant-scoped query guards and reporting/read-replica strategy on top of this schema as the next backend hardening step.

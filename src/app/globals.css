@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 13% 4%;
+    --foreground: 0 0% 100%;
+    --card: 240 13% 8%;
+    --card-foreground: 0 0% 100%;
+    --popover: 240 16% 12%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 313 100% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 91% 60%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 13% 15%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 313 100% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 13% 12%;
+    --input: 240 13% 12%;
+    --ring: 313 100% 65%;
+    --radius: 1rem;
+
+    --sidebar-background: 240 13% 8%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 313 100% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 16% 12%;
+    --sidebar-accent-foreground: 313 100% 65%;
+    --sidebar-border: 240 13% 12%;
+    --sidebar-ring: 313 100% 65%;
+
+    --chart-1: 313 100% 65%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 270 100% 65%;
+    --chart-4: 190 100% 50%;
+    --chart-5: 340 100% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-headline tracking-tight;
+  }
+}
+
+.glass-card {
+  @apply bg-white/[0.03] border border-white/[0.06] backdrop-blur-md;
+}
+
+.gradient-pink-blue {
+  background: linear-gradient(90deg, #FF4FD8 0%, #7B61FF 50%, #3B82F6 100%);
+}
+
+/* Business OS amber/black gradient — replaces pink-blue in /business/* */
+.gradient-amber {
+  background: linear-gradient(90deg, #FBBF24 0%, #F59E0B 55%, #92400E 100%);
+}
+
+/* ── Business OS: override primary → amber throughout the subtree ── */
+[data-product="business"] {
+  --primary: 38 92% 50%;
+  --primary-foreground: 20 14% 4%;
+  --accent: 38 92% 50%;
+  --accent-foreground: 20 14% 4%;
+  --ring: 38 92% 50%;
+  --sidebar-primary: 38 92% 50%;
+  --sidebar-primary-foreground: 20 14% 4%;
+  --sidebar-accent-foreground: 38 92% 50%;
+  --sidebar-ring: 38 92% 50%;
+  --chart-1: 38 92% 50%;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(255, 79, 216, 0.15);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes nav-progress-fill {
+  0%   { width: 0%;   opacity: 1; }
+  15%  { width: 55%; }
+  40%  { width: 72%; }
+  70%  { width: 83%; }
+  100% { width: 90%; }
+}
+
+.nav-progress-bar {
+  animation: nav-progress-fill 2s cubic-bezier(0.1, 0.05, 0.1, 1) forwards;
+}

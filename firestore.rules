@@ -1,0 +1,247 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * PINKPLAN SAAS SECURITY RULES
+     * 
+     * CORE PHILOSOPHY:
+     * This ruleset implements a robust multi-tenant authorization model. Security is enforced primarily 
+     * through path-based scoping and Database Access Control (DBAC). Access to organizational data 
+     * is gated by membership records within a specific tenant.
+     * 
+     * DATA STRUCTURE:
+     * 1. Global Config: /plans, /roles, /permissions (Read-only for users, System Admin only for writes).
+     * 2. User Profiles: /users/{userId} (Strict owner-only access).
+     * 3. Multi-Tenant Data: /tenants/{tenantId}/... (Scoped by tenant membership).
+     * 
+     * KEY SECURITY DECISIONS:
+     * - Multi-Tenancy: Access to any document under a /tenant/{tenantId} path requires the user 
+     *   to have a corresponding record in /tenants/{tenantId}/userTenants/{userId}.
+     * - Denormalization for Authorization: Essential IDs (tenantId, projectId, ownerId) are 
+     *   required within documents to ensure relational integrity and permit efficient queries.
+     * - Prototyping Flexibility: Rules strictly enforce WHO can access data but do NOT 
+     *   validate the specific structure or types of non-relational data fields.
+     * - Super Admin: A global 'Super Admin' role is identified by the presence of a 
+     *   document in the /superAdmins collection.
+     */
+
+    // --- GLOBAL HELPER FUNCTIONS ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+
+    /**
+     * Verifies if the authenticated user is a member of the specified tenant.
+     */
+    function isTenantMember(tenantId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/tenants/$(tenantId)/userTenants/$(request.auth.uid));
+    }
+
+    // The 'getTenantRole' function was unused and contained invalid syntax ('get' and 'request' as variable names within a rules function).
+    // Given the prototyping mode focuses on "WHO can access" rather than "what specific role," and
+    // the comment "Note: In prototyping, we default to member existence for most operations,"
+    // this function has been removed for now. It can be reintroduced with proper implementation
+    // if more granular role-based access is required later.
+
+    // --- GLOBAL CONFIGURATION COLLECTIONS ---
+
+    /**
+     * @description Publicly readable system configurations for plans, roles, and permissions.
+     * @path /plans/{id}, /roles/{id}, /permissions/{id}
+     * @allow get, list: if isSignedIn();
+     * @deny create, update, delete: if !isSuperAdmin();
+     * @principle System-wide read access for authenticated users, restricted administrative writes.
+     */
+    match /plans/{planId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+    match /permissions/{permissionId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    /**
+     * @description Collection identifying global super administrators.
+     * @path /superAdmins/{userId}
+     * @allow get: if isSignedIn();
+     * @deny write, list: unless strictly managed via console/internal tools.
+     * @principle Existence-based global role identification.
+     */
+    match /superAdmins/{userId} {
+      allow get: if isSignedIn();
+      allow list, write: if isSuperAdmin();
+    }
+
+    // --- USER DATA ---
+
+    /**
+     * @description Private user profile documents.
+     * @path /users/{userId}
+     * @allow create: if isOwner(userId) && request.resource.data.id == userId;
+     * @allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+     * @allow get: if isOwner(userId);
+     * @deny list: if true;
+     * @principle Strict ownership for personal profile data and relational integrity of the ID.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description User-specific personal notifications.
+       * @path /users/{userId}/notifications/{notificationId}
+       * @allow get, list, update, delete: if isOwner(userId);
+       * @allow create: if isSignedIn();
+       * @principle Path-based private access for recipients; system/users can trigger notifications.
+       */
+      match /notifications/{notificationId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isSignedIn();
+        allow update, delete: if isExistingOwner(userId);
+      }
+    }
+
+    // --- TENANT DATA ---
+
+    /**
+     * @description Top-level Tenant organizational data.
+     * @path /tenants/{tenantId}
+     * @allow read: if isTenantMember(tenantId);
+     * @allow update: if isTenantMember(tenantId); // Specific role checks would be added here in Prod.
+     * @principle Tenant-scoped shared access.
+     */
+    match /tenants/{tenantId} {
+      allow get: if isTenantMember(tenantId);
+      allow list: if isSuperAdmin(); // Prevent listing all organizations.
+      allow create: if isSignedIn(); // Allow initial tenant creation.
+      allow update: if isTenantMember(tenantId);
+      allow delete: if isSuperAdmin();
+
+      /**
+       * @description Maps users to tenants and defines their roles.
+       * @path /tenants/{tenantId}/userTenants/{userId}
+       * @allow get, list: if isTenantMember(tenantId) || isOwner(userId);
+       * @allow create: if isSignedIn() && request.resource.data.userId == userId;
+       * @allow update: if isTenantMember(tenantId) && request.resource.data.userId == resource.data.userId;
+       * @allow delete: if isTenantMember(tenantId);
+       */
+      match /userTenants/{userId} {
+        allow get, list: if isTenantMember(tenantId) || isOwner(userId);
+        allow create: if isSignedIn() && request.resource.data.userId == userId;
+        allow update: if isTenantMember(tenantId) && request.resource.data.userId == resource.data.userId;
+        allow delete: if isTenantMember(tenantId);
+      }
+
+      /**
+       * @description Workspaces within a tenant.
+       * @path /tenants/{tenantId}/workspaces/{workspaceId}
+       * @allow create: if isTenantMember(tenantId) && request.resource.data.tenantId == tenantId;
+       * @principle Tenant membership required; validates relational integrity of tenantId.
+       */
+      match /workspaces/{workspaceId} {
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantMember(tenantId) && request.resource.data.tenantId == tenantId;
+        allow update: if isTenantMember(tenantId) && resource != null && request.resource.data.tenantId == resource.data.tenantId;
+        allow delete: if isTenantMember(tenantId) && resource != null;
+
+        /**
+         * @description Projects within a workspace.
+         * @path /tenants/{tenantId}/workspaces/{workspaceId}/projects/{projectId}
+         * @allow create: if isTenantMember(tenantId) && request.resource.data.workspaceId == workspaceId;
+         * @principle Cascading membership access and relational ID locking.
+         */
+        match /projects/{projectId} {
+          allow read: if isTenantMember(tenantId);
+          allow create: if isTenantMember(tenantId) && request.resource.data.workspaceId == workspaceId;
+          allow update: if isTenantMember(tenantId) && resource != null && request.resource.data.workspaceId == resource.data.workspaceId;
+          allow delete: if isTenantMember(tenantId) && resource != null;
+        }
+      }
+
+      /**
+       * @description Flat list of projects under a tenant (alternative access path).
+       * @path /tenants/{tenantId}/projects/{projectId}
+       */
+      match /projects/{projectId} {
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantMember(tenantId) && request.resource.data.tenantId == tenantId;
+        allow update, delete: if isTenantMember(tenantId) && resource != null;
+
+        /**
+         * @description Tasks within a project.
+         * @path /tenants/{tenantId}/projects/{projectId}/tasks/{taskId}
+         * @allow create: if isTenantMember(tenantId) && request.resource.data.projectId == projectId;
+         * @principle Tenant members can manage tasks; creator/tenant relational integrity.
+         */
+        match /tasks/{taskId} {
+          allow read: if isTenantMember(tenantId);
+          allow create: if isTenantMember(tenantId) && request.resource.data.projectId == projectId && request.resource.data.createdBy == request.auth.uid;
+          allow update: if isTenantMember(tenantId) && resource != null && request.resource.data.projectId == resource.data.projectId;
+          allow delete: if isTenantMember(tenantId) && resource != null;
+
+          /**
+           * @description Task assignments.
+           * @path /tenants/{tenantId}/projects/{projectId}/tasks/{taskId}/assignees/{userId}
+           * @allow write: if isTenantMember(tenantId);
+           * @principle Collaborative task assignment restricted to tenant members.
+           */
+          match /assignees/{userId} {
+            allow read: if isTenantMember(tenantId);
+            allow create, update, delete: if isTenantMember(tenantId);
+          }
+
+          /**
+           * @description Comments on tasks.
+           * @path /tenants/{tenantId}/projects/{projectId}/tasks/{taskId}/comments/{commentId}
+           * @allow create: if isTenantMember(tenantId) && request.resource.data.userId == request.auth.uid;
+           * @allow update, delete: if isTenantMember(tenantId) && resource.data.userId == request.auth.uid;
+           * @principle Member-only comments with author-only editing/deletion.
+           */
+          match /comments/{commentId} {
+            allow read: if isTenantMember(tenantId);
+            allow create: if isTenantMember(tenantId) && request.resource.data.userId == request.auth.uid;
+            allow update, delete: if isTenantMember(tenantId) && resource != null && resource.data.userId == request.auth.uid;
+          }
+        }
+      }
+
+      /**
+       * @description Billing and Subscription data.
+       * @path /tenants/{tenantId}/subscriptions/{id}, /tenants/{tenantId}/invoices/{id}
+       * @allow read: if isTenantMember(tenantId);
+       * @deny write: if !isSuperAdmin(); // Billing usually handled by server-side payment logic.
+       * @principle Restricted administrative billing management.
+       */
+      match /subscriptions/{subscriptionId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isSuperAdmin();
+      }
+      match /invoices/{invoiceId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if isSuperAdmin();
+      }
+    }
+  }
+}
