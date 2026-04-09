@@ -5,7 +5,7 @@ import { businessPrisma, ensureBusinessTenant, BUSINESS_DEFAULT_TENANT_ID } from
 const createProductSchema = z.object({
   name: z.string().min(1),
   sku: z.string().min(1),
-  productType: z.string().default('physical'),
+  productType: z.enum(['physical', 'digital', 'service', 'bundle']).default('physical'),
   category: z.string().default('general'),
 });
 

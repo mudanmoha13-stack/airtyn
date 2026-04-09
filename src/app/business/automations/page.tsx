@@ -1,3 +1,5 @@
+"use client";
+
 import { Workflow } from 'lucide-react';
 import { BusinessPageFrame } from '@/components/business/BusinessPageFrame';
 

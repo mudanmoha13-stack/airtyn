@@ -1,3 +1,5 @@
+"use client";
+
 import { Webhook } from 'lucide-react';
 import { BusinessPageFrame } from '@/components/business/BusinessPageFrame';
 

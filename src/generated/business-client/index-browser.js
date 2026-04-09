@@ -347,11 +347,18 @@ exports.Prisma.InvProductScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
   name: 'name',
+  description: 'description',
   sku: 'sku',
+  skuPrefix: 'skuPrefix',
   category: 'category',
+  categoryId: 'categoryId',
+  baseUomId: 'baseUomId',
   lifecycle: 'lifecycle',
   productType: 'productType',
-  createdAt: 'createdAt'
+  basePrice: 'basePrice',
+  tags: 'tags',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.InvSkuScalarFieldEnum = {
@@ -414,6 +421,61 @@ exports.Prisma.InvSerialScalarFieldEnum = {
   batchId: 'batchId',
   serialCode: 'serialCode',
   status: 'status'
+};
+
+exports.Prisma.InvProductCategoryScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  name: 'name',
+  code: 'code',
+  parentId: 'parentId',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.InvProductVariantScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  productId: 'productId',
+  sku: 'sku',
+  attributeValues: 'attributeValues',
+  additionalPrice: 'additionalPrice',
+  lifecycle: 'lifecycle',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.InvUoMScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  name: 'name',
+  symbol: 'symbol',
+  category: 'category',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.InvUoMConversionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  fromUomId: 'fromUomId',
+  toUomId: 'toUomId',
+  factor: 'factor',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.InvProductBundleScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  productId: 'productId',
+  name: 'name',
+  description: 'description',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.InvProductBundleItemScalarFieldEnum = {
+  id: 'id',
+  bundleId: 'bundleId',
+  componentProductId: 'componentProductId',
+  quantity: 'quantity',
+  notes: 'notes'
 };
 
 exports.Prisma.BizProjectScalarFieldEnum = {
@@ -710,6 +772,21 @@ exports.LeaveStatus = exports.$Enums.LeaveStatus = {
   canceled: 'canceled'
 };
 
+exports.ProductLifecycle = exports.$Enums.ProductLifecycle = {
+  draft: 'draft',
+  active: 'active',
+  discontinued: 'discontinued',
+  seasonal: 'seasonal',
+  archived: 'archived'
+};
+
+exports.ProductType = exports.$Enums.ProductType = {
+  physical: 'physical',
+  digital: 'digital',
+  service: 'service',
+  bundle: 'bundle'
+};
+
 exports.InventoryStockState = exports.$Enums.InventoryStockState = {
   on_hand: 'on_hand',
   reserved: 'reserved',
@@ -815,6 +892,12 @@ exports.Prisma.ModelName = {
   InvStockMove: 'InvStockMove',
   InvBatch: 'InvBatch',
   InvSerial: 'InvSerial',
+  InvProductCategory: 'InvProductCategory',
+  InvProductVariant: 'InvProductVariant',
+  InvUoM: 'InvUoM',
+  InvUoMConversion: 'InvUoMConversion',
+  InvProductBundle: 'InvProductBundle',
+  InvProductBundleItem: 'InvProductBundleItem',
   BizProject: 'BizProject',
   BizTask: 'BizTask',
   BizMilestone: 'BizMilestone',

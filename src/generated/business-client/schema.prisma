@@ -99,6 +99,21 @@ enum ExpenseStatus {
   reimbursed
 }
 
+enum ProductLifecycle {
+  draft
+  active
+  discontinued
+  seasonal
+  archived
+}
+
+enum ProductType {
+  physical
+  digital
+  service
+  bundle
+}
+
 enum LeaveStatus {
   requested
   approved
@@ -146,6 +161,11 @@ model Tenant {
   invWarehouses            InvWarehouse[]
   invStockItems            InvStockItem[]
   invStockMoves            InvStockMove[]
+  invProductCategories     InvProductCategory[]
+  invProductVariants       InvProductVariant[]
+  invUoMs                  InvUoM[]
+  invUoMConversions        InvUoMConversion[]
+  invBundles               InvProductBundle[]
   projects                 BizProject[]
   vendors                  ProcurementVendor[]
   rfqs                     ProcurementRfq[]
@@ -538,23 +558,36 @@ model HrCandidate {
 }
 
 model InvProduct {
-  id          String   @id @default(cuid())
-  tenantId    String   @map("tenant_id")
+  id          String           @id @default(cuid())
+  tenantId    String           @map("tenant_id")
   name        String
+  description String?
   sku         String?
+  skuPrefix   String?          @map("sku_prefix")
   category    String?
-  lifecycle   String?
-  productType String   @default("physical") @map("product_type")
-  createdAt   DateTime @default(now()) @map("created_at")
+  categoryId  String?          @map("category_id")
+  baseUomId   String?          @map("base_uom_id")
+  lifecycle   ProductLifecycle @default(active)
+  productType ProductType      @default(physical) @map("product_type")
+  basePrice   Decimal?         @map("base_price") @businessDb.Decimal(18, 2)
+  tags        Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
 
-  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  skus       InvSku[]
-  stockItems InvStockItem[]
-  stockMoves InvStockMove[]
-  batches    InvBatch[]
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productCategory InvProductCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  baseUom         InvUoM?                @relation("ProductBaseUom", fields: [baseUomId], references: [id], onDelete: SetNull)
+  skus            InvSku[]
+  variants        InvProductVariant[]
+  stockItems      InvStockItem[]
+  stockMoves      InvStockMove[]
+  batches         InvBatch[]
+  bundleHeaders   InvProductBundle[]     @relation("BundleHeaderProduct")
+  bundleItems     InvProductBundleItem[] @relation("BundleComponentProduct")
 
   @@unique([tenantId, name])
   @@index([tenantId, createdAt])
+  @@index([tenantId, lifecycle])
   @@map("products")
 }
 
@@ -661,6 +694,108 @@ model InvSerial {
   batch InvBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@map("serial_numbers")
+}
+
+model InvProductCategory {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  code      String?
+  parentId  String?  @map("parent_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   InvProductCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children InvProductCategory[] @relation("CategoryHierarchy")
+  products InvProduct[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, parentId])
+  @@map("product_categories")
+}
+
+model InvProductVariant {
+  id              String           @id @default(cuid())
+  tenantId        String           @map("tenant_id")
+  productId       String           @map("product_id")
+  sku             String
+  attributeValues Json             @map("attribute_values")
+  additionalPrice Decimal?         @map("additional_price") @businessDb.Decimal(18, 2)
+  lifecycle       ProductLifecycle @default(active)
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product InvProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sku])
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model InvUoM {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  symbol    String
+  category  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products        InvProduct[]       @relation("ProductBaseUom")
+  fromConversions InvUoMConversion[] @relation("ConversionFrom")
+  toConversions   InvUoMConversion[] @relation("ConversionTo")
+
+  @@unique([tenantId, symbol])
+  @@map("uom")
+}
+
+model InvUoMConversion {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  fromUomId String   @map("from_uom_id")
+  toUomId   String   @map("to_uom_id")
+  factor    Decimal  @businessDb.Decimal(18, 6)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromUom InvUoM @relation("ConversionFrom", fields: [fromUomId], references: [id], onDelete: Cascade)
+  toUom   InvUoM @relation("ConversionTo", fields: [toUomId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUomId, toUomId])
+  @@index([tenantId])
+  @@map("uom_conversions")
+}
+
+model InvProductBundle {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  productId   String   @map("product_id")
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product InvProduct             @relation("BundleHeaderProduct", fields: [productId], references: [id], onDelete: Cascade)
+  items   InvProductBundleItem[]
+
+  @@index([tenantId])
+  @@index([productId])
+  @@map("product_bundles")
+}
+
+model InvProductBundleItem {
+  id                 String  @id @default(cuid())
+  bundleId           String  @map("bundle_id")
+  componentProductId String  @map("component_product_id")
+  quantity           Decimal @businessDb.Decimal(18, 4)
+  notes              String?
+
+  bundle           InvProductBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  componentProduct InvProduct       @relation("BundleComponentProduct", fields: [componentProductId], references: [id], onDelete: Cascade)
+
+  @@index([bundleId])
+  @@index([componentProductId])
+  @@map("product_bundle_items")
 }
 
 model BizProject {

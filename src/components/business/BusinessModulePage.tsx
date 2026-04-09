@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { BUSINESS_MODULES_BY_KEY } from '@/lib/business-os';
 import type { BusinessModuleKey } from '@/lib/business-os';
 import type { BusinessModuleSpec, BusinessRecord } from '@/lib/business-os';
+import { ProductManagementContent } from '@/components/business/ProductManagementContent';
 
 const MODULE_UI_LABELS: Record<BusinessModuleKey, {
   objectLabel: string;
@@ -416,13 +417,7 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [tx, setTx] = useState<InventoryTx[]>([]);
-  const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [inventoryEntries, setInventoryEntries] = useState<InventoryEntry[]>([]);
-
-  const [newProductName, setNewProductName] = useState('');
-  const [newProductSku, setNewProductSku] = useState('');
-  const [newProductType, setNewProductType] = useState('physical');
-  const [newProductCategory, setNewProductCategory] = useState('general');
 
   const [newEntrySku, setNewEntrySku] = useState('');
   const [newEntryWarehouse, setNewEntryWarehouse] = useState('Main Warehouse');
@@ -434,25 +429,11 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
     let mounted = true;
     const load = async () => {
       try {
-        const [productsResponse, entriesResponse] = await Promise.all([
-          fetch('/api/business/inventory/products', { cache: 'no-store' }),
-          fetch('/api/business/inventory/entries', { cache: 'no-store' }),
-        ]);
+        const entriesResponse = await fetch('/api/business/inventory/entries', { cache: 'no-store' });
 
-        const productsData = (await productsResponse.json()) as { ok: boolean; products?: Array<{ id: string; name: string; sku: string | null; productType: string; category: string | null }> };
         const entriesData = (await entriesResponse.json()) as { ok: boolean; entries?: Array<{ id: string; productSku: string; warehouse: string; stockType: string; ownership: string; quantity: number }> };
 
         if (!mounted) return;
-
-        if (productsData.ok && productsData.products) {
-          setProducts(productsData.products.map((product) => ({
-            id: product.id,
-            name: product.name,
-            sku: product.sku ?? product.name,
-            productType: product.productType,
-            category: product.category ?? 'general',
-          })));
-        }
 
         if (entriesData.ok && entriesData.entries) {
           setInventoryEntries(entriesData.entries);
@@ -490,14 +471,12 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
       const stockRaw = window.localStorage.getItem('pinkplan:inventory:stock');
       const recordsRaw = window.localStorage.getItem('pinkplan:inventory:records');
       const txRaw = window.localStorage.getItem('pinkplan:inventory:tx');
-      const productsRaw = window.localStorage.getItem('pinkplan:inventory:products');
       const entriesRaw = window.localStorage.getItem('pinkplan:inventory:entries');
 
       if (stockRaw) setStock(JSON.parse(stockRaw) as typeof stock);
       if (recordsRaw) setRecords(JSON.parse(recordsRaw) as BusinessRecord[]);
       if (txRaw) setTx(JSON.parse(txRaw) as InventoryTx[]);
       else setTx([{ id: 'boot', at: new Date().toLocaleTimeString(), message: 'Inventory stream online' }]);
-      if (productsRaw) setProducts(JSON.parse(productsRaw) as InventoryProduct[]);
       if (entriesRaw) setInventoryEntries(JSON.parse(entriesRaw) as InventoryEntry[]);
     };
 
@@ -521,11 +500,6 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('pinkplan:inventory:tx', JSON.stringify(tx));
   }, [tx]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('pinkplan:inventory:products', JSON.stringify(products));
-  }, [products]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -588,58 +562,6 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
       pushTx(`${record.title} moved to ${next}`);
       return { ...record, status: next };
     }));
-  };
-
-  const addProduct = async () => {
-    if (!newProductName.trim() || !newProductSku.trim()) return;
-    let savedToApi = false;
-
-    try {
-      const response = await fetch('/api/business/inventory/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newProductName.trim(),
-          sku: newProductSku.trim().toUpperCase(),
-          productType: newProductType.trim() || 'physical',
-          category: newProductCategory.trim() || 'general',
-        }),
-      });
-
-      if (response.ok) {
-        savedToApi = true;
-        const refresh = await fetch('/api/business/inventory/products', { cache: 'no-store' });
-        const data = (await refresh.json()) as { ok: boolean; products?: Array<{ id: string; name: string; sku: string | null; productType: string; category: string | null }> };
-        if (data.ok && data.products) {
-          setProducts(data.products.map((product) => ({
-            id: product.id,
-            name: product.name,
-            sku: product.sku ?? product.name,
-            productType: product.productType,
-            category: product.category ?? 'general',
-          })));
-        }
-      }
-    } catch {
-      // continue with local fallback
-    }
-
-    const next: InventoryProduct = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-      name: newProductName.trim(),
-      sku: newProductSku.trim().toUpperCase(),
-      productType: newProductType.trim() || 'physical',
-      category: newProductCategory.trim() || 'general',
-    };
-
-    if (!savedToApi) {
-      setProducts((prev) => [next, ...prev]);
-    }
-    pushTx(`New product created: ${next.name} (${next.sku})`);
-    setNewProductName('');
-    setNewProductSku('');
-    setNewProductType('physical');
-    setNewProductCategory('general');
   };
 
   const addInventoryEntry = async () => {
@@ -802,24 +724,10 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-12">
-        <Card className="glass-card border-white/5 xl:col-span-6">
-          <CardHeader>
-            <CardTitle>Create New Product</CardTitle>
-            <CardDescription>Add product master records (physical, digital, service) with SKU.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            <Input placeholder="Product name" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} />
-            <Input placeholder="SKU" value={newProductSku} onChange={(event) => setNewProductSku(event.target.value)} />
-            <Input placeholder="Type (physical/digital/service)" value={newProductType} onChange={(event) => setNewProductType(event.target.value)} />
-            <Input placeholder="Category" value={newProductCategory} onChange={(event) => setNewProductCategory(event.target.value)} />
-            <div className="md:col-span-2">
-              <Button className="w-full gradient-amber text-black font-semibold" onClick={addProduct}>Add Product</Button>
-            </div>
-          </CardContent>
-        </Card>
+      <ProductManagementContent />
 
-        <Card className="glass-card border-white/5 xl:col-span-6">
+      <div className="grid gap-4 xl:grid-cols-12">
+        <Card className="glass-card border-white/5 xl:col-span-6" id="new-inventory-entry">
           <CardHeader>
             <CardTitle>Create New Inventory Entry</CardTitle>
             <CardDescription>Add warehouse stock entries with stock type and ownership.</CardDescription>
@@ -831,27 +739,6 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
             <Input placeholder="Ownership (company/consignment/vendor-owned)" value={newEntryOwnership} onChange={(event) => setNewEntryOwnership(event.target.value)} />
             <Input placeholder="Quantity" value={newEntryQty} onChange={(event) => setNewEntryQty(event.target.value)} />
             <Button className="gradient-amber text-black font-semibold" onClick={addInventoryEntry}>Add Inventory</Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-12">
-        <Card className="glass-card border-white/5 xl:col-span-6">
-          <CardHeader>
-            <CardTitle>Product Master Records</CardTitle>
-            <CardDescription>Products created through this interface.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {products.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No products added yet.</p>
-            ) : (
-              products.map((product) => (
-                <div key={product.id} className="rounded-xl border border-white/5 bg-card/40 p-3">
-                  <p className="font-medium text-foreground">{product.name} ({product.sku})</p>
-                  <p className="text-xs text-muted-foreground">{product.productType} • {product.category}</p>
-                </div>
-              ))
-            )}
           </CardContent>
         </Card>
 
