@@ -3,8 +3,11 @@ import { z } from 'zod';
 import { businessPrisma, ensureBusinessTenant, BUSINESS_DEFAULT_TENANT_ID } from '@/lib/server/business-prisma';
 
 const createEmployeeSchema = z.object({
-  name: z.string().min(1),
-  title: z.string().min(1),
+  name: z.string().min(1).optional(),
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().optional(),
+  title: z.string().min(1).optional(),
+  position: z.string().min(1).optional(),
   department: z.string().default('General'),
   email: z.string().email(),
 });
@@ -40,7 +43,28 @@ export async function POST(request: NextRequest) {
     await ensureBusinessTenant();
     const payload = createEmployeeSchema.parse(await request.json());
 
-    const [firstName, ...rest] = payload.name.trim().split(' ');
+    const normalizedName =
+      payload.name?.trim() ||
+      [payload.firstName?.trim(), payload.lastName?.trim()].filter(Boolean).join(' ').trim();
+    const normalizedTitle = payload.title?.trim() || payload.position?.trim();
+
+    if (!normalizedName || !normalizedTitle) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Invalid employee payload',
+          issues: {
+            fieldErrors: {
+              ...(normalizedName ? {} : { name: ['Required (or provide firstName)'] }),
+              ...(normalizedTitle ? {} : { title: ['Required (or provide position)'] }),
+            },
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const [firstName, ...rest] = normalizedName.split(' ');
     const lastName = rest.join(' ');
 
     const user = await businessPrisma.businessUser.upsert({
@@ -62,13 +86,13 @@ export async function POST(request: NextRequest) {
     const employee = await businessPrisma.hrEmployee.upsert({
       where: { userId: user.id },
       update: {
-        title: payload.title,
+        title: normalizedTitle,
         departmentId: payload.department,
       },
       create: {
         tenantId: BUSINESS_DEFAULT_TENANT_ID,
         userId: user.id,
-        title: payload.title,
+        title: normalizedTitle,
         departmentId: payload.department,
       },
     });

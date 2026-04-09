@@ -99,6 +99,28 @@ const TYPE_COLORS: Record<ProductType, string> = {
 
 const LIFECYCLE_CYCLE: ProductLifecycle[] = ['draft', 'active', 'seasonal', 'discontinued', 'archived'];
 
+const COMMON_CATEGORY_PRESETS = [
+  'Electronics',
+  'Fashion',
+  'Grocery',
+  'Home & Kitchen',
+  'Health & Beauty',
+  'Office Supplies',
+  'Services',
+  'Digital Goods',
+];
+
+const COMMON_UOM_PRESETS: Array<{ name: string; symbol: string; category: string }> = [
+  { name: 'Piece', symbol: 'pc', category: 'qty' },
+  { name: 'Box', symbol: 'box', category: 'qty' },
+  { name: 'Kilogram', symbol: 'kg', category: 'weight' },
+  { name: 'Gram', symbol: 'g', category: 'weight' },
+  { name: 'Liter', symbol: 'l', category: 'volume' },
+  { name: 'Milliliter', symbol: 'ml', category: 'volume' },
+  { name: 'Meter', symbol: 'm', category: 'length' },
+  { name: 'Hour', symbol: 'hr', category: 'time' },
+];
+
 function advanceLifecycle(current: ProductLifecycle): ProductLifecycle {
   const idx = LIFECYCLE_CYCLE.indexOf(current);
   return LIFECYCLE_CYCLE[(idx + 1) % LIFECYCLE_CYCLE.length];
@@ -122,7 +144,9 @@ const CatalogTab = () => {
   const [lifecycle, setLifecycle]     = useState<ProductLifecycle>('active');
   const [basePrice, setBasePrice]     = useState('');
   const [categoryId, setCategoryId]   = useState('');
+  const [categoryName, setCategoryName] = useState('');
   const [baseUomId, setBaseUomId]     = useState('');
+  const [uomSymbol, setUomSymbol]     = useState('');
   const [tagsInput, setTagsInput]     = useState('');
   const [saving, setSaving]           = useState(false);
 
@@ -148,11 +172,66 @@ const CatalogTab = () => {
 
   useEffect(() => { void load(); }, [load]);
 
+  const ensureCategoryId = useCallback(async (rawName: string) => {
+    const normalized = rawName.trim();
+    if (!normalized) return '';
+
+    const existing = categories.find((item) => item.name.toLowerCase() === normalized.toLowerCase());
+    if (existing) return existing.id;
+
+    const response = await fetch('/api/business/products/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: normalized }),
+    });
+
+    if (!response.ok) return '';
+    const data = (await response.json()) as { ok: boolean; category?: { id: string; name: string } };
+    if (data.ok && data.category) {
+      const createdCategory = data.category;
+      setCategories((prev) => [
+        ...prev,
+        { id: createdCategory.id, name: createdCategory.name },
+      ]);
+      return createdCategory.id;
+    }
+    return '';
+  }, [categories]);
+
+  const ensureUomId = useCallback(async (rawSymbol: string) => {
+    const normalized = rawSymbol.trim().toLowerCase();
+    if (!normalized) return '';
+
+    const existing = uoms.find((item) => item.symbol.toLowerCase() === normalized);
+    if (existing) return existing.id;
+
+    const preset = COMMON_UOM_PRESETS.find((item) => item.symbol === normalized);
+    const response = await fetch('/api/business/products/uom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: preset?.name ?? normalized.toUpperCase(),
+        symbol: normalized,
+        category: preset?.category,
+      }),
+    });
+
+    if (!response.ok) return '';
+    const data = (await response.json()) as { ok: boolean; uom?: UoM };
+    if (data.ok && data.uom) {
+      setUoms((prev) => [...prev, data.uom as UoM]);
+      return data.uom.id;
+    }
+    return '';
+  }, [uoms]);
+
   const addProduct = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
       const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
+      const resolvedCategoryId = categoryId || await ensureCategoryId(categoryName);
+      const resolvedUomId = baseUomId || await ensureUomId(uomSymbol);
       const res = await fetch('/api/business/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -163,8 +242,8 @@ const CatalogTab = () => {
           productType,
           lifecycle,
           basePrice: basePrice ? parseFloat(basePrice) : undefined,
-          categoryId: categoryId || undefined,
-          baseUomId: baseUomId || undefined,
+          categoryId: resolvedCategoryId || undefined,
+          baseUomId: resolvedUomId || undefined,
           tags: tags.length ? tags : undefined,
         }),
       });
@@ -172,7 +251,7 @@ const CatalogTab = () => {
         await load();
         setName(''); setDescription(''); setSkuPrefix('');
         setProductType('physical'); setLifecycle('active');
-        setBasePrice(''); setCategoryId(''); setBaseUomId(''); setTagsInput('');
+        setBasePrice(''); setCategoryId(''); setCategoryName(''); setBaseUomId(''); setUomSymbol(''); setTagsInput('');
       }
     } finally {
       setSaving(false);
@@ -298,7 +377,12 @@ const CatalogTab = () => {
               <Label className="text-xs text-muted-foreground">Category</Label>
               <select
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCategoryId(value);
+                  const selected = categories.find((item) => item.id === value);
+                  setCategoryName(selected?.name ?? '');
+                }}
                 className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground"
               >
                 <option value="">— None —</option>
@@ -306,12 +390,43 @@ const CatalogTab = () => {
                   <option key={c.id} value={c.id}>{c.parent ? `↳ ${c.name}` : c.name}</option>
                 ))}
               </select>
+              <Input
+                placeholder="Or add new category"
+                value={categoryName}
+                onChange={(e) => {
+                  setCategoryName(e.target.value);
+                  if (categoryId) setCategoryId('');
+                }}
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {COMMON_CATEGORY_PRESETS.map((preset) => (
+                  <Button
+                    key={preset}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 border-white/10 bg-card/40 px-2 text-[11px]"
+                    onClick={() => {
+                      const existing = categories.find((item) => item.name.toLowerCase() === preset.toLowerCase());
+                      setCategoryName(preset);
+                      setCategoryId(existing?.id ?? '');
+                    }}
+                  >
+                    {preset}
+                  </Button>
+                ))}
+              </div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Base Unit of Measure</Label>
               <select
                 value={baseUomId}
-                onChange={(e) => setBaseUomId(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setBaseUomId(value);
+                  const selected = uoms.find((item) => item.id === value);
+                  setUomSymbol(selected?.symbol ?? '');
+                }}
                 className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground"
               >
                 <option value="">— None —</option>
@@ -319,6 +434,32 @@ const CatalogTab = () => {
                   <option key={u.id} value={u.id}>{u.name} ({u.symbol})</option>
                 ))}
               </select>
+              <Input
+                placeholder="Or add measurement (e.g. kg, pc, l)"
+                value={uomSymbol}
+                onChange={(e) => {
+                  setUomSymbol(e.target.value.toLowerCase());
+                  if (baseUomId) setBaseUomId('');
+                }}
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {COMMON_UOM_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.symbol}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 border-white/10 bg-card/40 px-2 text-[11px]"
+                    onClick={() => {
+                      const existing = uoms.find((item) => item.symbol.toLowerCase() === preset.symbol.toLowerCase());
+                      setUomSymbol(preset.symbol);
+                      setBaseUomId(existing?.id ?? '');
+                    }}
+                  >
+                    {preset.symbol}
+                  </Button>
+                ))}
+              </div>
             </div>
             <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs text-muted-foreground">Description</Label>

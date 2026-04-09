@@ -7,20 +7,46 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import type { BusinessModuleSpec } from '@/lib/business-os';
 
-type SalesRecord = {
-  id: string;
-  title: string;
-  subtitle: string;
-  meta: string;
-  status: string;
-};
-
 type InventoryProduct = {
   id: string;
   name: string;
   sku: string;
   category: string;
   productType: string;
+  basePrice: number;
+};
+
+type Employee = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+type SalesOrderRow = {
+  id: string;
+  orderNo: string;
+  employeeId: string | null;
+  employeeName: string;
+  currency: string;
+  channel: 'pos' | 'warehouse' | 'ecommerce';
+  status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled';
+  total: number;
+  createdAt: string;
+  lines: Array<{
+    id: string;
+    productId: string;
+    productName: string;
+    productSku: string | null;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
+  payments: Array<{
+    id: string;
+    method: 'cash' | 'card' | 'wallet' | 'bank';
+    amount: number;
+    reference?: string | null;
+  }>;
 };
 
 type PricingRule = {
@@ -37,18 +63,15 @@ type CreditProfile = {
   used: number;
 };
 
-type SalesPerson = {
+type PaymentSplit = {
   id: string;
-  name: string;
-  orders: number;
+  method: 'cash' | 'card' | 'wallet' | 'bank';
   amount: number;
 };
 
-type PaymentSplit = {
-  id: string;
-  method: string;
-  amount: number;
-};
+const isPaymentMethod = (value: string): value is PaymentSplit['method'] => (
+  value === 'cash' || value === 'card' || value === 'wallet' || value === 'bank'
+);
 
 type PosLine = {
   productId: string;
@@ -60,10 +83,19 @@ type PosLine = {
 
 type OfflineSale = {
   id: string;
-  title: string;
-  subtitle: string;
-  meta: string;
-  status: string;
+  employeeId: string;
+  currency: string;
+  channel: 'pos' | 'warehouse' | 'ecommerce';
+  status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled';
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  payments: Array<{
+    method: 'cash' | 'card' | 'wallet' | 'bank';
+    amount: number;
+  }>;
 };
 
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -74,11 +106,12 @@ const CURRENCY_SYMBOL: Record<string, string> = {
   AED: 'AED ',
 };
 
-const SALES_FLOW = ['Open', 'POS Complete', 'Settled', 'Closed'];
+const SALES_FLOW: Array<'draft' | 'open' | 'settled' | 'closed' | 'canceled'> = ['draft', 'open', 'settled', 'closed', 'canceled'];
 
 export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
-  const [rows, setRows] = useState<SalesRecord[]>([]);
+  const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [products, setProducts] = useState<InventoryProduct[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [ruleName, setRuleName] = useState('');
@@ -89,11 +122,10 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const [creditCustomer, setCreditCustomer] = useState('');
   const [creditLimit, setCreditLimit] = useState('0');
 
-  const [salespeople, setSalespeople] = useState<SalesPerson[]>([]);
-  const [salespersonName, setSalespersonName] = useState('');
-  const [selectedSalespersonId, setSelectedSalespersonId] = useState('');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
 
   const [currency, setCurrency] = useState('USD');
+  const [channel, setChannel] = useState<'pos' | 'warehouse' | 'ecommerce'>('pos');
   const [barcode, setBarcode] = useState('');
   const [offlineMode, setOfflineMode] = useState(false);
   const [offlineQueue, setOfflineQueue] = useState<OfflineSale[]>([]);
@@ -115,29 +147,28 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
     const load = async () => {
       try {
-        const [salesResponse, productsResponse] = await Promise.all([
-          fetch('/api/business/operations?module=sales', { cache: 'no-store' }),
-          fetch('/api/business/inventory/products', { cache: 'no-store' }),
+        const [salesResponse, productsResponse, employeesResponse] = await Promise.all([
+          fetch('/api/business/sales/orders', { cache: 'no-store' }),
+          fetch('/api/business/products', { cache: 'no-store' }),
+          fetch('/api/business/hr/operations', { cache: 'no-store' }),
         ]);
 
-        const salesData = (await salesResponse.json()) as { ok: boolean; records?: SalesRecord[] };
+        const salesData = (await salesResponse.json()) as { ok: boolean; orders?: SalesOrderRow[] };
         const productsData = (await productsResponse.json()) as {
           ok: boolean;
-          products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string }>;
+          products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string; basePrice: number | null }>;
+        };
+        const employeesData = (await employeesResponse.json()) as {
+          ok: boolean;
+          employees?: Array<{ id: string; name: string; email: string }>;
         };
 
         if (!mounted) return;
 
-        if (salesData.ok && salesData.records) {
-          setRows(salesData.records);
+        if (salesData.ok && salesData.orders) {
+          setRows(salesData.orders);
         } else {
-          setRows(module.records.map((record, idx) => ({
-            id: `seed-sales-${idx}`,
-            title: record.title,
-            subtitle: record.subtitle,
-            meta: record.meta,
-            status: record.status ?? 'Open',
-          })));
+          setRows([]);
         }
 
         if (productsData.ok && productsData.products) {
@@ -147,23 +178,21 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             sku: item.sku ?? item.name,
             category: item.category ?? 'general',
             productType: item.productType,
+            basePrice: item.basePrice ?? 0,
           })));
+        }
+
+        if (employeesData.ok && employeesData.employees) {
+          setEmployees(employeesData.employees);
         }
       } catch {
         if (!mounted) return;
-        setRows(module.records.map((record, idx) => ({
-          id: `seed-sales-${idx}`,
-          title: record.title,
-          subtitle: record.subtitle,
-          meta: record.meta,
-          status: record.status ?? 'Open',
-        })));
+        setRows([]);
       }
 
       if (typeof window !== 'undefined') {
         const rulesRaw = window.localStorage.getItem('pinkplan:sales:pricing-rules');
         const creditsRaw = window.localStorage.getItem('pinkplan:sales:credits');
-        const repsRaw = window.localStorage.getItem('pinkplan:sales:salespeople');
         const queueRaw = window.localStorage.getItem('pinkplan:sales:offline-queue');
 
         if (rulesRaw) setPricingRules(JSON.parse(rulesRaw) as PricingRule[]);
@@ -179,14 +208,6 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           setCredits([
             { id: 'credit-seed-1', customer: 'Apex Retail', limit: 15000, used: 6400 },
             { id: 'credit-seed-2', customer: 'Northwind B2B', limit: 9000, used: 2000 },
-          ]);
-        }
-
-        if (repsRaw) setSalespeople(JSON.parse(repsRaw) as SalesPerson[]);
-        else {
-          setSalespeople([
-            { id: 'sp-seed-1', name: 'Mia Carter', orders: 18, amount: 12420 },
-            { id: 'sp-seed-2', name: 'Owen Blake', orders: 14, amount: 9720 },
           ]);
         }
 
@@ -213,13 +234,16 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('pinkplan:sales:salespeople', JSON.stringify(salespeople));
-  }, [salespeople]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
     window.localStorage.setItem('pinkplan:sales:offline-queue', JSON.stringify(offlineQueue));
   }, [offlineQueue]);
+
+  useEffect(() => {
+    if (!selectedProductId) return;
+    const product = products.find((item) => item.id === selectedProductId);
+    if (product) {
+      setSelectedPrice(String(product.basePrice));
+    }
+  }, [selectedProductId, products]);
 
   const filteredRows = useMemo(() => {
     if (statusFilter === 'all') return rows;
@@ -250,6 +274,18 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     ];
   }, [products.length]);
 
+  const salespersonTracking = useMemo(() => {
+    return employees.map((employee) => {
+      const employeeOrders = rows.filter((order) => order.employeeId === employee.id);
+      return {
+        id: employee.id,
+        name: employee.name,
+        orders: employeeOrders.length,
+        amount: employeeOrders.reduce((sum, order) => sum + order.total, 0),
+      };
+    });
+  }, [employees, rows]);
+
   const addPricingRule = () => {
     const value = Number(ruleValue);
     if (!ruleName.trim() || Number.isNaN(value) || value < 0) return;
@@ -279,21 +315,6 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     setCreditLimit('0');
   };
 
-  const addSalesperson = () => {
-    if (!salespersonName.trim()) return;
-    const next: SalesPerson = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-      name: salespersonName.trim(),
-      orders: 0,
-      amount: 0,
-    };
-    setSalespeople((prev) => [next, ...prev]);
-    setSalespersonName('');
-    if (!selectedSalespersonId) {
-      setSelectedSalespersonId(next.id);
-    }
-  };
-
   const addBarcodeLine = () => {
     if (!barcode.trim()) return;
     const matched = products.find((item) => item.sku.toLowerCase() === barcode.trim().toLowerCase());
@@ -313,7 +334,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           sku: matched.sku,
           name: matched.name,
           qty: 1,
-          unitPrice: 10,
+          unitPrice: matched.basePrice,
         },
       ];
     });
@@ -350,7 +371,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     });
 
     setSelectedQty('1');
-    setSelectedPrice('0');
+    setSelectedPrice(String(product.basePrice));
   };
 
   const updateSplit = (id: string, updates: Partial<PaymentSplit>) => {
@@ -371,8 +392,13 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const advanceRecord = (id: string) => {
     setRows((prev) => prev.map((row) => {
       if (row.id !== id) return row;
-      const index = SALES_FLOW.findIndex((state) => state.toLowerCase() === row.status.toLowerCase());
+      const index = SALES_FLOW.findIndex((state) => state === row.status);
       const next = SALES_FLOW[(index + 1 + SALES_FLOW.length) % SALES_FLOW.length];
+      void fetch('/api/business/sales/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: row.id, status: next }),
+      });
       return { ...row, status: next };
     }));
   };
@@ -398,30 +424,32 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   };
 
   const persistSale = async (sale: OfflineSale) => {
-    const response = await fetch('/api/business/operations', {
+    const response = await fetch('/api/business/sales/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        module: 'sales',
-        title: sale.title,
-        subtitle: sale.subtitle,
-        meta: sale.meta,
-        status: sale.status,
-      }),
+      body: JSON.stringify(sale),
     });
     return response.ok;
   };
 
   const checkout = async () => {
-    if (cart.length === 0 || posTotal <= 0) return;
+    if (cart.length === 0 || posTotal <= 0 || !selectedEmployeeId) return;
 
-    const selectedRep = salespeople.find((rep) => rep.id === selectedSalespersonId);
     const sale: OfflineSale = {
       id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-      title: `POS-${Date.now().toString().slice(-6)}`,
-      subtitle: `${selectedRep?.name ?? 'Unassigned'} • ${cart.length} lines`,
-      meta: `${CURRENCY_SYMBOL[currency] ?? ''}${posTotal.toFixed(2)}`,
-      status: offlineMode ? 'Queued Offline' : 'Open',
+      employeeId: selectedEmployeeId,
+      currency,
+      channel,
+      status: offlineMode ? 'draft' : 'open',
+      lines: cart.map((line) => ({
+        productId: line.productId,
+        quantity: line.qty,
+        unitPrice: line.unitPrice,
+      })),
+      payments: splitPayments.map((payment) => ({
+        method: payment.method,
+        amount: Number(payment.amount || 0),
+      })),
     };
 
     if (offlineMode) {
@@ -429,22 +457,14 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     } else {
       const saved = await persistSale(sale);
       if (saved) {
-        const refresh = await fetch('/api/business/operations?module=sales', { cache: 'no-store' });
-        const data = (await refresh.json()) as { ok: boolean; records?: SalesRecord[] };
-        if (data.ok && data.records) {
-          setRows(data.records);
+        const refresh = await fetch('/api/business/sales/orders', { cache: 'no-store' });
+        const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
+        if (data.ok && data.orders) {
+          setRows(data.orders);
         }
       } else {
         setOfflineQueue((prev) => [sale, ...prev]);
       }
-    }
-
-    if (selectedRep) {
-      setSalespeople((prev) => prev.map((rep) => (
-        rep.id === selectedRep.id
-          ? { ...rep, orders: rep.orders + 1, amount: rep.amount + posTotal }
-          : rep
-      )));
     }
 
     const cashPaid = splitPayments
@@ -457,6 +477,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
     setCart([]);
     setSplitPayments([{ id: 'p1', method: 'cash', amount: 0 }]);
+    setSelectedEmployeeId('');
   };
 
   const syncOfflineQueue = async () => {
@@ -467,16 +488,16 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
     for (const item of queued) {
       // Serial sync keeps order deterministic for receipts and reconciliation.
-      const ok = await persistSale({ ...item, status: 'Open' });
+      const ok = await persistSale({ ...item, status: 'open' });
       if (!ok) stillQueued.push(item);
     }
 
     setOfflineQueue(stillQueued);
 
-    const refresh = await fetch('/api/business/operations?module=sales', { cache: 'no-store' });
-    const data = (await refresh.json()) as { ok: boolean; records?: SalesRecord[] };
-    if (data.ok && data.records) {
-      setRows(data.records);
+    const refresh = await fetch('/api/business/sales/orders', { cache: 'no-store' });
+    const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
+    if (data.ok && data.orders) {
+      setRows(data.orders);
     }
   };
 
@@ -574,9 +595,19 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={addManualLine}>Add POS Line</Button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-5">
               <Input placeholder="Barcode / SKU" value={barcode} onChange={(event) => setBarcode(event.target.value)} />
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={addBarcodeLine}>Scan Barcode</Button>
+              <select
+                value={selectedEmployeeId}
+                onChange={(event) => setSelectedEmployeeId(event.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">Select employee ID</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.id.slice(0, 8)} • {employee.name}</option>
+                ))}
+              </select>
               <select
                 value={currency}
                 onChange={(event) => setCurrency(event.target.value)}
@@ -587,6 +618,15 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
                 <option value="GBP">GBP</option>
                 <option value="KES">KES</option>
                 <option value="AED">AED</option>
+              </select>
+              <select
+                value={channel}
+                onChange={(event) => setChannel(event.target.value as 'pos' | 'warehouse' | 'ecommerce')}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="pos">POS</option>
+                <option value="warehouse">Warehouse</option>
+                <option value="ecommerce">E-commerce</option>
               </select>
               <Button
                 variant={offlineMode ? 'default' : 'outline'}
@@ -634,7 +674,12 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
                 <div key={line.id} className="grid gap-3 md:grid-cols-4">
                   <select
                     value={line.method}
-                    onChange={(event) => updateSplit(line.id, { method: event.target.value })}
+                    onChange={(event) => {
+                      const method = event.target.value;
+                      if (isPaymentMethod(method)) {
+                        updateSplit(line.id, { method });
+                      }
+                    }}
                     className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                   >
                     <option value="cash">cash</option>
@@ -660,7 +705,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button className="gradient-amber text-black font-semibold" onClick={checkout} disabled={cart.length === 0}>Checkout</Button>
+              <Button className="gradient-amber text-black font-semibold" onClick={checkout} disabled={cart.length === 0 || !selectedEmployeeId}>Checkout</Button>
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={printReceipt}>Print Receipt</Button>
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={syncOfflineQueue} disabled={offlineQueue.length === 0}>
                 Sync Offline Queue ({offlineQueue.length})
@@ -719,29 +764,13 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
         <Card id="salesperson-tracking" className="glass-card border-white/5 xl:col-span-5 scroll-mt-24">
           <CardHeader>
             <CardTitle>Salesperson Tracking</CardTitle>
-            <CardDescription>Track orders and booked amount per salesperson.</CardDescription>
+            <CardDescription>Computed from Sales Orders linked to employee IDs.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Input placeholder="Salesperson name" value={salespersonName} onChange={(event) => setSalespersonName(event.target.value)} />
-              <Button variant="outline" className="border-white/10 bg-card/40" onClick={addSalesperson}>Add Salesperson</Button>
-            </div>
-
-            <select
-              value={selectedSalespersonId}
-              onChange={(event) => setSelectedSalespersonId(event.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Assign checkout salesperson</option>
-              {salespeople.map((rep) => (
-                <option key={rep.id} value={rep.id}>{rep.name}</option>
-              ))}
-            </select>
-
             <div className="space-y-2">
-              {salespeople.map((rep) => (
+              {salespersonTracking.map((rep) => (
                 <div key={rep.id} className="rounded-xl border border-white/5 bg-card/40 p-3">
-                  <p className="font-medium text-foreground">{rep.name}</p>
+                  <p className="font-medium text-foreground">{rep.name} ({rep.id.slice(0, 8)})</p>
                   <p className="text-xs text-muted-foreground mt-1">{rep.orders} orders • {rep.amount.toFixed(2)} booked</p>
                 </div>
               ))}
@@ -753,11 +782,11 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
       <Card id="operations" className="glass-card border-white/5 scroll-mt-24">
         <CardHeader>
           <CardTitle>Sales Operations Feed</CardTitle>
-          <CardDescription>Saved sales operations from POS and online channels.</CardDescription>
+          <CardDescription>Relational sales orders linked to employees and products.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {['all', 'open', 'pos complete', 'settled', 'closed', 'queued offline'].map((option) => (
+            {['all', 'draft', 'open', 'settled', 'closed', 'canceled'].map((option) => (
               <Button
                 key={option}
                 size="sm"
@@ -774,9 +803,9 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             {filteredRows.map((row) => (
               <div key={row.id} className="flex flex-col gap-3 rounded-xl border border-white/5 bg-card/40 p-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="font-medium text-foreground">{row.title}</p>
-                  <p className="text-sm text-muted-foreground">{row.subtitle}</p>
-                  <p className="text-xs text-primary">{row.meta}</p>
+                  <p className="font-medium text-foreground">{row.orderNo} • {row.employeeName}</p>
+                  <p className="text-sm text-muted-foreground">{row.channel.toUpperCase()} • {new Date(row.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-primary">{CURRENCY_SYMBOL[row.currency] ?? ''}{row.total.toFixed(2)} • {row.lines.length} lines</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="border-white/10 text-muted-foreground">{row.status}</Badge>

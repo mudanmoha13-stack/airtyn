@@ -99,6 +99,27 @@ enum ExpenseStatus {
   reimbursed
 }
 
+enum SalesOrderStatus {
+  draft
+  open
+  settled
+  closed
+  canceled
+}
+
+enum SalesChannel {
+  pos
+  warehouse
+  ecommerce
+}
+
+enum SalesPaymentMethod {
+  cash
+  card
+  wallet
+  bank
+}
+
 enum ProductLifecycle {
   draft
   active
@@ -156,6 +177,9 @@ model Tenant {
   hrEmployees              HrEmployee[]
   hrCandidates             HrCandidate[]
   hrPayrollRuns            HrPayrollRun[]
+  saleOrders               SaleOrder[]
+  saleOrderLines           SaleOrderLine[]
+  salePayments             SalePayment[]
   invProducts              InvProduct[]
   invSkus                  InvSku[]
   invWarehouses            InvWarehouse[]
@@ -471,6 +495,7 @@ model HrEmployee {
   attendance HrAttendance[]
   leaves     HrLeave[]
   payslips   HrPayslip[]
+  saleOrders SaleOrder[]
 
   @@index([tenantId, createdAt])
   @@map("employees")
@@ -557,6 +582,66 @@ model HrCandidate {
   @@map("candidates")
 }
 
+model SaleOrder {
+  id         String           @id @default(cuid())
+  tenantId   String           @map("tenant_id")
+  employeeId String?          @map("employee_id")
+  orderNo    String           @map("order_no")
+  currency   String           @default("USD")
+  channel    SalesChannel     @default(pos)
+  status     SalesOrderStatus @default(open)
+  total      Decimal          @default(0) @businessDb.Decimal(18, 2)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee HrEmployee?     @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  lines    SaleOrderLine[]
+  payments SalePayment[]
+
+  @@unique([tenantId, orderNo])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, employeeId])
+  @@map("sale_orders")
+}
+
+model SaleOrderLine {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  saleOrderId String   @map("sale_order_id")
+  productId   String   @map("product_id")
+  quantity    Decimal  @default(1) @businessDb.Decimal(18, 4)
+  unitPrice   Decimal  @default(0) @businessDb.Decimal(18, 2)
+  lineTotal   Decimal  @default(0) @map("line_total") @businessDb.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  saleOrder SaleOrder  @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+  product   InvProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+  @@index([saleOrderId])
+  @@index([productId])
+  @@map("sale_order_lines")
+}
+
+model SalePayment {
+  id          String             @id @default(cuid())
+  tenantId    String             @map("tenant_id")
+  saleOrderId String             @map("sale_order_id")
+  method      SalesPaymentMethod
+  amount      Decimal            @default(0) @businessDb.Decimal(18, 2)
+  reference   String?
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  saleOrder SaleOrder @relation(fields: [saleOrderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([saleOrderId])
+  @@map("sale_payments")
+}
+
 model InvProduct {
   id          String           @id @default(cuid())
   tenantId    String           @map("tenant_id")
@@ -582,6 +667,7 @@ model InvProduct {
   stockItems      InvStockItem[]
   stockMoves      InvStockMove[]
   batches         InvBatch[]
+  saleOrderLines  SaleOrderLine[]
   bundleHeaders   InvProductBundle[]     @relation("BundleHeaderProduct")
   bundleItems     InvProductBundleItem[] @relation("BundleComponentProduct")
 

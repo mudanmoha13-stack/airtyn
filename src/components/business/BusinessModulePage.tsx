@@ -97,6 +97,89 @@ const MODULE_UI_LABELS: Record<BusinessModuleKey, {
   },
 };
 
+type ModuleSectionConfig = {
+  id: string;
+  label: string;
+  defaultVisible?: boolean;
+};
+
+const MODULE_SECTION_LIBRARY: Record<BusinessModuleKey, ModuleSectionConfig[]> = {
+  crm: [
+    { id: 'operations', label: 'Operations board', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'workflows', label: 'Workflows' },
+    { id: 'governance', label: 'Controls' },
+  ],
+  sales: [
+    { id: 'operations', label: 'Sales operations', defaultVisible: true },
+    { id: 'sales-pos', label: 'POS workspace', defaultVisible: true },
+    { id: 'sales-payments', label: 'Split payments', defaultVisible: true },
+    { id: 'sales-pricing', label: 'Pricing rules' },
+    { id: 'sales-credit', label: 'Credit controls' },
+    { id: 'sales-channels', label: 'Channel stock' },
+    { id: 'salesperson-tracking', label: 'Salesperson tracking' },
+  ],
+  finance: [
+    { id: 'operations', label: 'Finance operations', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'workflows', label: 'Workflows' },
+    { id: 'compliance', label: 'Compliance controls' },
+  ],
+  hr: [
+    { id: 'operations', label: 'Employee operations', defaultVisible: true },
+    { id: 'workflows', label: 'Workflow lane', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'governance', label: 'Governance controls' },
+  ],
+  inventory: [
+    { id: 'new-inventory-entry', label: 'Add inventory', defaultVisible: true },
+    { id: 'stock-tracking', label: 'Stock tracking', defaultVisible: true },
+    { id: 'live-transactions', label: 'Live transactions', defaultVisible: true },
+    { id: 'stock-types', label: 'Stock counters' },
+    { id: 'product-management', label: 'Product management blocks' },
+    { id: 'inventory-structure', label: 'Inventory structure' },
+  ],
+  projects: [
+    { id: 'operations', label: 'Execution board', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'workflows', label: 'Workflows' },
+    { id: 'governance', label: 'Controls' },
+  ],
+  procurement: [
+    { id: 'operations', label: 'Procurement board', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'workflows', label: 'Workflows' },
+    { id: 'governance', label: 'Controls' },
+  ],
+  support: [
+    { id: 'operations', label: 'Ticket operations', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'workflows', label: 'Workflows' },
+    { id: 'governance', label: 'Controls' },
+  ],
+  analytics: [
+    { id: 'operations', label: 'Analytics operations', defaultVisible: true },
+    { id: 'core-objects', label: 'Core objects' },
+    { id: 'features', label: 'Features' },
+    { id: 'workflows', label: 'Workflows' },
+    { id: 'governance', label: 'Controls' },
+  ],
+};
+
+function getDefaultVisibleSections(moduleKey: BusinessModuleKey) {
+  const sections = MODULE_SECTION_LIBRARY[moduleKey] ?? [];
+  const visible = sections
+    .filter((section) => section.defaultVisible)
+    .map((section) => section.id);
+  return visible.length > 0 ? visible : sections.map((section) => section.id);
+}
+
 const BulletList = ({ title, items, id }: { title: string; items: string[]; id?: string }) => (
   <Card id={id} className="glass-card border-white/5 scroll-mt-24">
     <CardHeader>
@@ -1218,10 +1301,63 @@ export function BusinessModulePage({
   const module = BUSINESS_MODULES_BY_KEY[moduleKey];
   const Icon = module.icon;
   const labels = MODULE_UI_LABELS[moduleKey];
+  const availableSections = MODULE_SECTION_LIBRARY[moduleKey] ?? [];
+  const [visibleSections, setVisibleSections] = useState<string[]>(() => getDefaultVisibleSections(moduleKey));
+  const [libraryOpen, setLibraryOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const key = `pinkplan:business:visible-sections:${moduleKey}`;
+    const defaults = getDefaultVisibleSections(moduleKey);
+    const allowed = new Set(availableSections.map((section) => section.id));
+
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) {
+        setVisibleSections(defaults);
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setVisibleSections(defaults);
+        return;
+      }
+
+      const normalized = parsed.filter((id): id is string => typeof id === 'string' && allowed.has(id));
+      setVisibleSections(normalized.length > 0 ? normalized : defaults);
+    } catch {
+      setVisibleSections(defaults);
+    }
+  }, [availableSections, moduleKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = `pinkplan:business:visible-sections:${moduleKey}`;
+    window.localStorage.setItem(key, JSON.stringify(visibleSections));
+  }, [moduleKey, visibleSections]);
+
+  const hiddenSectionIds = useMemo(() => {
+    const visible = new Set(visibleSections);
+    return availableSections
+      .map((section) => section.id)
+      .filter((id) => !visible.has(id));
+  }, [availableSections, visibleSections]);
+
+  const toggleSection = (id: string) => {
+    setVisibleSections((prev) => (
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    ));
+  };
 
   return (
     <Shell>
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
+        {hiddenSectionIds.length > 0 ? (
+          <style>{hiddenSectionIds.map((id) => `#${id}{display:none !important;}`).join('\n')}</style>
+        ) : null}
+
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <Badge className="w-fit rounded-full border-primary/20 bg-primary/10 px-3 py-1 text-primary hover:bg-primary/10">
@@ -1267,6 +1403,66 @@ export function BusinessModulePage({
             </Card>
           ))}
         </div>
+
+        <Card className="glass-card border-white/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Feature Library</CardTitle>
+            <CardDescription>
+              Keep the interface focused. Add any hidden feature back when you need it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={libraryOpen ? 'default' : 'outline'}
+                className={libraryOpen ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
+                onClick={() => setLibraryOpen((prev) => !prev)}
+              >
+                {libraryOpen ? 'Hide Library' : 'Manage Visible Features'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/10 bg-card/40"
+                onClick={() => setVisibleSections(getDefaultVisibleSections(moduleKey))}
+              >
+                Reset to Essentials
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/10 bg-card/40"
+                onClick={() => setVisibleSections(availableSections.map((section) => section.id))}
+              >
+                Show All
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Showing {visibleSections.length} of {availableSections.length} sections
+            </p>
+
+            {libraryOpen ? (
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {availableSections.map((section) => {
+                  const enabled = visibleSections.includes(section.id);
+                  return (
+                    <Button
+                      key={section.id}
+                      type="button"
+                      variant="outline"
+                      className={enabled ? 'justify-start border-primary/30 bg-primary/10 text-primary' : 'justify-start border-white/10 bg-card/40'}
+                      onClick={() => toggleSection(section.id)}
+                    >
+                      {enabled ? 'Visible' : 'Hidden'} • {section.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {moduleKey === 'finance' ? (
           <FinanceModuleContent module={module} />

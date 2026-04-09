@@ -343,6 +343,40 @@ exports.Prisma.HrCandidateScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.SaleOrderScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  employeeId: 'employeeId',
+  orderNo: 'orderNo',
+  currency: 'currency',
+  channel: 'channel',
+  status: 'status',
+  total: 'total',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SaleOrderLineScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  saleOrderId: 'saleOrderId',
+  productId: 'productId',
+  quantity: 'quantity',
+  unitPrice: 'unitPrice',
+  lineTotal: 'lineTotal',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.SalePaymentScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  saleOrderId: 'saleOrderId',
+  method: 'method',
+  amount: 'amount',
+  reference: 'reference',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.InvProductScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -772,6 +806,27 @@ exports.LeaveStatus = exports.$Enums.LeaveStatus = {
   canceled: 'canceled'
 };
 
+exports.SalesChannel = exports.$Enums.SalesChannel = {
+  pos: 'pos',
+  warehouse: 'warehouse',
+  ecommerce: 'ecommerce'
+};
+
+exports.SalesOrderStatus = exports.$Enums.SalesOrderStatus = {
+  draft: 'draft',
+  open: 'open',
+  settled: 'settled',
+  closed: 'closed',
+  canceled: 'canceled'
+};
+
+exports.SalesPaymentMethod = exports.$Enums.SalesPaymentMethod = {
+  cash: 'cash',
+  card: 'card',
+  wallet: 'wallet',
+  bank: 'bank'
+};
+
 exports.ProductLifecycle = exports.$Enums.ProductLifecycle = {
   draft: 'draft',
   active: 'active',
@@ -884,6 +939,9 @@ exports.Prisma.ModelName = {
   HrPayrollRun: 'HrPayrollRun',
   HrPayslip: 'HrPayslip',
   HrCandidate: 'HrCandidate',
+  SaleOrder: 'SaleOrder',
+  SaleOrderLine: 'SaleOrderLine',
+  SalePayment: 'SalePayment',
   InvProduct: 'InvProduct',
   InvSku: 'InvSku',
   InvWarehouse: 'InvWarehouse',
