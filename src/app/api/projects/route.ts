@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/server/prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col, makeId, nowIso } from '@/lib/server/firestore-data';
 import { invalidateProjectsCache, listProjectsCached } from '@/lib/server/project-cache';
 
 const createProjectSchema = z.object({
@@ -34,13 +35,23 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const payload = createProjectSchema.parse(await request.json());
-    const project = await prisma.project.create({
-      data: {
-        ...payload,
-        id: payload.id,
-        createdAt: payload.createdAt ? new Date(payload.createdAt) : undefined,
-      },
+    const id = payload.id ?? makeId(col.coreProjects);
+    const now = nowIso();
+    const ref = adminFirestore.collection(col.coreProjects).doc(id);
+    await ref.set({
+      id,
+      tenantId: payload.tenantId,
+      ownerId: payload.ownerId,
+      name: payload.name,
+      description: payload.description,
+      status: payload.status,
+      progress: payload.progress,
+      templateId: payload.templateId ?? null,
+      color: payload.color ?? null,
+      createdAt: payload.createdAt ?? now,
+      updatedAt: now,
     });
+    const project = { id, ...(await ref.get()).data() };
     await invalidateProjectsCache();
 
     return NextResponse.json({ ok: true, project }, { status: 201 });

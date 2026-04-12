@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { businessPrisma, ensureBusinessTenant, BUSINESS_DEFAULT_TENANT_ID } from '@/lib/server/business-prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, normalizeDate, nowIso } from '@/lib/server/firestore-data';
 
 const createProductSchema = z.object({
   name: z.string().min(1),
@@ -11,12 +12,16 @@ const createProductSchema = z.object({
 
 export async function GET() {
   try {
-    await ensureBusinessTenant();
-    const products = await businessPrisma.invProduct.findMany({
-      where: { tenantId: BUSINESS_DEFAULT_TENANT_ID },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    await ensureBusinessTenantDoc();
+    const snap = await adminFirestore
+      .collection(col.bizProducts)
+      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .limit(100)
+      .get();
+
+    const products = snap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data(), createdAt: normalizeDate(doc.data().createdAt) }))
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
 
     return NextResponse.json({ ok: true, products });
   } catch (error) {
@@ -26,19 +31,21 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const payload = createProductSchema.parse(await request.json());
-
-    const product = await businessPrisma.invProduct.create({
-      data: {
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
-        name: payload.name,
-        sku: payload.sku.toUpperCase(),
-        productType: payload.productType,
-        category: payload.category,
-        lifecycle: 'active',
-      },
-    });
+    const id = makeId(col.bizProducts);
+    const product = {
+      id,
+      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      name: payload.name,
+      sku: payload.sku.toUpperCase(),
+      productType: payload.productType,
+      category: payload.category,
+      lifecycle: 'active',
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    await adminFirestore.collection(col.bizProducts).doc(id).set(product);
 
     return NextResponse.json({ ok: true, product }, { status: 201 });
   } catch (error) {

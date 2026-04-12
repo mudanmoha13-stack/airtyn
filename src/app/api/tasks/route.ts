@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/server/prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col, makeId, nowIso } from '@/lib/server/firestore-data';
 import { invalidateTasksCache, listTasksCached } from '@/lib/server/task-cache';
 
 const createTaskSchema = z.object({
@@ -34,36 +35,35 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const payload = createTaskSchema.parse(await request.json());
-    const project = await prisma.project.findUnique({
-      where: { id: payload.projectId },
-      select: { tenantId: true },
-    });
-
-    if (!project) {
+    const projectSnap = await adminFirestore.collection(col.coreProjects).doc(payload.projectId).get();
+    if (!projectSnap.exists) {
       return NextResponse.json({ ok: false, error: 'Project not found for task creation' }, { status: 404 });
     }
+    const project = projectSnap.data();
+    const id = payload.id ?? makeId(col.coreTasks);
+    const now = nowIso();
 
-    const task = await prisma.task.create({
-      data: {
-        id: payload.id,
-        tenantId: project.tenantId,
-        projectId: payload.projectId,
-        milestoneId: payload.milestoneId,
-        title: payload.title,
-        description: payload.description,
-        status: payload.status,
-        priority: payload.priority,
-        assigneeId: payload.assigneeId,
-        dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
-        startDate: payload.startDate ? new Date(payload.startDate) : undefined,
-        estimatedMinutes: payload.estimatedMinutes,
-        tags: payload.tags ?? [],
-        timeEntries: payload.timeEntries ?? [],
-        attachments: payload.attachments ?? [],
-        createdBy: payload.createdBy,
-        createdAt: payload.createdAt ? new Date(payload.createdAt) : undefined,
-      },
+    await adminFirestore.collection(col.coreTasks).doc(id).set({
+      id,
+      tenantId: String(project?.tenantId ?? ''),
+      projectId: payload.projectId,
+      milestoneId: payload.milestoneId ?? null,
+      title: payload.title,
+      description: payload.description,
+      status: payload.status,
+      priority: payload.priority,
+      assigneeId: payload.assigneeId ?? null,
+      dueDate: payload.dueDate ?? null,
+      startDate: payload.startDate ?? null,
+      estimatedMinutes: payload.estimatedMinutes ?? null,
+      tags: payload.tags ?? [],
+      timeEntries: payload.timeEntries ?? [],
+      attachments: payload.attachments ?? [],
+      createdBy: payload.createdBy,
+      createdAt: payload.createdAt ?? now,
+      updatedAt: now,
     });
+    const task = { id, ...(await adminFirestore.collection(col.coreTasks).doc(id).get()).data() };
     await invalidateTasksCache();
     return NextResponse.json({ ok: true, task }, { status: 201 });
   } catch (error) {

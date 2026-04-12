@@ -14,7 +14,12 @@ type Employee = {
   department: string;
   email: string;
   status: string;
+  role?: string;
+  orgUnit?: string;
+  skills?: string;
 };
+
+type EmployeeStatus = 'active' | 'suspended' | 'deactive';
 
 type Contract = {
   id: string;
@@ -69,6 +74,28 @@ type Candidate = {
 
 const CANDIDATE_FLOW = ['screening', 'interview', 'offer', 'approved'];
 
+type HrApiErrorPayload = {
+  ok?: boolean;
+  error?: string;
+  description?: string;
+  code?: string;
+  indexUrl?: string;
+};
+
+async function parseApiPayload(response: Response): Promise<HrApiErrorPayload | null> {
+  try {
+    return (await response.json()) as HrApiErrorPayload;
+  } catch {
+    return null;
+  }
+}
+
+function formatApiError(payload: HrApiErrorPayload | null, fallback: string): string {
+  if (!payload) return fallback;
+  const parts = [payload.error, payload.description, payload.code].filter(Boolean);
+  return parts.length > 0 ? parts.join(' | ') : fallback;
+}
+
 export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -106,13 +133,24 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
   const [candidateName, setCandidateName] = useState('');
   const [candidateRoleTitle, setCandidateRoleTitle] = useState('');
   const [candidateStage, setCandidateStage] = useState('screening');
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiErrorLink, setApiErrorLink] = useState<string | null>(null);
 
   const [localProfiles, setLocalProfiles] = useState<Record<string, { role: string; orgUnit: string; skills: string }>>({});
 
   const load = async () => {
+    setApiError(null);
+    setApiErrorLink(null);
     try {
       const response = await fetch('/api/business/hr/operations', { cache: 'no-store' });
-      const data = (await response.json()) as {
+      const parsedPayload = await parseApiPayload(response);
+
+      if (!response.ok || parsedPayload?.ok === false) {
+        if (parsedPayload?.indexUrl) setApiErrorLink(parsedPayload.indexUrl);
+        throw new Error(formatApiError(parsedPayload, 'Failed to load HR operations data.'));
+      }
+
+      const data = parsedPayload as {
         ok: boolean;
         employees?: Employee[];
         contracts?: Contract[];
@@ -130,7 +168,8 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
         setPayrollRuns(data.payrollRuns ?? []);
         setCandidates(data.candidates ?? []);
       }
-    } catch {
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Failed to load HR operations data.');
       setEmployees((module.records ?? []).map((record, index) => ({
         id: `seed-emp-${index}`,
         name: record.title,
@@ -161,19 +200,34 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
   const addEmployee = async () => {
     if (!employeeName.trim() || !employeeTitle.trim() || !employeeEmail.trim()) return;
 
-    await fetch('/api/business/hr/operations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        entityType: 'employee',
-        name: employeeName.trim(),
-        email: employeeEmail.trim().toLowerCase(),
-        title: employeeTitle.trim(),
-        department: employeeDepartment.trim() || 'General',
-      }),
-    });
+    setApiError(null);
+    setApiErrorLink(null);
+    try {
+      const response = await fetch('/api/business/hr/operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: 'employee',
+          name: employeeName.trim(),
+          email: employeeEmail.trim().toLowerCase(),
+          title: employeeTitle.trim(),
+          department: employeeDepartment.trim() || 'General',
+          role: employeeRole.trim() || undefined,
+          orgUnit: employeeOrgUnit.trim() || undefined,
+          skills: employeeSkills.trim() || undefined,
+        }),
+      });
+      const payload = await parseApiPayload(response);
+      if (!response.ok || payload?.ok === false) {
+        if (payload?.indexUrl) setApiErrorLink(payload.indexUrl);
+        throw new Error(formatApiError(payload, 'Failed to add employee.'));
+      }
 
-    await load();
+      await load();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Failed to add employee.');
+      return;
+    }
 
     const match = employees.find((item) => item.email.toLowerCase() === employeeEmail.trim().toLowerCase());
     if (match) {
@@ -310,6 +364,20 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
     await load();
   };
 
+  const updateEmployeeStatus = async (id: string, status: EmployeeStatus) => {
+    await fetch('/api/business/hr/operations', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entityType: 'employee',
+        id,
+        status,
+      }),
+    });
+
+    await load();
+  };
+
   const advanceCandidate = async (candidate: Candidate) => {
     const index = CANDIDATE_FLOW.findIndex((stage) => stage === candidate.stage.toLowerCase());
     const next = CANDIDATE_FLOW[(index + 1 + CANDIDATE_FLOW.length) % CANDIDATE_FLOW.length];
@@ -347,6 +415,27 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
   return (
     <>
       <div className="grid gap-4 xl:grid-cols-2">
+        {apiError ? (
+          <Card className="glass-card border-red-500/40 xl:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-red-400">HR Operation Error</CardTitle>
+              <CardDescription className="text-red-300 whitespace-pre-wrap">{apiError}</CardDescription>
+            </CardHeader>
+            {apiErrorLink ? (
+              <CardContent>
+                <a
+                  href={apiErrorLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-400 transition-colors"
+                >
+                  Create Missing Index in Firebase Console
+                </a>
+              </CardContent>
+            ) : null}
+          </Card>
+        ) : null}
+
         <Card id="core-objects" className="glass-card border-white/5 scroll-mt-24">
           <CardHeader>
             <CardTitle>Core Objects</CardTitle>
@@ -634,22 +723,58 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
           <CardTitle>Employee Directory</CardTitle>
           <CardDescription>Profiles with role, skills, org unit and employment context.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {employees.map((employee) => {
-            const profile = localProfiles[employee.id];
-            return (
-              <div key={employee.id} className="rounded-xl border border-white/5 bg-card/40 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-foreground">{employee.name}</p>
-                  <Badge variant="outline" className="border-white/10 text-muted-foreground">{employee.status}</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{employee.title} • {employee.department}</p>
-                <p className="text-xs text-muted-foreground">{employee.email}</p>
-                <p className="text-xs text-primary mt-1">Role: {profile?.role || 'N/A'} • Org Unit: {profile?.orgUnit || 'N/A'}</p>
-                <p className="text-xs text-primary">Skills: {profile?.skills || 'N/A'}</p>
-              </div>
-            );
-          })}
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-3 py-2">Employee</th>
+                  <th className="px-3 py-2">Title</th>
+                  <th className="px-3 py-2">Department</th>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Role</th>
+                  <th className="px-3 py-2">Org Unit</th>
+                  <th className="px-3 py-2">Skills</th>
+                  <th className="px-3 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((employee) => {
+                  const profile = localProfiles[employee.id];
+                  const resolvedRole = employee.role || profile?.role || 'N/A';
+                  const resolvedOrgUnit = employee.orgUnit || profile?.orgUnit || 'N/A';
+                  const resolvedSkills = employee.skills || profile?.skills || 'N/A';
+                  const statusValue = (employee.status || 'active').toLowerCase();
+                  const normalizedStatus: EmployeeStatus = statusValue === 'inactive' ? 'deactive' : (statusValue === 'suspended' ? 'suspended' : (statusValue === 'deactive' ? 'deactive' : 'active'));
+                  return (
+                    <tr key={employee.id} className="border-b border-white/5 align-top">
+                      <td className="px-3 py-3 font-medium text-foreground">{employee.name}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{employee.title}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{employee.department}</td>
+                      <td className="px-3 py-3 text-muted-foreground">{employee.email}</td>
+                      <td className="px-3 py-3 text-primary">{resolvedRole}</td>
+                      <td className="px-3 py-3 text-primary">{resolvedOrgUnit}</td>
+                      <td className="px-3 py-3 text-primary">{resolvedSkills}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="border-white/10 text-muted-foreground">{employee.status || 'active'}</Badge>
+                          <select
+                            value={normalizedStatus}
+                            onChange={(event) => void updateEmployeeStatus(employee.id, event.target.value as EmployeeStatus)}
+                            className="rounded-lg border border-white/10 bg-card/40 px-2 py-1 text-xs text-foreground"
+                          >
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspend</option>
+                            <option value="deactive">Deactive</option>
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
     </>

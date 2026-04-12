@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { businessPrisma, ensureBusinessTenant, BUSINESS_DEFAULT_TENANT_ID } from '@/lib/server/business-prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1).optional(),
@@ -14,24 +15,27 @@ const createEmployeeSchema = z.object({
 
 export async function GET() {
   try {
-    await ensureBusinessTenant();
-    const employees = await businessPrisma.hrEmployee.findMany({
-      where: { tenantId: BUSINESS_DEFAULT_TENANT_ID },
-      include: { user: true },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    });
+    await ensureBusinessTenantDoc();
+    const [employeeSnap, usersSnap] = await Promise.all([
+      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).orderBy('createdAt', 'desc').limit(200).get(),
+      adminFirestore.collection(col.bizUsers).get(),
+    ]);
+    const users = new Map(usersSnap.docs.map((doc) => [doc.id, doc.data()]));
 
     return NextResponse.json({
       ok: true,
-      employees: employees.map((employee) => ({
-        id: employee.id,
-        name: employee.user ? `${employee.user.firstName ?? ''} ${employee.user.lastName ?? ''}`.trim() || employee.user.email : 'Unknown Employee',
-        title: employee.title,
-        department: employee.departmentId ?? 'General',
-        email: employee.user?.email ?? 'unknown@local',
-        status: 'Active',
-      })),
+      employees: employeeSnap.docs.map((doc) => {
+        const employee = doc.data();
+        const user = users.get(String(employee.userId ?? ''));
+        return {
+          id: doc.id,
+          name: user ? `${String(user.firstName ?? '')} ${String(user.lastName ?? '')}`.trim() || String(user.email ?? 'Unknown Employee') : 'Unknown Employee',
+          title: String(employee.title ?? ''),
+          department: String(employee.departmentId ?? 'General'),
+          email: String(user?.email ?? 'unknown@local'),
+          status: 'Active',
+        };
+      }),
     });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to list employees' }, { status: 500 });
@@ -40,7 +44,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const payload = createEmployeeSchema.parse(await request.json());
 
     const normalizedName =
@@ -67,35 +71,35 @@ export async function POST(request: NextRequest) {
     const [firstName, ...rest] = normalizedName.split(' ');
     const lastName = rest.join(' ');
 
-    const user = await businessPrisma.businessUser.upsert({
-      where: { email: payload.email.toLowerCase() },
-      update: {
-        firstName,
-        lastName: lastName || null,
-        status: 'active',
-      },
-      create: {
-        email: payload.email.toLowerCase(),
+    const normalizedEmail = payload.email.toLowerCase();
+    const existingUser = await adminFirestore.collection(col.bizUsers).where('email', '==', normalizedEmail).limit(1).get();
+    const userId = existingUser.empty ? makeId(col.bizUsers) : existingUser.docs[0].id;
+    await adminFirestore.collection(col.bizUsers).doc(userId).set(
+      {
+        id: userId,
+        email: normalizedEmail,
         passwordHash: 'temp-password-hash',
         status: 'active',
         firstName,
         lastName: lastName || null,
+        updatedAt: nowIso(),
+        createdAt: existingUser.empty ? nowIso() : undefined,
       },
-    });
+      { merge: true }
+    );
 
-    const employee = await businessPrisma.hrEmployee.upsert({
-      where: { userId: user.id },
-      update: {
-        title: normalizedTitle,
-        departmentId: payload.department,
-      },
-      create: {
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
-        userId: user.id,
-        title: normalizedTitle,
-        departmentId: payload.department,
-      },
-    });
+    const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('userId', '==', userId).limit(1).get();
+    const employeeId = existingEmployee.empty ? makeId(col.bizEmployees) : existingEmployee.docs[0].id;
+    const employee = {
+      id: employeeId,
+      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      userId,
+      title: normalizedTitle,
+      departmentId: payload.department,
+      updatedAt: nowIso(),
+      createdAt: existingEmployee.empty ? nowIso() : undefined,
+    };
+    await adminFirestore.collection(col.bizEmployees).doc(employeeId).set(employee, { merge: true });
 
     return NextResponse.json({ ok: true, employee }, { status: 201 });
   } catch (error) {

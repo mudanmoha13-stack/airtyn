@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/server/prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col, nowIso } from '@/lib/server/firestore-data';
 import { invalidateTasksCache } from '@/lib/server/task-cache';
 
 const updateTaskSchema = z.object({
@@ -16,13 +17,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
   try {
     const { taskId } = await context.params;
     const payload = updateTaskSchema.parse(await request.json());
-    const task = await prisma.task.update({
-      where: { id: taskId },
-      data: {
+    const ref = adminFirestore.collection(col.coreTasks).doc(taskId);
+    await ref.set(
+      {
         ...payload,
-        dueDate: payload.dueDate === undefined ? undefined : payload.dueDate ? new Date(payload.dueDate) : null,
+        dueDate: payload.dueDate === undefined ? undefined : payload.dueDate,
+        updatedAt: nowIso(),
       },
-    });
+      { merge: true }
+    );
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return NextResponse.json({ ok: false, error: 'Task not found' }, { status: 404 });
+    }
+    const task = { id: snap.id, ...snap.data() };
     await invalidateTasksCache();
     return NextResponse.json({ ok: true, task });
   } catch (error) {

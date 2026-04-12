@@ -1,6 +1,6 @@
-import { prisma } from '@/lib/server/prisma';
 import { ensureRedisConnection } from '@/lib/server/redis';
-import { mapProjectRecord } from '@/lib/server/mappers';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col, normalizeDate, asNumber } from '@/lib/server/firestore-data';
 
 const PROJECTS_CACHE_KEY = 'pinkplan:projects:all';
 const PROJECTS_CACHE_TTL_SECONDS = 60;
@@ -25,10 +25,20 @@ export async function invalidateProjectsCache() {
 }
 
 async function fetchProjects() {
-  const projects = await prisma.project.findMany({
-    orderBy: {
-      createdAt: 'desc',
-    },
+  const snap = await adminFirestore.collection(col.coreProjects).orderBy('createdAt', 'desc').get();
+  return snap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      tenantId: String(data.tenantId ?? ''),
+      name: String(data.name ?? ''),
+      description: String(data.description ?? ''),
+      status: (data.status ?? 'active') as 'active' | 'archived' | 'completed',
+      progress: asNumber(data.progress),
+      ownerId: String(data.ownerId ?? ''),
+      createdAt: normalizeDate(data.createdAt) ?? new Date(0).toISOString(),
+      templateId: data.templateId ? String(data.templateId) : undefined,
+      color: data.color ? String(data.color) : undefined,
+    };
   });
-  return projects.map(mapProjectRecord);
 }

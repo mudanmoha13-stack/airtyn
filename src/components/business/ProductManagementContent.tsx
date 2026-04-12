@@ -26,6 +26,7 @@ type Product = {
   lifecycle: ProductLifecycle;
   productType: ProductType;
   basePrice?: string | number | null;
+  costPrice?: string | number | null;
   tags?: string[] | null;
   productCategory?: { id: string; name: string; code?: string | null } | null;
   baseUom?: { id: string; name: string; symbol: string } | null;
@@ -121,6 +122,15 @@ const COMMON_UOM_PRESETS: Array<{ name: string; symbol: string; category: string
   { name: 'Hour', symbol: 'hr', category: 'time' },
 ];
 
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await response.json()) as { error?: string };
+    return data.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function advanceLifecycle(current: ProductLifecycle): ProductLifecycle {
   const idx = LIFECYCLE_CYCLE.indexOf(current);
   return LIFECYCLE_CYCLE[(idx + 1) % LIFECYCLE_CYCLE.length];
@@ -143,12 +153,14 @@ const CatalogTab = () => {
   const [productType, setProductType] = useState<ProductType>('physical');
   const [lifecycle, setLifecycle]     = useState<ProductLifecycle>('active');
   const [basePrice, setBasePrice]     = useState('');
+  const [costPrice, setCostPrice]     = useState('');
   const [categoryId, setCategoryId]   = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [baseUomId, setBaseUomId]     = useState('');
   const [uomSymbol, setUomSymbol]     = useState('');
   const [tagsInput, setTagsInput]     = useState('');
   const [saving, setSaving]           = useState(false);
+  const [feedback, setFeedback]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -227,6 +239,7 @@ const CatalogTab = () => {
 
   const addProduct = async () => {
     if (!name.trim()) return;
+    setFeedback(null);
     setSaving(true);
     try {
       const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
@@ -242,6 +255,7 @@ const CatalogTab = () => {
           productType,
           lifecycle,
           basePrice: basePrice ? parseFloat(basePrice) : undefined,
+          costPrice: costPrice ? parseFloat(costPrice) : undefined,
           categoryId: resolvedCategoryId || undefined,
           baseUomId: resolvedUomId || undefined,
           tags: tags.length ? tags : undefined,
@@ -251,8 +265,13 @@ const CatalogTab = () => {
         await load();
         setName(''); setDescription(''); setSkuPrefix('');
         setProductType('physical'); setLifecycle('active');
-        setBasePrice(''); setCategoryId(''); setCategoryName(''); setBaseUomId(''); setUomSymbol(''); setTagsInput('');
+        setBasePrice(''); setCostPrice(''); setCategoryId(''); setCategoryName(''); setBaseUomId(''); setUomSymbol(''); setTagsInput('');
+        setFeedback('Product added successfully.');
+      } else {
+        setFeedback(await readApiError(res, 'Unable to add product.'));
       }
+    } catch {
+      setFeedback('Unable to add product right now. Check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -343,8 +362,12 @@ const CatalogTab = () => {
               <Input placeholder="e.g. RSH" value={skuPrefix} onChange={(e) => setSkuPrefix(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Base Price</Label>
+              <Label className="text-xs text-muted-foreground">Sales Price</Label>
               <Input type="number" placeholder="0.00" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Cost per Item</Label>
+              <Input type="number" placeholder="0.00" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Product Type</Label>
@@ -474,6 +497,7 @@ const CatalogTab = () => {
             <Button className="gradient-amber text-black font-semibold" onClick={addProduct} disabled={saving}>
               {saving ? 'Saving…' : 'Add Product'}
             </Button>
+            {feedback ? <p className="mt-2 text-sm text-muted-foreground">{feedback}</p> : null}
           </div>
         </CardContent>
       </Card>
@@ -489,14 +513,16 @@ const CatalogTab = () => {
               <th className="px-4 py-3 font-medium">Lifecycle</th>
               <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">UoM</th>
-              <th className="px-4 py-3 font-medium">Price</th>
+              <th className="px-4 py-3 font-medium">Sales Price</th>
+              <th className="px-4 py-3 font-medium">Cost/Item</th>
+              <th className="px-4 py-3 font-medium">Sales Value</th>
               <th className="px-4 py-3 font-medium">Variants</th>
               <th className="px-4 py-3 font-medium">Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredProducts.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">No products match the active filter.</td></tr>
+              <tr><td colSpan={11} className="px-4 py-6 text-center text-muted-foreground">No products match the active filter.</td></tr>
             ) : filteredProducts.map((p) => (
               <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
                 <td className="px-4 py-3">
@@ -514,6 +540,8 @@ const CatalogTab = () => {
                 <td className="px-4 py-3 text-muted-foreground">{p.productCategory?.name ?? p.category ?? '—'}</td>
                 <td className="px-4 py-3 text-muted-foreground">{p.baseUom ? `${p.baseUom.name} (${p.baseUom.symbol})` : '—'}</td>
                 <td className="px-4 py-3 text-primary">{p.basePrice ? `$${Number(p.basePrice).toFixed(2)}` : '—'}</td>
+                <td className="px-4 py-3 text-muted-foreground">{p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '—'}</td>
+                <td className="px-4 py-3 text-foreground">{p.basePrice != null ? `$${(Number(p.basePrice) - Number(p.costPrice ?? 0)).toFixed(2)}` : '—'}</td>
                 <td className="px-4 py-3 text-muted-foreground">{p.variants?.length ?? 0}</td>
                 <td className="px-4 py-3">
                   <Button size="sm" variant="outline" className="border-white/10 bg-card/40 text-xs"
@@ -542,6 +570,7 @@ const VariantsTab = () => {
   const [extraAttrValue, setExtraAttrValue] = useState('');
   const [addlPrice, setAddlPrice]       = useState('');
   const [saving, setSaving]             = useState(false);
+  const [feedback, setFeedback]         = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -564,6 +593,7 @@ const VariantsTab = () => {
 
   const addVariant = async () => {
     if (!selectedProductId || !attrValue.trim()) return;
+    setFeedback(null);
     setSaving(true);
     try {
       const attributeValues: Record<string, string> = { [attrKey.trim()]: attrValue.trim() };
@@ -581,7 +611,12 @@ const VariantsTab = () => {
       if (res.ok) {
         await load();
         setAttrValue(''); setExtraAttrKey(''); setExtraAttrValue(''); setAddlPrice('');
+        setFeedback('Variant added successfully.');
+      } else {
+        setFeedback(await readApiError(res, 'Unable to add variant.'));
       }
+    } catch {
+      setFeedback('Unable to add variant right now.');
     } finally {
       setSaving(false);
     }
@@ -644,6 +679,7 @@ const VariantsTab = () => {
             <Button className="gradient-amber text-black font-semibold" onClick={addVariant} disabled={saving}>
               {saving ? 'Saving…' : 'Add Variant'}
             </Button>
+            {feedback ? <p className="mt-2 text-sm text-muted-foreground">{feedback}</p> : null}
           </div>
         </CardContent>
       </Card>
@@ -708,6 +744,7 @@ const CategoriesTab = () => {
   const [parentId, setParentId] = useState('');
   const [saving, setSaving]   = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -721,6 +758,7 @@ const CategoriesTab = () => {
 
   const addCategory = async () => {
     if (!name.trim()) return;
+    setFeedback(null);
     setSaving(true);
     try {
       const res = await fetch('/api/business/products/categories', {
@@ -728,7 +766,17 @@ const CategoriesTab = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), code: code.trim() || undefined, parentId: parentId || undefined }),
       });
-      if (res.ok) { await load(); setName(''); setCode(''); setParentId(''); }
+      if (res.ok) {
+        await load();
+        setName('');
+        setCode('');
+        setParentId('');
+        setFeedback('Category added successfully.');
+      } else {
+        setFeedback(await readApiError(res, 'Unable to add category.'));
+      }
+    } catch {
+      setFeedback('Unable to add category right now.');
     } finally { setSaving(false); }
   };
 
@@ -768,6 +816,7 @@ const CategoriesTab = () => {
             <Button className="gradient-amber text-black font-semibold" onClick={addCategory} disabled={saving}>
               {saving ? 'Saving…' : 'Add Category'}
             </Button>
+            {feedback ? <p className="mt-2 text-sm text-muted-foreground">{feedback}</p> : null}
           </div>
         </CardContent>
       </Card>
@@ -832,6 +881,7 @@ const UoMTab = () => {
   const [toId, setToId]             = useState('');
   const [factor, setFactor]         = useState('');
   const [saving, setSaving]         = useState(false);
+  const [feedback, setFeedback]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -858,25 +908,47 @@ const UoMTab = () => {
 
   const addUoM = async () => {
     if (!uomName.trim() || !uomSymbol.trim()) return;
+    setFeedback(null);
     setSaving(true);
     try {
       const res = await fetch('/api/business/products/uom', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: uomName.trim(), symbol: uomSymbol.trim(), category: uomCategory.trim() || undefined }),
       });
-      if (res.ok) { await load(); setUomName(''); setUomSymbol(''); setUomCategory(''); }
+      if (res.ok) {
+        await load();
+        setUomName('');
+        setUomSymbol('');
+        setUomCategory('');
+        setFeedback('UoM added successfully.');
+      } else {
+        setFeedback(await readApiError(res, 'Unable to add UoM.'));
+      }
+    } catch {
+      setFeedback('Unable to add UoM right now.');
     } finally { setSaving(false); }
   };
 
   const addConversion = async () => {
     if (!fromId || !toId || !factor) return;
+    setFeedback(null);
     setSaving(true);
     try {
       const res = await fetch('/api/business/products/uom?conversion=true', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromUomId: fromId, toUomId: toId, factor: parseFloat(factor) }),
       });
-      if (res.ok) { await load(); setFromId(''); setToId(''); setFactor(''); }
+      if (res.ok) {
+        await load();
+        setFromId('');
+        setToId('');
+        setFactor('');
+        setFeedback('Conversion rule added successfully.');
+      } else {
+        setFeedback(await readApiError(res, 'Unable to add conversion rule.'));
+      }
+    } catch {
+      setFeedback('Unable to add conversion rule right now.');
     } finally { setSaving(false); }
   };
 
@@ -912,6 +984,7 @@ const UoMTab = () => {
             <Button className="mt-4 gradient-amber text-black font-semibold" onClick={addUoM} disabled={saving}>
               {saving ? 'Saving…' : 'Add UoM'}
             </Button>
+            {feedback ? <p className="mt-2 text-sm text-muted-foreground">{feedback}</p> : null}
           </CardContent>
         </Card>
 
@@ -946,6 +1019,7 @@ const UoMTab = () => {
             <Button className="mt-4 gradient-amber text-black font-semibold" onClick={addConversion} disabled={saving}>
               {saving ? 'Saving…' : 'Add Conversion'}
             </Button>
+            {feedback ? <p className="mt-2 text-sm text-muted-foreground">{feedback}</p> : null}
           </CardContent>
         </Card>
       </div>
@@ -1008,6 +1082,7 @@ const BundlesTab = () => {
     { componentProductId: '', quantity: '1', notes: '' },
   ]);
   const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -1036,6 +1111,7 @@ const BundlesTab = () => {
     if (!bundleProductId || !bundleName.trim()) return;
     const validComponents = components.filter((c) => c.componentProductId && parseFloat(c.quantity) > 0);
     if (validComponents.length === 0) return;
+    setFeedback(null);
     setSaving(true);
     try {
       const res = await fetch('/api/business/products/bundles', {
@@ -1055,7 +1131,12 @@ const BundlesTab = () => {
         await load();
         setBundleProductId(''); setBundleName(''); setBundleDesc('');
         setComponents([{ componentProductId: '', quantity: '1', notes: '' }]);
+        setFeedback('Bundle created successfully.');
+      } else {
+        setFeedback(await readApiError(res, 'Unable to create bundle.'));
       }
+    } catch {
+      setFeedback('Unable to create bundle right now.');
     } finally { setSaving(false); }
   };
 
@@ -1116,6 +1197,7 @@ const BundlesTab = () => {
           <Button className="gradient-amber text-black font-semibold" onClick={createBundle} disabled={saving}>
             {saving ? 'Saving…' : 'Create Bundle'}
           </Button>
+          {feedback ? <p className="text-sm text-muted-foreground">{feedback}</p> : null}
         </CardContent>
       </Card>
 

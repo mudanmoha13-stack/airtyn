@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/server/prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col, makeId, nowIso } from '@/lib/server/firestore-data';
 import { invalidateUsersCache, listUsersCached } from '@/lib/server/user-cache';
 
 const createUserSchema = z.object({
@@ -26,26 +27,33 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const payload = createUserSchema.parse(await request.json());
-    const user = await prisma.user.upsert({
-      where: { email: payload.email },
-      update: {
-        name: payload.name,
-        role: payload.role,
-        avatarUrl: payload.avatarUrl,
-        departmentId: payload.departmentId,
+    const email = payload.email.toLowerCase();
+    const existingByEmail = await adminFirestore
+      .collection(col.coreUsers)
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+
+    const userId = payload.id ?? (existingByEmail.empty ? makeId(col.coreUsers) : existingByEmail.docs[0].id);
+    const ref = adminFirestore.collection(col.coreUsers).doc(userId);
+    const now = nowIso();
+    await ref.set(
+      {
+        id: userId,
         tenantId: payload.tenantId,
-      },
-      create: {
-        id: payload.id,
-        tenantId: payload.tenantId,
-        departmentId: payload.departmentId,
+        departmentId: payload.departmentId ?? null,
         name: payload.name,
-        email: payload.email,
-        avatarUrl: payload.avatarUrl,
+        email,
+        avatarUrl: payload.avatarUrl ?? null,
         role: payload.role,
-        createdAt: payload.createdAt ? new Date(payload.createdAt) : undefined,
+        createdAt: payload.createdAt ?? now,
+        updatedAt: now,
       },
-    });
+      { merge: true }
+    );
+
+    const snap = await ref.get();
+    const user = { id: snap.id, ...snap.data() };
     await invalidateUsersCache();
     return NextResponse.json({ ok: true, user }, { status: 201 });
   } catch (error) {

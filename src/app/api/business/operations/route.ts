@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { businessPrisma, ensureBusinessTenant, BUSINESS_DEFAULT_TENANT_ID } from '@/lib/server/business-prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
 
 const operationQuerySchema = z.object({
   module: z.string().min(1),
@@ -25,7 +26,7 @@ function toModuleFromReportName(name: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const parsed = operationQuerySchema.parse({ module: request.nextUrl.searchParams.get('module') ?? '' });
 
     if (parsed.module === 'sales') {
@@ -35,31 +36,20 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const [crmLeads, expenses, rfqs, tickets, tasks, reports] = await Promise.all([
-      parsed.module === 'crm'
-        ? businessPrisma.crmLead.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { createdAt: 'desc' }, take: 50 })
-        : Promise.resolve([]),
-      parsed.module === 'finance'
-        ? businessPrisma.financeExpense.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { submittedAt: 'desc' }, take: 50 })
-        : Promise.resolve([]),
-      parsed.module === 'procurement'
-        ? businessPrisma.procurementRfq.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { createdAt: 'desc' }, take: 50 })
-        : Promise.resolve([]),
-      parsed.module === 'support'
-        ? businessPrisma.supportTicket.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { createdAt: 'desc' }, take: 50 })
-        : Promise.resolve([]),
-      parsed.module === 'projects'
-        ? businessPrisma.bizTask.findMany({
-            where: { project: { tenantId: BUSINESS_DEFAULT_TENANT_ID } },
-            include: { project: true },
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-          })
-        : Promise.resolve([]),
-      parsed.module === 'analytics'
-        ? businessPrisma.biReport.findMany({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { id: 'desc' }, take: 50 })
-        : Promise.resolve([]),
+    const load = async (collectionName: string) => {
+      const snap = await adminFirestore.collection(collectionName).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(50).get();
+      return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    };
+    const [crmLeads, expenses, rfqs, tickets, tasks, reports, projects] = await Promise.all([
+      parsed.module === 'crm' ? load(col.bizCrmLeads) : Promise.resolve([]),
+      parsed.module === 'finance' ? load(col.bizFinanceExpenses) : Promise.resolve([]),
+      parsed.module === 'procurement' ? load(col.bizProcurementRfqs) : Promise.resolve([]),
+      parsed.module === 'support' ? load(col.bizSupportTickets) : Promise.resolve([]),
+      parsed.module === 'projects' ? load(col.bizTasks) : Promise.resolve([]),
+      parsed.module === 'analytics' ? load(col.bizReports) : Promise.resolve([]),
+      parsed.module === 'projects' ? load(col.bizProjects) : Promise.resolve([]),
     ]);
+    const projectMap = new Map(projects.map((project) => [String(project.id), project]));
 
     const records = [
       ...crmLeads.map((lead) => ({
@@ -93,7 +83,7 @@ export async function GET(request: NextRequest) {
       ...tasks.map((task) => ({
         id: task.id,
         title: task.title,
-        subtitle: task.project.name,
+        subtitle: String(projectMap.get(String(task.projectId))?.name ?? 'Business project'),
         meta: `Task ${task.id.slice(0, 8)}`,
         status: task.status,
       })),
@@ -117,7 +107,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const payload = createOperationSchema.parse(await request.json());
 
     if (payload.module === 'sales') {
@@ -128,98 +118,52 @@ export async function POST(request: NextRequest) {
     }
 
     if (payload.module === 'crm') {
-      const lead = await businessPrisma.crmLead.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          source: payload.subtitle,
-          status: payload.status,
-          score: 0,
-        },
-      });
-      return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
+      const id = makeId(col.bizCrmLeads);
+      await adminFirestore.collection(col.bizCrmLeads).doc(id).set({ id, tenantId: BUSINESS_DEFAULT_TENANT_ID, source: payload.subtitle, status: payload.status, score: 0, createdAt: nowIso() });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.module === 'finance') {
       const parsedAmount = Number((payload.meta ?? '').replace(/[^0-9.-]+/g, ''));
       const amount = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : 0;
 
-      const expense = await businessPrisma.financeExpense.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          amount,
-          category: payload.title,
-          status: 'submitted',
-        },
-      });
-      return NextResponse.json({ ok: true, id: expense.id }, { status: 201 });
+      const id = makeId(col.bizFinanceExpenses);
+      await adminFirestore.collection(col.bizFinanceExpenses).doc(id).set({ id, tenantId: BUSINESS_DEFAULT_TENANT_ID, amount, category: payload.title, status: 'submitted', submittedAt: nowIso() });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.module === 'procurement') {
-      const rfq = await businessPrisma.procurementRfq.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          title: payload.title,
-          status: 'open',
-        },
-      });
-      return NextResponse.json({ ok: true, id: rfq.id }, { status: 201 });
+      const id = makeId(col.bizProcurementRfqs);
+      await adminFirestore.collection(col.bizProcurementRfqs).doc(id).set({ id, tenantId: BUSINESS_DEFAULT_TENANT_ID, title: payload.title, status: 'open', createdAt: nowIso() });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.module === 'support') {
-      const ticket = await businessPrisma.supportTicket.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          subject: payload.title,
-          status: 'open',
-          priority: 'medium',
-        },
-      });
-      return NextResponse.json({ ok: true, id: ticket.id }, { status: 201 });
+      const id = makeId(col.bizSupportTickets);
+      await adminFirestore.collection(col.bizSupportTickets).doc(id).set({ id, tenantId: BUSINESS_DEFAULT_TENANT_ID, subject: payload.title, status: 'open', priority: 'medium', createdAt: nowIso() });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.module === 'projects') {
-      let project = await businessPrisma.bizProject.findFirst({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { createdAt: 'desc' } });
-      if (!project) {
-        project = await businessPrisma.bizProject.create({
-          data: {
-            tenantId: BUSINESS_DEFAULT_TENANT_ID,
-            name: 'Business Delivery Program',
-            ownerId: 'system-owner',
-          },
-        });
+      const projectQuery = await adminFirestore.collection(col.bizProjects).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(1).get();
+      const projectId = projectQuery.empty ? makeId(col.bizProjects) : projectQuery.docs[0].id;
+      if (projectQuery.empty) {
+        await adminFirestore.collection(col.bizProjects).doc(projectId).set({ id: projectId, tenantId: BUSINESS_DEFAULT_TENANT_ID, name: 'Business Delivery Program', ownerId: 'system-owner', createdAt: nowIso() });
       }
-
-      const task = await businessPrisma.bizTask.create({
-        data: {
-          projectId: project.id,
-          title: payload.title,
-          status: payload.status,
-        },
-      });
-      return NextResponse.json({ ok: true, id: task.id }, { status: 201 });
+      const id = makeId(col.bizTasks);
+      await adminFirestore.collection(col.bizTasks).doc(id).set({ id, projectId, tenantId: BUSINESS_DEFAULT_TENANT_ID, title: payload.title, status: payload.status, createdAt: nowIso() });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.module === 'analytics') {
-      let dataset = await businessPrisma.biDataset.findFirst({ where: { tenantId: BUSINESS_DEFAULT_TENANT_ID }, orderBy: { id: 'desc' } });
-      if (!dataset) {
-        dataset = await businessPrisma.biDataset.create({
-          data: {
-            tenantId: BUSINESS_DEFAULT_TENANT_ID,
-            name: 'Business Master Dataset',
-            queryDef: {},
-          },
-        });
+      const datasetQuery = await adminFirestore.collection(col.bizDatasets).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(1).get();
+      const datasetId = datasetQuery.empty ? makeId(col.bizDatasets) : datasetQuery.docs[0].id;
+      if (datasetQuery.empty) {
+        await adminFirestore.collection(col.bizDatasets).doc(datasetId).set({ id: datasetId, tenantId: BUSINESS_DEFAULT_TENANT_ID, name: 'Business Master Dataset', queryDef: {}, createdAt: nowIso() });
       }
-
-      const report = await businessPrisma.biReport.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          datasetId: dataset.id,
-          name: payload.title,
-          config: { subtitle: payload.subtitle, meta: payload.meta },
-        },
-      });
-      return NextResponse.json({ ok: true, id: report.id }, { status: 201 });
+      const id = makeId(col.bizReports);
+      await adminFirestore.collection(col.bizReports).doc(id).set({ id, tenantId: BUSINESS_DEFAULT_TENANT_ID, datasetId, name: payload.title, config: { subtitle: payload.subtitle, meta: payload.meta }, createdAt: nowIso() });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     return NextResponse.json({ ok: false, error: `Module ${payload.module} is not supported by this endpoint` }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/server/prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col, nowIso } from '@/lib/server/firestore-data';
 import { invalidateProjectsCache } from '@/lib/server/project-cache';
 
 const updateProjectSchema = z.object({
@@ -14,10 +15,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ p
   try {
     const { projectId } = await context.params;
     const payload = updateProjectSchema.parse(await request.json());
-    const project = await prisma.project.update({
-      where: { id: projectId },
-      data: payload,
-    });
+    const ref = adminFirestore.collection(col.coreProjects).doc(projectId);
+    await ref.set({ ...payload, updatedAt: nowIso() }, { merge: true });
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return NextResponse.json({ ok: false, error: 'Project not found' }, { status: 404 });
+    }
+    const project = { id: snap.id, ...snap.data() };
     await invalidateProjectsCache();
     return NextResponse.json({ ok: true, project });
   } catch (error) {

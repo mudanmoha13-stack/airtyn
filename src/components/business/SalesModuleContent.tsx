@@ -14,6 +14,7 @@ type InventoryProduct = {
   category: string;
   productType: string;
   basePrice: number;
+  costPrice: number;
 };
 
 type Employee = {
@@ -31,6 +32,10 @@ type SalesOrderRow = {
   channel: 'pos' | 'warehouse' | 'ecommerce';
   status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled';
   total: number;
+  costTotal: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
   createdAt: string;
   lines: Array<{
     id: string;
@@ -103,6 +108,7 @@ type PosLine = {
   name: string;
   qty: number;
   unitPrice: number;
+  unitCost: number;
 };
 
 type OfflineSale = {
@@ -111,6 +117,11 @@ type OfflineSale = {
   currency: string;
   channel: 'pos' | 'warehouse' | 'ecommerce';
   status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled';
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+  };
   lines: Array<{
     productId: string;
     quantity: number;
@@ -119,6 +130,7 @@ type OfflineSale = {
   payments: Array<{
     method: 'cash' | 'card' | 'wallet' | 'bank';
     amount: number;
+    reference?: string;
   }>;
 };
 
@@ -179,15 +191,31 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const [offlineMode, setOfflineMode] = useState(false);
   const [offlineQueue, setOfflineQueue] = useState<OfflineSale[]>([]);
 
-  const [cashDrawerOpen, setCashDrawerOpen] = useState(false);
-  const [cashDrawerBalance, setCashDrawerBalance] = useState(0);
-
   const [cart, setCart] = useState<PosLine[]>([]);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedQty, setSelectedQty] = useState('1');
   const [selectedPrice, setSelectedPrice] = useState('0');
+  const [selectedCost, setSelectedCost] = useState('0');
 
-  const [splitPayments, setSplitPayments] = useState<PaymentSplit[]>([{ id: 'p1', method: 'cash', amount: 0 }]);
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'card' | 'wallet' | 'bank'>('cash');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [lastReceipt, setLastReceipt] = useState<{
+    orderNo: string;
+    employeeName: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    paymentMethod: 'cash' | 'card' | 'wallet' | 'bank';
+    paymentReference?: string;
+    currency: string;
+    total: number;
+    paid: number;
+    items: Array<{ name: string; sku: string; qty: number; unitPrice: number }>;
+    at: string;
+  } | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [companyNature, setCompanyNature] = useState<CompanyNature>('mixed');
@@ -244,7 +272,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
         const salesData = (await salesResponse.json()) as { ok: boolean; orders?: SalesOrderRow[] };
         const productsData = (await productsResponse.json()) as {
           ok: boolean;
-          products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string; basePrice: number | null }>;
+          products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string; basePrice: number | null; costPrice?: number | null }>;
         };
         const employeesData = (await employeesResponse.json()) as {
           ok: boolean;
@@ -267,6 +295,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             category: item.category ?? 'general',
             productType: item.productType,
             basePrice: item.basePrice ?? 0,
+            costPrice: item.costPrice ?? 0,
           })));
         }
 
@@ -380,6 +409,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     const product = products.find((item) => item.id === selectedProductId);
     if (product) {
       setSelectedPrice(String(product.basePrice));
+      setSelectedCost(String(product.costPrice ?? 0));
     }
   }, [selectedProductId, products]);
 
@@ -393,12 +423,16 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     [cart]
   );
 
-  const paidTotal = useMemo(
-    () => splitPayments.reduce((sum, line) => sum + Number(line.amount || 0), 0),
-    [splitPayments]
-  );
+  const paidTotal = posTotal;
 
   const remaining = Math.max(posTotal - paidTotal, 0);
+
+  const posCostTotal = useMemo(
+    () => cart.reduce((sum, line) => sum + line.qty * line.unitCost, 0),
+    [cart]
+  );
+
+  const posProfit = Math.max(posTotal - posCostTotal, 0);
 
   const stockByChannel = useMemo(() => {
     const totalUnits = Math.max(products.length * 36, 0);
@@ -572,7 +606,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   };
 
   const addBarcodeLine = () => {
-    if (!barcode.trim()) return;
+    if (!selectedEmployeeId || !barcode.trim()) return;
     const matched = products.find((item) => item.sku.toLowerCase() === barcode.trim().toLowerCase());
     if (!matched) return;
 
@@ -591,6 +625,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           name: matched.name,
           qty: 1,
           unitPrice: matched.basePrice,
+          unitCost: matched.costPrice ?? 0,
         },
       ];
     });
@@ -600,7 +635,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const addManualLine = () => {
     const qty = Number(selectedQty);
     const unitPrice = Number(selectedPrice);
-    if (!selectedProductId || Number.isNaN(qty) || qty <= 0 || Number.isNaN(unitPrice) || unitPrice < 0) return;
+    if (!selectedEmployeeId || !selectedProductId || Number.isNaN(qty) || qty <= 0 || Number.isNaN(unitPrice) || unitPrice < 0) return;
 
     const product = products.find((item) => item.id === selectedProductId);
     if (!product) return;
@@ -610,7 +645,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
       if (existing) {
         return prev.map((line) =>
           line.productId === product.id
-            ? { ...line, qty: line.qty + qty, unitPrice }
+            ? { ...line, qty: line.qty + qty, unitPrice, unitCost: product.costPrice ?? 0 }
             : line
         );
       }
@@ -622,28 +657,17 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           name: product.name,
           qty,
           unitPrice,
+          unitCost: product.costPrice ?? 0,
         },
       ];
     });
 
     setSelectedQty('1');
     setSelectedPrice(String(product.basePrice));
+    setSelectedCost(String(product.costPrice ?? 0));
   };
 
-  const updateSplit = (id: string, updates: Partial<PaymentSplit>) => {
-    setSplitPayments((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
-  };
 
-  const addSplitLine = () => {
-    setSplitPayments((prev) => [
-      ...prev,
-      { id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`, method: 'card', amount: 0 },
-    ]);
-  };
-
-  const removeSplitLine = (id: string) => {
-    setSplitPayments((prev) => prev.filter((item) => item.id !== id));
-  };
 
   const advanceRecord = (id: string) => {
     setRows((prev) => prev.map((row) => {
@@ -660,15 +684,40 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   };
 
   const printReceipt = () => {
-    if (cart.length === 0) return;
-    const lines = cart.map((line) => `${line.name} (${line.sku}) x${line.qty} = ${(line.qty * line.unitPrice).toFixed(2)}`);
+    const linesSource = lastReceipt?.items ?? cart.map((line) => ({
+      name: line.name,
+      sku: line.sku,
+      qty: line.qty,
+      unitPrice: line.unitPrice,
+    }));
+    if (linesSource.length === 0) return;
+
+    const lines = linesSource.map((line) => `${line.name} (${line.sku}) x${line.qty} = ${(line.qty * line.unitPrice).toFixed(2)}`);
+    const receiptOrderNo = lastReceipt && lastReceipt.orderNo ? lastReceipt.orderNo : 'Preview';
+    const receiptEmployee = lastReceipt && lastReceipt.employeeName ? lastReceipt.employeeName : 'N/A';
+    const receiptCustomerName = lastReceipt && lastReceipt.customerName ? lastReceipt.customerName : (customerName || 'N/A');
+    const receiptCustomerEmail = lastReceipt && lastReceipt.customerEmail ? lastReceipt.customerEmail : (customerEmail || 'N/A');
+    const receiptCustomerPhone = lastReceipt && lastReceipt.customerPhone ? lastReceipt.customerPhone : (customerPhone || 'N/A');
+    const receiptPaymentMethod = String(lastReceipt ? lastReceipt.paymentMethod : selectedPaymentMethod).toUpperCase();
+    const receiptPaymentRef = lastReceipt && lastReceipt.paymentReference ? ` (${lastReceipt.paymentReference})` : '';
+    const receiptCurrency = lastReceipt && lastReceipt.currency ? lastReceipt.currency : currency;
+    const receiptTotal = lastReceipt ? lastReceipt.total : posTotal;
+    const receiptPaid = lastReceipt ? lastReceipt.paid : paidTotal;
+
     const body = [
       'Pinkplan POS Receipt',
-      `Currency: ${currency}`,
+      `Order: ${receiptOrderNo}`,
+      `Sales Rep: ${receiptEmployee}`,
+      `Customer: ${receiptCustomerName}`,
+      `Email: ${receiptCustomerEmail}`,
+      `Phone: ${receiptCustomerPhone}`,
+      `Payment: ${receiptPaymentMethod}${receiptPaymentRef}`,
+      `Currency: ${receiptCurrency}`,
       ...lines,
-      `Total: ${(posTotal).toFixed(2)}`,
-      `Paid: ${(paidTotal).toFixed(2)}`,
-      `Change/Due: ${(paidTotal - posTotal).toFixed(2)}`,
+      `Total: ${receiptTotal.toFixed(2)}`,
+      `Paid: ${receiptPaid.toFixed(2)}`,
+      `Change/Due: ${(receiptPaid - receiptTotal).toFixed(2)}`,
+      `Printed At: ${new Date().toLocaleString()}`,
     ].join('\n');
 
     const receiptWindow = window.open('', '_blank', 'width=420,height=640');
@@ -709,6 +758,11 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
         currency,
         channel: 'ecommerce',
         status: 'draft',
+        customer: {
+          name: 'Quotation Customer',
+          email: 'quotation@pinkplan.local',
+          phone: 'N/A',
+        },
         lines: [{ productId: quoteProductId, quantity: qty, unitPrice: price }],
         payments: [],
       }),
@@ -734,46 +788,79 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
   const checkout = async () => {
     if (cart.length === 0 || posTotal <= 0 || !selectedEmployeeId) return;
+    if (!customerName.trim() || !customerEmail.trim() || !customerPhone.trim()) return;
+
+    const currentEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
 
     const sale: OfflineSale = {
       id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
       employeeId: selectedEmployeeId,
       currency,
       channel,
-      status: offlineMode ? 'draft' : 'open',
+      status: offlineMode ? 'draft' : 'settled',
+      customer: {
+        name: customerName.trim(),
+        email: customerEmail.trim().toLowerCase(),
+        phone: customerPhone.trim(),
+      },
       lines: cart.map((line) => ({
         productId: line.productId,
         quantity: line.qty,
         unitPrice: line.unitPrice,
       })),
-      payments: splitPayments.map((payment) => ({
-        method: payment.method,
-        amount: Number(payment.amount || 0),
-      })),
+      payments: [{
+        method: selectedPaymentMethod,
+        amount: posTotal,
+      }],
     };
+
+    let saved = false;
+    let orderNo = 'PENDING';
 
     if (offlineMode) {
       setOfflineQueue((prev) => [sale, ...prev]);
     } else {
-      const saved = await persistSale(sale);
+      const response = await fetch('/api/business/sales/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sale),
+      });
+      saved = response.ok;
       if (saved) {
+        const data = (await response.json()) as { ok: boolean; orderNo?: string };
+        orderNo = data.orderNo ?? orderNo;
         await refreshOrders();
       } else {
         setOfflineQueue((prev) => [sale, ...prev]);
       }
     }
 
-    const cashPaid = splitPayments
-      .filter((split) => split.method === 'cash')
-      .reduce((sum, split) => sum + Number(split.amount || 0), 0);
-
-    if (cashDrawerOpen && cashPaid > 0) {
-      setCashDrawerBalance((prev) => prev + cashPaid);
-    }
+    setLastReceipt({
+      orderNo: saved ? orderNo : 'OFFLINE-QUEUED',
+      employeeName: currentEmployee?.name ?? selectedEmployeeId,
+      customerName: sale.customer.name,
+      customerEmail: sale.customer.email,
+      customerPhone: sale.customer.phone,
+      paymentMethod: selectedPaymentMethod,
+      paymentReference: paymentReference.trim() || undefined,
+      currency,
+      total: posTotal,
+      paid: posTotal,
+      items: cart.map((line) => ({ name: line.name, sku: line.sku, qty: line.qty, unitPrice: line.unitPrice })),
+      at: new Date().toISOString(),
+    });
 
     setCart([]);
-    setSplitPayments([{ id: 'p1', method: 'cash', amount: 0 }]);
     setSelectedEmployeeId('');
+    setSelectedProductId('');
+    setSelectedQty('1');
+    setSelectedPrice('0');
+    setSelectedCost('0');
+    setCustomerName('');
+    setCustomerEmail('');
+    setCustomerPhone('');
+    setSelectedPaymentMethod('cash');
+    setPaymentReference('');
   };
 
   const syncOfflineQueue = async () => {
@@ -784,7 +871,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
     for (const item of queued) {
       // Serial sync keeps order deterministic for receipts and reconciliation.
-      const ok = await persistSale({ ...item, status: 'open' });
+      const ok = await persistSale({ ...item, status: 'settled' });
       if (!ok) stillQueued.push(item);
     }
 
@@ -1332,7 +1419,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-12">
-        <Card id="sales-pos" className="glass-card border-white/5 xl:col-span-8 scroll-mt-24">
+        <Card id="sales-pos" className="glass-card border-white/5 xl:col-span-12 scroll-mt-24">
           <CardHeader>
             <CardTitle>POS Shop</CardTitle>
             <CardDescription>
@@ -1340,39 +1427,58 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-4">
+              <select
+                value={selectedEmployeeId}
+                onChange={(event) => setSelectedEmployeeId(event.target.value)}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
+              >
+                <option value="">1) Select employee</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
+              </select>
               <select
                 value={selectedProductId}
                 onChange={(event) => setSelectedProductId(event.target.value)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={!selectedEmployeeId}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium disabled:opacity-60"
               >
-                <option value="">Select product</option>
+                <option value="">2) Select product</option>
                 {products.map((item) => (
                   <option key={item.id} value={item.id}>{item.name} ({item.sku})</option>
                 ))}
               </select>
-              <Input placeholder="Qty" value={selectedQty} onChange={(event) => setSelectedQty(event.target.value)} />
-              <Input placeholder="Unit price" value={selectedPrice} onChange={(event) => setSelectedPrice(event.target.value)} />
-              <Button variant="outline" className="border-white/10 bg-card/40" onClick={addManualLine}>Add POS Line</Button>
+              <Input placeholder="3) Quantity" value={selectedQty} onChange={(event) => setSelectedQty(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="4) Sales Price (auto)" value={selectedPrice} readOnly className="h-12 text-base font-medium" />
+              <Input placeholder="Cost/Item" value={selectedCost} readOnly className="h-12 text-base font-medium" />
+              <Button variant="outline" className="h-12 border-white/10 bg-card/40 text-base font-semibold" onClick={addManualLine}>Add POS Line</Button>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-5">
-              <Input placeholder="Barcode / SKU" value={barcode} onChange={(event) => setBarcode(event.target.value)} />
-              <Button variant="outline" className="border-white/10 bg-card/40" onClick={addBarcodeLine}>Scan Barcode</Button>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Input placeholder="Customer name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="Customer email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="Customer telfoon" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="h-12 text-base font-medium" />
               <select
-                value={selectedEmployeeId}
-                onChange={(event) => setSelectedEmployeeId(event.target.value)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedPaymentMethod}
+                onChange={(event) => setSelectedPaymentMethod(event.target.value as 'cash' | 'card' | 'wallet' | 'bank')}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
               >
-                <option value="">Select employee ID</option>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>{employee.id.slice(0, 8)} • {employee.name}</option>
-                ))}
+                <option value="cash">Payment: cash</option>
+                <option value="card">Payment: card</option>
+                <option value="wallet">Payment: wallet</option>
+                <option value="bank">Payment: bank</option>
               </select>
+              <Input placeholder="Payment reference (optional)" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="Barcode / SKU" value={barcode} onChange={(event) => setBarcode(event.target.value)} className="h-12 text-base font-medium" />
+              <Button variant="outline" className="h-12 border-white/10 bg-card/40 text-base font-semibold" onClick={addBarcodeLine}>Scan Barcode</Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-4">
               <select
                 value={currency}
                 onChange={(event) => setCurrency(event.target.value)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
               >
                 <option value="USD">USD</option>
                 <option value="EUR">EUR</option>
@@ -1383,7 +1489,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
               <select
                 value={channel}
                 onChange={(event) => setChannel(event.target.value as 'pos' | 'warehouse' | 'ecommerce')}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
               >
                 <option value="pos">POS</option>
                 <option value="warehouse">Warehouse</option>
@@ -1391,7 +1497,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
               </select>
               <Button
                 variant={offlineMode ? 'default' : 'outline'}
-                className={offlineMode ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
+                className={offlineMode ? 'gradient-amber text-black font-semibold h-12 text-base' : 'border-white/10 bg-card/40 h-12 text-base font-semibold'}
                 onClick={() => setOfflineMode((prev) => !prev)}
               >
                 {offlineMode ? 'Offline Mode: ON' : 'Offline Mode: OFF'}
@@ -1405,14 +1511,15 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
                     <th className="px-4 py-3 font-medium">Item</th>
                     <th className="px-4 py-3 font-medium">SKU</th>
                     <th className="px-4 py-3 font-medium">Qty</th>
-                    <th className="px-4 py-3 font-medium">Unit</th>
-                    <th className="px-4 py-3 font-medium">Line Total</th>
+                    <th className="px-4 py-3 font-medium">Sales Price</th>
+                    <th className="px-4 py-3 font-medium">Cost/Item</th>
+                    <th className="px-4 py-3 font-medium">Sales Value</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cart.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-4 text-muted-foreground">Cart is empty.</td>
+                      <td colSpan={6} className="px-4 py-4 text-muted-foreground">Cart is empty.</td>
                     </tr>
                   ) : (
                     cart.map((line) => (
@@ -1421,6 +1528,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
                         <td className="px-4 py-3 text-primary">{line.sku}</td>
                         <td className="px-4 py-3 text-muted-foreground">{line.qty}</td>
                         <td className="px-4 py-3 text-muted-foreground">{line.unitPrice.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{line.unitCost.toFixed(2)}</td>
                         <td className="px-4 py-3 text-foreground">{(line.qty * line.unitPrice).toFixed(2)}</td>
                       </tr>
                     ))
@@ -1430,43 +1538,29 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
             </div>
 
             <div id="sales-payments" className="space-y-3 scroll-mt-24">
-              <p className="text-sm font-medium text-foreground">Split Payments</p>
-              {splitPayments.map((line) => (
-                <div key={line.id} className="grid gap-3 md:grid-cols-4">
-                  <select
-                    value={line.method}
-                    onChange={(event) => {
-                      const method = event.target.value;
-                      if (isPaymentMethod(method)) {
-                        updateSplit(line.id, { method });
-                      }
-                    }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="cash">cash</option>
-                    <option value="card">card</option>
-                    <option value="wallet">wallet</option>
-                    <option value="bank">bank</option>
-                  </select>
-                  <Input
-                    placeholder="Amount"
-                    value={String(line.amount)}
-                    onChange={(event) => updateSplit(line.id, { amount: Number(event.target.value || 0) })}
-                  />
-                  <Button variant="outline" className="border-white/10 bg-card/40" onClick={() => removeSplitLine(line.id)}>Remove</Button>
-                </div>
-              ))}
-              <Button variant="outline" className="border-white/10 bg-card/40" onClick={addSplitLine}>Add Split Line</Button>
+              <p className="text-sm font-medium text-foreground">Payment Confirmation</p>
+              <div className="rounded-xl border border-white/5 bg-card/40 p-3 text-sm text-muted-foreground">
+                Method: <span className="text-foreground uppercase">{selectedPaymentMethod}</span>
+                {paymentReference.trim() ? ` • Ref: ${paymentReference.trim()}` : ''}
+              </div>
             </div>
 
             <div className="rounded-xl border border-white/5 bg-card/40 p-4">
               <p className="text-sm text-muted-foreground">POS Total: {CURRENCY_SYMBOL[currency] ?? ''}{posTotal.toFixed(2)}</p>
+              <p className="text-sm text-muted-foreground">Cost Total: {CURRENCY_SYMBOL[currency] ?? ''}{posCostTotal.toFixed(2)}</p>
+              <p className="text-sm text-primary">Sales Value (Profit): {CURRENCY_SYMBOL[currency] ?? ''}{posProfit.toFixed(2)}</p>
               <p className="text-sm text-muted-foreground">Paid: {CURRENCY_SYMBOL[currency] ?? ''}{paidTotal.toFixed(2)}</p>
               <p className="text-sm text-primary">Remaining: {CURRENCY_SYMBOL[currency] ?? ''}{remaining.toFixed(2)}</p>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button className="gradient-amber text-black font-semibold" onClick={checkout} disabled={cart.length === 0 || !selectedEmployeeId}>Checkout</Button>
+              <Button
+                className="gradient-amber text-black font-semibold"
+                onClick={checkout}
+                disabled={cart.length === 0 || !selectedEmployeeId || !customerName.trim() || !customerEmail.trim() || !customerPhone.trim()}
+              >
+                Confirm Sale
+              </Button>
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={printReceipt}>Print Receipt</Button>
               <Button variant="outline" className="border-white/10 bg-card/40" onClick={syncOfflineQueue} disabled={offlineQueue.length === 0}>
                 Sync Offline Queue ({offlineQueue.length})
@@ -1475,33 +1569,6 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           </CardContent>
         </Card>
 
-        <Card id="sales-cash-drawer" className="glass-card border-white/5 xl:col-span-4 scroll-mt-24">
-          <CardHeader>
-            <CardTitle>Cash Drawer Management</CardTitle>
-            <CardDescription>Open/close drawer and monitor cash balance from split payments.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              className={cashDrawerOpen ? 'gradient-amber text-black font-semibold' : ''}
-              variant={cashDrawerOpen ? 'default' : 'outline'}
-              onClick={() => setCashDrawerOpen((prev) => !prev)}
-            >
-              {cashDrawerOpen ? 'Close Drawer' : 'Open Drawer'}
-            </Button>
-            <div className="rounded-xl border border-white/5 bg-card/40 p-3">
-              <p className="text-xs uppercase tracking-[0.16em] text-primary">Drawer Status</p>
-              <p className="mt-2 text-sm text-muted-foreground">{cashDrawerOpen ? 'Open' : 'Closed'}</p>
-              <p className="mt-1 text-sm text-foreground">Balance: {cashDrawerBalance.toFixed(2)}</p>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <Button variant="outline" className="border-white/10 bg-card/40" onClick={() => setCashDrawerBalance((prev) => prev + 50)}>+50 Float</Button>
-              <Button variant="outline" className="border-white/10 bg-card/40" onClick={() => setCashDrawerBalance((prev) => Math.max(prev - 50, 0))}>-50 Drop</Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-12">
         <Card id="pos-restaurant" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
           <CardHeader>
             <CardTitle>POS Restaurant</CardTitle>
@@ -1612,8 +1679,9 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
               <div key={row.id} className="flex flex-col gap-3 rounded-xl border border-white/5 bg-card/40 p-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="font-medium text-foreground">{row.orderNo} • {row.employeeName}</p>
+                  <p className="text-sm text-muted-foreground">{row.customerName || 'Walk-in customer'} • {row.customerEmail || 'N/A'} • {row.customerPhone || 'N/A'}</p>
                   <p className="text-sm text-muted-foreground">{row.channel.toUpperCase()} • {new Date(row.createdAt).toLocaleString()}</p>
-                  <p className="text-xs text-primary">{CURRENCY_SYMBOL[row.currency] ?? ''}{row.total.toFixed(2)} • {row.lines.length} lines</p>
+                  <p className="text-xs text-primary">{CURRENCY_SYMBOL[row.currency] ?? ''}{row.total.toFixed(2)} • Cost {CURRENCY_SYMBOL[row.currency] ?? ''}{row.costTotal.toFixed(2)} • Sales Value {CURRENCY_SYMBOL[row.currency] ?? ''}{(row.total - row.costTotal).toFixed(2)} • {row.lines.length} lines</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="border-white/10 text-muted-foreground">{row.status}</Badge>

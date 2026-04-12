@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo } from 'react';
-import { ClipboardList, ListChecks, Plus, ShieldCheck, Workflow } from 'lucide-react';
+import { ClipboardList, ListChecks, LogOut, Plus, ShieldCheck, Workflow } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -127,7 +127,7 @@ const SidebarSection = ({
 );
 
 export const AppSidebar = () => {
-  const { currentTenant, projects, currentUser, addProject, canManageProjects, canManageMembers } = useAppState();
+  const { currentTenant, projects, currentUser, addProject, canManageProjects, canManageMembers, signOut } = useAppState();
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -376,6 +376,18 @@ export const AppSidebar = () => {
             <span className="truncate text-xs text-muted-foreground">{currentTenant?.name}</span>
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-3 w-full justify-start gap-2 group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center"
+          onClick={() => {
+            signOut();
+            router.push('/');
+          }}
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );

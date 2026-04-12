@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { businessPrisma, BUSINESS_DEFAULT_TENANT_ID, ensureBusinessTenant } from '@/lib/server/business-prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -13,6 +14,7 @@ const createSchema = z.object({
   lifecycle: z.enum(['draft', 'active', 'discontinued', 'seasonal', 'archived']).default('active'),
   productType: z.enum(['physical', 'digital', 'service', 'bundle']).default('physical'),
   basePrice: z.number().nonnegative().optional(),
+  costPrice: z.number().nonnegative().optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -20,22 +22,69 @@ const patchSchema = z.object({
   lifecycle: z.enum(['draft', 'active', 'discontinued', 'seasonal', 'archived']).optional(),
   description: z.string().optional(),
   basePrice: z.number().nonnegative().optional(),
+  costPrice: z.number().nonnegative().optional(),
   categoryId: z.string().optional(),
   baseUomId: z.string().optional(),
 });
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
-    const products = await businessPrisma.invProduct.findMany({
-      where: { tenantId: BUSINESS_DEFAULT_TENANT_ID },
-      include: {
-        productCategory: { select: { id: true, name: true, code: true } },
-        baseUom: { select: { id: true, name: true, symbol: true } },
-        variants: { select: { id: true, sku: true, attributeValues: true, additionalPrice: true, lifecycle: true } },
-        bundleHeaders: { select: { id: true, name: true, description: true, items: { include: { componentProduct: { select: { id: true, name: true, sku: true } } } } } },
-      },
-      orderBy: { createdAt: 'desc' },
+    const [productsSnap, categoriesSnap, uomsSnap, variantsSnap, bundlesSnap, bundleItemsSnap] = await Promise.all([
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProductCategories).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizUoms).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProductBundles).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizBundleItems).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+    ]);
+
+    const categoryMap = new Map(categoriesSnap.docs.map((doc) => [doc.id, doc.data()]));
+    const uomMap = new Map(uomsSnap.docs.map((doc) => [doc.id, doc.data()]));
+    const variantsByProduct = new Map<string, Array<Record<string, unknown>>>();
+    variantsSnap.docs.forEach((doc) => {
+      const data = doc.data();
+      const key = String(data.productId ?? '');
+      const arr = variantsByProduct.get(key) ?? [];
+      arr.push({ id: doc.id, ...data });
+      variantsByProduct.set(key, arr);
     });
+
+    const bundleItemsByBundle = new Map<string, Array<Record<string, unknown>>>();
+    bundleItemsSnap.docs.forEach((doc) => {
+      const data = doc.data();
+      const key = String(data.bundleId ?? '');
+      const arr = bundleItemsByBundle.get(key) ?? [];
+      arr.push({ id: doc.id, ...data });
+      bundleItemsByBundle.set(key, arr);
+    });
+
+    const bundlesByProduct = new Map<string, Array<Record<string, unknown>>>();
+    bundlesSnap.docs.forEach((doc) => {
+      const data = doc.data();
+      const key = String(data.productId ?? '');
+      const arr = bundlesByProduct.get(key) ?? [];
+      arr.push({ id: doc.id, ...data, items: bundleItemsByBundle.get(doc.id) ?? [] });
+      bundlesByProduct.set(key, arr);
+    });
+
+    const products = productsSnap.docs.map((doc) => {
+      const data = doc.data();
+      const category = categoryMap.get(String(data.categoryId ?? ''));
+      const uom = uomMap.get(String(data.baseUomId ?? ''));
+      const createdAt = String(data.createdAt ?? '');
+      return {
+        id: doc.id,
+        ...data,
+        createdAt,
+        productCategory: category
+          ? { id: String(data.categoryId), name: String(category.name ?? ''), code: String(category.code ?? '') }
+          : null,
+        baseUom: uom ? { id: String(data.baseUomId), name: String(uom.name ?? ''), symbol: String(uom.symbol ?? '') } : null,
+        variants: variantsByProduct.get(doc.id) ?? [],
+        bundleHeaders: bundlesByProduct.get(doc.id) ?? [],
+      };
+    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
     return NextResponse.json({ ok: true, products });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
@@ -44,10 +93,25 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const body = createSchema.parse(await req.json());
 
-    // Auto-generate SKU if not provided
+    const normalizedName = body.name.trim();
+    if (!normalizedName) {
+      return NextResponse.json({ ok: false, error: 'Product name is required' }, { status: 400 });
+    }
+
+    const sameName = await adminFirestore
+      .collection(col.bizProducts)
+      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('nameLower', '==', normalizedName.toLowerCase())
+      .limit(1)
+      .get();
+
+    if (!sameName.empty) {
+      return NextResponse.json({ ok: false, error: `Product '${normalizedName}' already exists`, duplicateField: 'name' }, { status: 409 });
+    }
+
     let sku = body.sku?.toUpperCase();
     if (!sku) {
       const prefix = (body.skuPrefix ?? body.name.slice(0, 3)).toUpperCase().replace(/\s+/g, '');
@@ -55,27 +119,39 @@ export async function POST(req: NextRequest) {
       sku = `${prefix}-${suffix}`;
     }
 
-    const product = await businessPrisma.invProduct.create({
-      data: {
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
-        name: body.name,
-        description: body.description,
-        sku,
-        skuPrefix: body.skuPrefix,
-        category: body.category,
-        categoryId: body.categoryId ?? null,
-        baseUomId: body.baseUomId ?? null,
-        lifecycle: body.lifecycle,
-        productType: body.productType,
-        basePrice: body.basePrice ?? null,
-        tags: body.tags ? body.tags : undefined,
-      },
-      include: {
-        productCategory: { select: { id: true, name: true, code: true } },
-        baseUom: { select: { id: true, name: true, symbol: true } },
-      },
-    });
+    const sameSku = await adminFirestore
+      .collection(col.bizProducts)
+      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('sku', '==', sku)
+      .limit(1)
+      .get();
 
+    if (!sameSku.empty) {
+      return NextResponse.json({ ok: false, error: `SKU '${sku}' is already in use`, duplicateField: 'sku' }, { status: 409 });
+    }
+
+    const id = makeId(col.bizProducts);
+    const product = {
+      id,
+      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      name: normalizedName,
+      nameLower: normalizedName.toLowerCase(),
+      description: body.description ?? null,
+      sku,
+      skuPrefix: body.skuPrefix ?? null,
+      category: body.category ?? null,
+      categoryId: body.categoryId ?? null,
+      baseUomId: body.baseUomId ?? null,
+      lifecycle: body.lifecycle,
+      productType: body.productType,
+      basePrice: body.basePrice ?? null,
+      costPrice: body.costPrice ?? null,
+      tags: body.tags ?? [],
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+
+    await adminFirestore.collection(col.bizProducts).doc(id).set(product);
     return NextResponse.json({ ok: true, product }, { status: 201 });
   } catch (e) {
     if (e instanceof z.ZodError) {
@@ -93,16 +169,8 @@ export async function PATCH(req: NextRequest) {
 
     const body = patchSchema.parse(await req.json());
 
-    const product = await businessPrisma.invProduct.update({
-      where: { id },
-      data: {
-        ...(body.lifecycle ? { lifecycle: body.lifecycle } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.basePrice !== undefined ? { basePrice: body.basePrice } : {}),
-        ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
-        ...(body.baseUomId !== undefined ? { baseUomId: body.baseUomId } : {}),
-      },
-    });
+    await adminFirestore.collection(col.bizProducts).doc(id).set({ ...body, updatedAt: nowIso() }, { merge: true });
+    const product = { id, ...(await adminFirestore.collection(col.bizProducts).doc(id).get()).data() };
 
     return NextResponse.json({ ok: true, product });
   } catch (e) {

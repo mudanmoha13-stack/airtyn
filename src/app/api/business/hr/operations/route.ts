@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { businessPrisma, ensureBusinessTenant, BUSINESS_DEFAULT_TENANT_ID } from '@/lib/server/business-prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
 
 const createSchema = z.discriminatedUnion('entityType', [
   z.object({
@@ -9,6 +10,9 @@ const createSchema = z.discriminatedUnion('entityType', [
     email: z.string().email(),
     title: z.string().min(1),
     department: z.string().default('General'),
+    role: z.string().optional(),
+    orgUnit: z.string().optional(),
+    skills: z.string().optional(),
   }),
   z.object({
     entityType: z.literal('contract'),
@@ -46,269 +50,321 @@ const createSchema = z.discriminatedUnion('entityType', [
 ]);
 
 const patchSchema = z.discriminatedUnion('entityType', [
-  z.object({
-    entityType: z.literal('leave'),
-    id: z.string().min(1),
-    status: z.enum(['requested', 'approved', 'rejected', 'canceled']),
-  }),
-  z.object({
-    entityType: z.literal('candidate'),
-    id: z.string().min(1),
-    stage: z.string().min(1),
-  }),
-  z.object({
-    entityType: z.literal('payroll'),
-    id: z.string().min(1),
-    approval: z.enum(['approved', 'rejected']),
-  }),
+  z.object({ entityType: z.literal('leave'), id: z.string().min(1), status: z.enum(['requested', 'approved', 'rejected', 'canceled']) }),
+  z.object({ entityType: z.literal('candidate'), id: z.string().min(1), stage: z.string().min(1) }),
+  z.object({ entityType: z.literal('payroll'), id: z.string().min(1), approval: z.enum(['approved', 'rejected']) }),
+  z.object({ entityType: z.literal('employee'), id: z.string().min(1), status: z.enum(['active', 'suspended', 'deactive']) }),
 ]);
+
+type EmployeeDoc = {
+  id: string;
+  userId?: string;
+  name?: string;
+  email?: string;
+  title?: string;
+  departmentId?: string;
+  role?: string;
+  orgUnit?: string;
+  skills?: string;
+  status?: string;
+  createdAt?: string;
+};
+
+function extractIndexUrl(message: string): string | null {
+  const match = /https:\/\/console\.firebase\.google\.com\/[^\s|]+/.exec(message);
+  return match ? match[0].replace(/\s+$/, '') : null;
+}
+
+function getFirestoreErrorDescription(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('not_found') || m.includes('not found')) {
+    return 'Firestore database does not exist yet. Open Firebase Console → your project → Build → Firestore Database → click "Create database", choose Native mode and a region, then retry.';
+  }
+  if (m.includes('permission_denied') && m.includes('firestore.googleapis.com')) {
+    return 'Cloud Firestore API is disabled for this Google Cloud project. Enable firestore.googleapis.com at https://console.developers.google.com/apis/api/firestore.googleapis.com, wait a few minutes, then retry.';
+  }
+  if (m.includes('unauthenticated') || m.includes('permission_denied')) {
+    return 'Firebase Admin credentials are missing or do not have Firestore access. Verify FIREBASE_SERVICE_ACCOUNT_PATH and IAM roles (Firestore Editor or Firebase Admin).';
+  }
+  if (m.includes('failed_precondition') || m.includes('failed-precondition') || m.includes('index')) {
+    return 'A required Firestore composite index is missing. Click the "Create Index" link below to create it instantly, then retry.';
+  }
+  return 'Unexpected Firestore error. Check server logs for details.';
+}
 
 export async function GET() {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
 
-    const [employees, contracts, attendance, leaves, payrollRuns, candidates, payrollLogs] = await Promise.all([
-      businessPrisma.hrEmployee.findMany({
-        where: { tenantId: BUSINESS_DEFAULT_TENANT_ID },
-        include: { user: true },
-        orderBy: { createdAt: 'desc' },
-      }),
-      businessPrisma.hrContract.findMany({
-        include: { employee: { include: { user: true } } },
-        orderBy: { startDate: 'desc' },
-        take: 200,
-      }),
-      businessPrisma.hrAttendance.findMany({
-        include: { employee: { include: { user: true } } },
-        orderBy: { checkIn: 'desc' },
-        take: 300,
-      }),
-      businessPrisma.hrLeave.findMany({
-        include: { employee: { include: { user: true } } },
-        orderBy: { startDate: 'desc' },
-        take: 200,
-      }),
-      businessPrisma.hrPayrollRun.findMany({
-        where: { tenantId: BUSINESS_DEFAULT_TENANT_ID },
-        include: {
-          payslips: {
-            include: {
-              employee: {
-                include: { user: true },
-              },
-            },
-          },
-        },
-        orderBy: { periodStart: 'desc' },
-        take: 100,
-      }),
-      businessPrisma.hrCandidate.findMany({
-        where: { tenantId: BUSINESS_DEFAULT_TENANT_ID },
-        orderBy: { createdAt: 'desc' },
-        take: 200,
-      }),
-      businessPrisma.auditLog.findMany({
-        where: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          module: 'hr',
-          entityType: 'payroll_run',
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 500,
-      }),
+    // orderBy is intentionally omitted from all queries to avoid requiring composite indexes.
+    // Results are sorted in JS below.
+    const [employeeSnap, userSnap, contractSnap, attendanceSnap, leaveSnap, payrollSnap, payslipSnap, candidateSnap] = await Promise.all([
+      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(500).get(),
+      adminFirestore.collection(col.bizUsers).limit(500).get(),
+      adminFirestore.collection(col.bizContracts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
+      adminFirestore.collection(col.bizAttendance).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(300).get(),
+      adminFirestore.collection(col.bizLeaves).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
+      adminFirestore.collection(col.bizPayrollRuns).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(100).get(),
+      adminFirestore.collection(col.bizPayslips).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizCandidates).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
     ]);
 
-    const payrollStatusMap = new Map<string, string>();
-    for (const log of payrollLogs) {
-      if (payrollStatusMap.has(log.entityId)) continue;
-      if (log.action === 'payroll_approved') payrollStatusMap.set(log.entityId, 'approved');
-      else if (log.action === 'payroll_rejected') payrollStatusMap.set(log.entityId, 'rejected');
-      else payrollStatusMap.set(log.entityId, 'pending_approval');
+    // Payroll audit log is optional — skip silently if collection/index not ready.
+    let payrollLogDocs: Array<Record<string, unknown>> = [];
+    try {
+      const payrollLogSnap = await adminFirestore
+        .collection(col.bizAuditLogs)
+        .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+        .where('module', '==', 'hr')
+        .where('entityType', '==', 'payroll_run')
+        .limit(500)
+        .get();
+      payrollLogDocs = payrollLogSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, unknown>))
+        .sort((a, b) => String(b['createdAt'] ?? '').localeCompare(String(a['createdAt'] ?? '')));
+    } catch {
+      payrollLogDocs = [];
     }
+
+    const users = new Map(userSnap.docs.map((doc) => [doc.id, doc.data()]));
+    const employees: EmployeeDoc[] = employeeSnap.docs
+      .map((doc) => {
+        const employee = doc.data() as Omit<EmployeeDoc, 'id'>;
+        return { id: doc.id, ...employee };
+      })
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+    const employeeMap = new Map(employees.map((employee) => [String(employee.id), employee]));
+
+    const payrollStatusMap = new Map<string, string>();
+    payrollLogDocs.forEach((log) => {
+      const entityId = String(log.entityId ?? '');
+      if (!entityId || payrollStatusMap.has(entityId)) return;
+      if (log.action === 'payroll_approved') payrollStatusMap.set(entityId, 'approved');
+      else if (log.action === 'payroll_rejected') payrollStatusMap.set(entityId, 'rejected');
+      else payrollStatusMap.set(entityId, 'pending_approval');
+    });
+
+    const payslipsByRun = new Map<string, Array<Record<string, unknown>>>();
+    payslipSnap.docs.forEach((doc) => {
+      const slip = doc.data();
+      const runId = String(slip.payrollRunId ?? '');
+      const arr = payslipsByRun.get(runId) ?? [];
+      arr.push({ id: doc.id, ...slip });
+      payslipsByRun.set(runId, arr);
+    });
 
     return NextResponse.json({
       ok: true,
-      employees: employees.map((employee) => ({
-        id: employee.id,
-        name: employee.user ? `${employee.user.firstName ?? ''} ${employee.user.lastName ?? ''}`.trim() || employee.user.email : 'Unknown Employee',
-        title: employee.title,
-        department: employee.departmentId ?? 'General',
-        email: employee.user?.email ?? 'unknown@local',
-        status: 'active',
+      employees: employees.map((employee) => {
+        const user = users.get(String(employee.userId ?? ''));
+        return {
+          id: employee.id,
+          name: (() => { const fromUser = user ? `${String(user.firstName ?? '')} ${String(user.lastName ?? '')}`.trim() || String(user.email ?? '') : ''; return fromUser || String(employee.name ?? '') || 'Unknown Employee'; })(),
+          title: String(employee.title ?? ''),
+          department: String(employee.departmentId ?? 'General'),
+          email: String(user?.email ?? employee.email ?? 'unknown@local'),
+          status: String(employee.status ?? user?.status ?? 'active'),
+          role: String(employee.role ?? ''),
+          orgUnit: String(employee.orgUnit ?? ''),
+          skills: String(employee.skills ?? ''),
+        };
+      }),
+      contracts: contractSnap.docs
+        .map((doc) => {
+          const contract = doc.data();
+          const employee = employeeMap.get(String(contract.employeeId ?? ''));
+          const user = users.get(String(employee?.userId ?? ''));
+          return {
+            id: doc.id,
+            employeeId: String(contract.employeeId ?? ''),
+            employeeName: user ? `${String(user.firstName ?? '')} ${String(user.lastName ?? '')}`.trim() || String(user.email ?? 'Unknown Employee') : 'Unknown Employee',
+            type: String(contract.type ?? ''),
+            startDate: String(contract.startDate ?? ''),
+            endDate: contract.endDate ? String(contract.endDate) : null,
+          };
+        })
+        .sort((a, b) => b.startDate.localeCompare(a.startDate)),
+      attendance: attendanceSnap.docs
+        .map((doc) => {
+          const entry = doc.data();
+          const employee = employeeMap.get(String(entry.employeeId ?? ''));
+          const user = users.get(String(employee?.userId ?? ''));
+          return {
+            id: doc.id,
+            employeeId: String(entry.employeeId ?? ''),
+            employeeName: user ? `${String(user.firstName ?? '')} ${String(user.lastName ?? '')}`.trim() || String(user.email ?? 'Unknown Employee') : 'Unknown Employee',
+            checkIn: String(entry.checkIn ?? ''),
+            checkOut: entry.checkOut ? String(entry.checkOut) : null,
+          };
+        })
+        .sort((a, b) => b.checkIn.localeCompare(a.checkIn)),
+      leaves: leaveSnap.docs
+        .map((doc) => {
+          const leave = doc.data();
+          const employee = employeeMap.get(String(leave.employeeId ?? ''));
+          const user = users.get(String(employee?.userId ?? ''));
+          return {
+            id: doc.id,
+            employeeId: String(leave.employeeId ?? ''),
+            employeeName: user ? `${String(user.firstName ?? '')} ${String(user.lastName ?? '')}`.trim() || String(user.email ?? 'Unknown Employee') : 'Unknown Employee',
+            type: String(leave.type ?? ''),
+            status: String(leave.status ?? ''),
+            startDate: String(leave.startDate ?? ''),
+            endDate: String(leave.endDate ?? ''),
+          };
+        })
+        .sort((a, b) => b.startDate.localeCompare(a.startDate)),
+      payrollRuns: payrollSnap.docs.map((doc) => ({
+        id: doc.id,
+        periodStart: String(doc.data().periodStart ?? ''),
+        periodEnd: String(doc.data().periodEnd ?? ''),
+        createdAt: String(doc.data().createdAt ?? ''),
+        approvalStatus: payrollStatusMap.get(doc.id) ?? 'pending_approval',
+        payslips: (payslipsByRun.get(doc.id) ?? []).map((slip) => {
+          const employee = employeeMap.get(String(slip.employeeId ?? ''));
+          const user = users.get(String(employee?.userId ?? ''));
+          return {
+            id: String(slip.id ?? ''),
+            employeeId: String(slip.employeeId ?? ''),
+            employeeName: user ? `${String(user.firstName ?? '')} ${String(user.lastName ?? '')}`.trim() || String(user.email ?? 'Unknown Employee') : 'Unknown Employee',
+            netPay: Number(slip.netPay ?? 0),
+          };
+        }),
       })),
-      contracts: contracts.map((contract) => ({
-        id: contract.id,
-        employeeId: contract.employeeId,
-        employeeName: contract.employee.user ? `${contract.employee.user.firstName ?? ''} ${contract.employee.user.lastName ?? ''}`.trim() || contract.employee.user.email : 'Unknown Employee',
-        type: contract.type,
-        startDate: contract.startDate.toISOString(),
-        endDate: contract.endDate?.toISOString() ?? null,
-      })),
-      attendance: attendance.map((entry) => ({
-        id: entry.id,
-        employeeId: entry.employeeId,
-        employeeName: entry.employee.user ? `${entry.employee.user.firstName ?? ''} ${entry.employee.user.lastName ?? ''}`.trim() || entry.employee.user.email : 'Unknown Employee',
-        checkIn: entry.checkIn.toISOString(),
-        checkOut: entry.checkOut?.toISOString() ?? null,
-      })),
-      leaves: leaves.map((leave) => ({
-        id: leave.id,
-        employeeId: leave.employeeId,
-        employeeName: leave.employee.user ? `${leave.employee.user.firstName ?? ''} ${leave.employee.user.lastName ?? ''}`.trim() || leave.employee.user.email : 'Unknown Employee',
-        type: leave.type,
-        status: leave.status,
-        startDate: leave.startDate.toISOString(),
-        endDate: leave.endDate.toISOString(),
-      })),
-      payrollRuns: payrollRuns.map((run) => ({
-        id: run.id,
-        periodStart: run.periodStart.toISOString(),
-        periodEnd: run.periodEnd.toISOString(),
-        createdAt: run.createdAt.toISOString(),
-        approvalStatus: payrollStatusMap.get(run.id) ?? 'pending_approval',
-        payslips: run.payslips.map((slip) => ({
-          id: slip.id,
-          employeeId: slip.employeeId,
-          employeeName: slip.employee.user ? `${slip.employee.user.firstName ?? ''} ${slip.employee.user.lastName ?? ''}`.trim() || slip.employee.user.email : 'Unknown Employee',
-          netPay: Number(slip.netPay),
-        })),
-      })),
-      candidates: candidates.map((candidate) => ({
-        id: candidate.id,
-        name: candidate.name,
-        roleTitle: candidate.roleTitle,
-        stage: candidate.stage,
-        createdAt: candidate.createdAt.toISOString(),
-      })),
+      candidates: candidateSnap.docs
+        .map((doc) => ({
+          id: doc.id,
+          name: String(doc.data().name ?? ''),
+          roleTitle: String(doc.data().roleTitle ?? ''),
+          stage: String(doc.data().stage ?? ''),
+          createdAt: String(doc.data().createdAt ?? ''),
+        }))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to load HR operations' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to load HR operations';
+    const description = getFirestoreErrorDescription(message);
+    const indexUrl = extractIndexUrl(message);
+    return NextResponse.json(
+      { ok: false, code: 'HR_OPERATIONS_GET_FAILED', error: message, description, ...(indexUrl ? { indexUrl } : {}) },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const payload = createSchema.parse(await request.json());
 
     if (payload.entityType === 'employee') {
       const [firstName, ...rest] = payload.name.trim().split(' ');
       const lastName = rest.join(' ');
+      const email = payload.email.toLowerCase();
 
-      const user = await businessPrisma.businessUser.upsert({
-        where: { email: payload.email.toLowerCase() },
-        update: {
-          firstName,
-          lastName: lastName || null,
-          status: 'active',
-        },
-        create: {
-          email: payload.email.toLowerCase(),
-          passwordHash: 'temp-password-hash',
-          status: 'active',
-          firstName,
-          lastName: lastName || null,
-        },
-      });
+      const existingUser = await adminFirestore.collection(col.bizUsers).where('email', '==', email).limit(1).get();
+      const userId = existingUser.empty ? makeId(col.bizUsers) : existingUser.docs[0].id;
+      await adminFirestore.collection(col.bizUsers).doc(userId).set(
+        { id: userId, email, firstName, lastName: lastName || null, passwordHash: 'temp-password-hash', status: 'active', createdAt: nowIso(), updatedAt: nowIso() },
+        { merge: true }
+      );
 
-      const employee = await businessPrisma.hrEmployee.upsert({
-        where: { userId: user.id },
-        update: {
-          title: payload.title,
-          departmentId: payload.department,
-        },
-        create: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          userId: user.id,
-          title: payload.title,
-          departmentId: payload.department,
-        },
-      });
+      const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('userId', '==', userId).limit(1).get();
+      const employeeId = existingEmployee.empty ? makeId(col.bizEmployees) : existingEmployee.docs[0].id;
+      await adminFirestore.collection(col.bizEmployees).doc(employeeId).set(
+        { id: employeeId, tenantId: BUSINESS_DEFAULT_TENANT_ID, userId, name: payload.name.trim(), email: payload.email.toLowerCase(), title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, status: 'active', createdAt: nowIso(), updatedAt: nowIso() },
+        { merge: true }
+      );
 
-      return NextResponse.json({ ok: true, id: employee.id }, { status: 201 });
+      return NextResponse.json({ ok: true, id: employeeId }, { status: 201 });
     }
 
     if (payload.entityType === 'contract') {
-      const contract = await businessPrisma.hrContract.create({
-        data: {
-          employeeId: payload.employeeId,
-          type: payload.contractType,
-          startDate: new Date(payload.startDate),
-          endDate: payload.endDate ? new Date(payload.endDate) : null,
-        },
+      const id = makeId(col.bizContracts);
+      await adminFirestore.collection(col.bizContracts).doc(id).set({
+        id,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        employeeId: payload.employeeId,
+        type: payload.contractType,
+        startDate: payload.startDate,
+        endDate: payload.endDate ?? null,
+        createdAt: nowIso(),
       });
-
-      return NextResponse.json({ ok: true, id: contract.id }, { status: 201 });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.entityType === 'attendance') {
-      const attendance = await businessPrisma.hrAttendance.create({
-        data: {
-          employeeId: payload.employeeId,
-          checkIn: payload.checkIn ? new Date(payload.checkIn) : new Date(),
-          checkOut: payload.checkOut ? new Date(payload.checkOut) : null,
-        },
+      const id = makeId(col.bizAttendance);
+      await adminFirestore.collection(col.bizAttendance).doc(id).set({
+        id,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        employeeId: payload.employeeId,
+        checkIn: payload.checkIn ?? nowIso(),
+        checkOut: payload.checkOut ?? null,
       });
-
-      return NextResponse.json({ ok: true, id: attendance.id }, { status: 201 });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.entityType === 'leave') {
-      const leave = await businessPrisma.hrLeave.create({
-        data: {
-          employeeId: payload.employeeId,
-          type: payload.leaveType,
-          status: 'requested',
-          startDate: new Date(payload.startDate),
-          endDate: new Date(payload.endDate),
-        },
+      const id = makeId(col.bizLeaves);
+      await adminFirestore.collection(col.bizLeaves).doc(id).set({
+        id,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        employeeId: payload.employeeId,
+        type: payload.leaveType,
+        status: 'requested',
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        createdAt: nowIso(),
       });
-
-      return NextResponse.json({ ok: true, id: leave.id }, { status: 201 });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     if (payload.entityType === 'payroll') {
-      const run = await businessPrisma.hrPayrollRun.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          periodStart: new Date(payload.periodStart),
-          periodEnd: new Date(payload.periodEnd),
-          payslips: {
-            create: [
-              {
-                employeeId: payload.employeeId,
-                netPay: payload.netPay,
-              },
-            ],
-          },
-        },
+      const runId = makeId(col.bizPayrollRuns);
+      await adminFirestore.collection(col.bizPayrollRuns).doc(runId).set({
+        id: runId,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        periodStart: payload.periodStart,
+        periodEnd: payload.periodEnd,
+        createdAt: nowIso(),
       });
 
-      await businessPrisma.auditLog.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          module: 'hr',
-          entityType: 'payroll_run',
-          entityId: run.id,
-          action: 'payroll_submitted',
-          meta: { source: 'hr-module' },
-        },
+      const payslipId = makeId(col.bizPayslips);
+      await adminFirestore.collection(col.bizPayslips).doc(payslipId).set({
+        id: payslipId,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        payrollRunId: runId,
+        employeeId: payload.employeeId,
+        netPay: payload.netPay,
       });
 
-      return NextResponse.json({ ok: true, id: run.id }, { status: 201 });
+      const logId = makeId(col.bizAuditLogs);
+      await adminFirestore.collection(col.bizAuditLogs).doc(logId).set({
+        id: logId,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        module: 'hr',
+        entityType: 'payroll_run',
+        entityId: runId,
+        action: 'payroll_submitted',
+        meta: { source: 'hr-module' },
+        createdAt: nowIso(),
+      });
+
+      return NextResponse.json({ ok: true, id: runId }, { status: 201 });
     }
 
     if (payload.entityType === 'candidate') {
-      const candidate = await businessPrisma.hrCandidate.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          name: payload.name,
-          stage: payload.stage,
-          roleTitle: payload.roleTitle,
-        },
+      const id = makeId(col.bizCandidates);
+      await adminFirestore.collection(col.bizCandidates).doc(id).set({
+        id,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        name: payload.name,
+        stage: payload.stage,
+        roleTitle: payload.roleTitle,
+        createdAt: nowIso(),
       });
-
-      return NextResponse.json({ ok: true, id: candidate.id }, { status: 201 });
+      return NextResponse.json({ ok: true, id }, { status: 201 });
     }
 
     return NextResponse.json({ ok: false, error: 'Unsupported entity payload' }, { status: 400 });
@@ -317,44 +373,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Invalid HR payload', issues: error.flatten() }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to save HR operation' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to save HR operation';
+    const description = getFirestoreErrorDescription(message);
+    const indexUrl = extractIndexUrl(message);
+    return NextResponse.json(
+      { ok: false, code: 'HR_OPERATIONS_POST_FAILED', error: message, description, ...(indexUrl ? { indexUrl } : {}) },
+      { status: 500 }
+    );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
-    await ensureBusinessTenant();
+    await ensureBusinessTenantDoc();
     const payload = patchSchema.parse(await request.json());
 
     if (payload.entityType === 'leave') {
-      const leave = await businessPrisma.hrLeave.update({
-        where: { id: payload.id },
-        data: { status: payload.status },
-      });
-
-      return NextResponse.json({ ok: true, id: leave.id });
+      await adminFirestore.collection(col.bizLeaves).doc(payload.id).set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
+      return NextResponse.json({ ok: true, id: payload.id });
     }
 
     if (payload.entityType === 'candidate') {
-      const candidate = await businessPrisma.hrCandidate.update({
-        where: { id: payload.id },
-        data: { stage: payload.stage },
-      });
-
-      return NextResponse.json({ ok: true, id: candidate.id });
+      await adminFirestore.collection(col.bizCandidates).doc(payload.id).set({ stage: payload.stage, updatedAt: nowIso() }, { merge: true });
+      return NextResponse.json({ ok: true, id: payload.id });
     }
 
     if (payload.entityType === 'payroll') {
-      await businessPrisma.auditLog.create({
-        data: {
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
-          module: 'hr',
-          entityType: 'payroll_run',
-          entityId: payload.id,
-          action: payload.approval === 'approved' ? 'payroll_approved' : 'payroll_rejected',
-          meta: { source: 'hr-module' },
-        },
+      const logId = makeId(col.bizAuditLogs);
+      await adminFirestore.collection(col.bizAuditLogs).doc(logId).set({
+        id: logId,
+        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        module: 'hr',
+        entityType: 'payroll_run',
+        entityId: payload.id,
+        action: payload.approval === 'approved' ? 'payroll_approved' : 'payroll_rejected',
+        meta: { source: 'hr-module' },
+        createdAt: nowIso(),
       });
+
+      return NextResponse.json({ ok: true, id: payload.id });
+    }
+
+    if (payload.entityType === 'employee') {
+      await adminFirestore.collection(col.bizEmployees).doc(payload.id).set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
+
+      const employeeDoc = await adminFirestore.collection(col.bizEmployees).doc(payload.id).get();
+      const userId = String(employeeDoc.data()?.userId ?? '');
+      if (userId) {
+        const mappedUserStatus = payload.status === 'deactive' ? 'inactive' : payload.status;
+        await adminFirestore.collection(col.bizUsers).doc(userId).set({ status: mappedUserStatus, updatedAt: nowIso() }, { merge: true });
+      }
 
       return NextResponse.json({ ok: true, id: payload.id });
     }
@@ -365,6 +433,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Invalid HR patch payload', issues: error.flatten() }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to update HR operation' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to update HR operation';
+    const description = getFirestoreErrorDescription(message);
+    const indexUrl = extractIndexUrl(message);
+    return NextResponse.json(
+      { ok: false, code: 'HR_OPERATIONS_PATCH_FAILED', error: message, description, ...(indexUrl ? { indexUrl } : {}) },
+      { status: 500 }
+    );
   }
 }

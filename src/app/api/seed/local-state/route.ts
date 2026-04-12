@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/server/prisma';
+import { adminFirestore } from '@/lib/server/firebase-admin';
+import { col } from '@/lib/server/firestore-data';
 import { invalidateProjectsCache } from '@/lib/server/project-cache';
 import { invalidateTasksCache } from '@/lib/server/task-cache';
 import { invalidateUsersCache } from '@/lib/server/user-cache';
@@ -33,115 +34,96 @@ const seedPayloadSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const payload = seedPayloadSchema.parse(await request.json());
-    const tenantId = payload.currentTenant?.id;
+    const tenantId = payload.currentTenant?.id ?? '';
     const projectTenantById = new Map(payload.projects.map((project) => [project.id, project.tenantId]));
 
     if (payload.currentTenant) {
-      await prisma.tenant.upsert({
-        where: { id: payload.currentTenant.id },
-        update: { name: payload.currentTenant.name, slug: payload.currentTenant.slug, plan: payload.currentTenant.plan },
-        create: payload.currentTenant,
-      });
+      await adminFirestore.collection(col.coreTenants).doc(payload.currentTenant.id).set(payload.currentTenant, { merge: true });
     }
 
     if (payload.currentWorkspace) {
-      await prisma.workspace.upsert({
-        where: { id: payload.currentWorkspace.id },
-        update: { name: payload.currentWorkspace.name, tenantId: payload.currentWorkspace.tenantId },
-        create: { ...payload.currentWorkspace, createdAt: new Date(payload.currentWorkspace.createdAt) },
-      });
+      await adminFirestore.collection(col.coreWorkspaces).doc(payload.currentWorkspace.id).set(payload.currentWorkspace, { merge: true });
     }
 
     for (const user of payload.users) {
-      await prisma.user.upsert({
-        where: { id: user.id },
-        update: { name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tenantId: tenantId ?? '', departmentId: user.departmentId },
-        create: { ...user, tenantId: tenantId ?? '', departmentId: user.departmentId },
-      });
+      await adminFirestore.collection(col.coreUsers).doc(user.id).set(
+        {
+          ...user,
+          tenantId,
+          departmentId: user.departmentId ?? null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     }
 
     for (const project of payload.projects) {
-      await prisma.project.upsert({
-        where: { id: project.id },
-        update: { name: project.name, description: project.description, status: project.status, progress: project.progress, ownerId: project.ownerId, templateId: project.templateId, color: project.color },
-        create: { ...project, createdAt: new Date(project.createdAt) },
-      });
+      await adminFirestore.collection(col.coreProjects).doc(project.id).set(
+        {
+          ...project,
+          createdAt: project.createdAt,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     }
 
     for (const milestone of payload.milestones) {
-      await prisma.milestone.upsert({
-        where: { id: milestone.id },
-        update: { title: milestone.title, description: milestone.description, dueDate: new Date(milestone.dueDate), status: milestone.status, projectId: milestone.projectId },
-        create: { ...milestone, dueDate: new Date(milestone.dueDate), createdAt: new Date(milestone.createdAt) },
-      });
+      await adminFirestore.collection(col.coreMilestones).doc(milestone.id).set(
+        {
+          ...milestone,
+          dueDate: milestone.dueDate,
+          createdAt: milestone.createdAt,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     }
 
     for (const task of payload.tasks) {
-      await prisma.task.upsert({
-        where: { id: task.id },
-        update: {
-          tenantId: projectTenantById.get(task.projectId) ?? tenantId ?? '',
-          projectId: task.projectId,
-          milestoneId: task.milestoneId,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          priority: task.priority,
-          assigneeId: task.assigneeId,
-          dueDate: task.dueDate ? new Date(task.dueDate) : null,
-          startDate: task.startDate ? new Date(task.startDate) : null,
-          estimatedMinutes: task.estimatedMinutes,
-          tags: task.tags,
-          timeEntries: task.timeEntries,
-          attachments: task.attachments,
-          createdBy: task.createdBy,
-        },
-        create: {
+      await adminFirestore.collection(col.coreTasks).doc(task.id).set(
+        {
           id: task.id,
-          tenantId: projectTenantById.get(task.projectId) ?? tenantId ?? '',
+          tenantId: projectTenantById.get(task.projectId) ?? tenantId,
           projectId: task.projectId,
-          milestoneId: task.milestoneId,
+          milestoneId: task.milestoneId ?? null,
           title: task.title,
           description: task.description,
           status: task.status,
           priority: task.priority,
-          assigneeId: task.assigneeId,
-          dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-          startDate: task.startDate ? new Date(task.startDate) : undefined,
-          estimatedMinutes: task.estimatedMinutes,
+          assigneeId: task.assigneeId ?? null,
+          dueDate: task.dueDate ?? null,
+          startDate: task.startDate ?? null,
+          estimatedMinutes: task.estimatedMinutes ?? null,
           tags: task.tags,
           timeEntries: task.timeEntries,
           attachments: task.attachments,
           createdBy: task.createdBy,
-          createdAt: new Date(task.createdAt),
+          createdAt: task.createdAt,
+          updatedAt: new Date().toISOString(),
         },
-      });
+        { merge: true }
+      );
 
-      await prisma.subtask.deleteMany({ where: { taskId: task.id } });
-      await prisma.taskComment.deleteMany({ where: { taskId: task.id } });
+      const existingSubtasks = await adminFirestore.collection(col.coreSubtasks).where('taskId', '==', task.id).get();
+      const existingComments = await adminFirestore.collection(col.coreTaskComments).where('taskId', '==', task.id).get();
+      const batch = adminFirestore.batch();
+      existingSubtasks.docs.forEach((doc) => batch.delete(doc.ref));
+      existingComments.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
 
-      if (task.subtasks.length > 0) {
-        await prisma.subtask.createMany({
-          data: task.subtasks.map((subtask) => ({
-            id: subtask.id,
-            taskId: task.id,
-            title: subtask.title,
-            completed: subtask.completed,
-            createdAt: new Date(subtask.createdAt),
-          })),
-          skipDuplicates: true,
+      for (const subtask of task.subtasks) {
+        await adminFirestore.collection(col.coreSubtasks).doc(subtask.id).set({
+          ...subtask,
+          taskId: task.id,
         });
       }
 
       for (const comment of task.comments) {
-        await prisma.taskComment.create({
-          data: {
-            id: comment.id,
-            taskId: task.id,
-            userId: comment.userId,
-            content: comment.content,
-            createdAt: new Date(comment.createdAt),
-          },
+        await adminFirestore.collection(col.coreTaskComments).doc(comment.id).set({
+          ...comment,
+          taskId: task.id,
         });
       }
     }
