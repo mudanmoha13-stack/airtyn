@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anfac Hirsi Hussein - CV</title>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --secondary: #334155;
+            --accent: #2563eb;
+            --text-main: #334155;
+            --text-light: #64748b;
+            --bg-light: #f8fafc;
+            --white: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .cv-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--white);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            min-height: 1100px;
+        }
+
+        /* Left Column / Sidebar */
+        .sidebar {
+            background-color: var(--primary);
+            color: var(--white);
+            padding: 40px 30px;
+        }
+
+        .header-section h1 {
+            font-size: 28px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 1.1;
+            margin-bottom: 10px;
+            color: var(--white);
+        }
+
+        .header-section h2 {
+            font-size: 14px;
+            font-weight: 400;
+            color: var(--accent);
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .contact-item {
+            margin-bottom: 15px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar-section {
+            margin-top: 40px;
+        }
+
+        .sidebar-title {
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--secondary);
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+            color: var(--accent);
+        }
+
+        .skill-list {
+            list-style: none;
+        }
+
+        .skill-list li {
+            font-size: 13px;
+            margin-bottom: 8px;
+            padding-left: 15px;
+            position: relative;
+        }
+
+        .skill-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 40px;
+        }
+
+        .content-section {
+            margin-bottom: 35px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #e2e8f0;
+            margin-left: 15px;
+        }
+
+        .summary-text {
+            font-size: 14px;
+            color: var(--secondary);
+        }
+
+        .experience-item {
+            margin-bottom: 25px;
+        }
+
+        .exp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 5px;
+        }
+
+        .job-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--primary);
+        }
+
+        .company-name {
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 14px;
+        }
+
+        .exp-date {
+            font-size: 12px;
+            color: var(--text-light);
+            font-style: italic;
+        }
+
+        .exp-location {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-bottom: 8px;
+        }
+
+        .exp-bullets {
+            list-style-type: none;
+            padding-left: 5px;
+        }
+
+        .exp-bullets li {
+            font-size: 13.5px;
+            margin-bottom: 4px;
+            position: relative;
+            padding-left: 15px;
+        }
+
+        .exp-bullets li::before {
+            content: "›";
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .achievement-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-top: 8px;
+            text-transform: uppercase;
+        }
+
+        @media print {
+            body { padding: 0; background: none; }
+            .cv-container { box-shadow: none; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="cv-container">
+        <aside class="sidebar">
+            <div class="header-section">
+                <h1>Anfac Hirsi Hussein</h1>
+                <h2>Digital Banking Specialist</h2>
+                
+                <div class="contact-info">
+                    <div class="contact-item">📍 Nairobi, Kenya</div>
+                    <div class="contact-item">📞 +254 748 666 773</div>
+                    <div class="contact-item">📧 anfacxirsi133@gmail.com</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Core Skills</h3>
+                <ul class="skill-list">
+                    <li>Digital Banking & FinTech</li>
+                    <li>M-Pesa Integration</li>
+                    <li>Digital Marketing</li>
+                    <li>Public Relations</li>
+                    <li>Brand Communication</li>
+                    <li>Data Analytics (A/B Testing)</li>
+                    <li>Stakeholder Management</li>
+                    <li>Social Media Strategy</li>
+                    <li>CRM & Acquisition</li>
+                    <li>Crisis Communication</li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Education</h3>
+                <div style="font-size: 13px; font-weight: 600;">BBIT</div>
+                <div style="font-size: 12px; opacity: 0.9;">KCA University, Nairobi</div>
+                <div style="font-size: 11px; opacity: 0.7;">2010 – 2014</div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Expertise</h3>
+                <p style="font-size: 12px; line-height: 1.4;">Deep knowledge of Kenya’s digital finance ecosystem and mobile money integration (M-Pesa).</p>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <section class="content-section">
+                <h3 class="section-title">Professional Summary</h3>
+                <p class="summary-text">
+                    Results-driven Communication and Digital Banking Specialist with 8+ years of experience in media relations, public relations, and digital transformation. Proven ability to drive digital growth, optimize customer acquisition funnels, and execute high-impact communication strategies. Experienced in Kenya’s financial ecosystem, including mobile money platforms such as M-Pesa.
+                </p>
+            </section>
+
+            <section class="content-section">
+                <h3 class="section-title">Professional Experience</h3>
+
+                <div class="experience-item">
+                    <div class="exp-header">
+                        <div>
+                            <span class="job-title">Digital Banking Manager</span><br>
+                            <span class="company-name">Premier Bank</span>
+                        </div>
+                        <span class="exp-date">Dec 2019 – Jan 2022</span>
+                    </div>
+                    <div class="exp-location">Nairobi, Kenya</div>
+                    <ul class="exp-bullets">
+                        <li>Led digital banking strategy across mobile and online platforms.</li>
+                        <li>Optimized digital sales funnels across web, mobile, and social channels.</li>
+                        <li>Implemented data-driven marketing and analytics frameworks.</li>
+                        <li>Integrated systems to improve customer insights and engagement.</li>
+                    </ul>
+                    <div class="achievement-label">Key Achievements:</div>
+                    <ul class="exp-bullets">
+                        <li>Increased digital customer acquisition and retention.</li>
+                        <li>Supported M-Pesa integration and mobile banking adoption.</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="exp-header">
+                        <div>
+                            <span class="job-title">TV Station Director</span><br>
+                            <span class="company-name">Goobjoog Media Group</span>
+                        </div>
+                        <span class="exp-date">Nov 2016 – Oct 2017</span>
+                    </div>
+                    <div class="exp-location">Nairobi, Kenya</div>
+                    <ul class="exp-bullets">
+                        <li>Directed live broadcasts and managed production teams.</li>
+                        <li>Supervised technical crews and editorial planning.</li>
+                        <li>Improved audience engagement through strategic programming.</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="exp-header">
+                        <div>
+                            <span class="job-title">Communication Officer</span><br>
+                            <span class="company-name">IFIYE Center</span>
+                        </div>
+                        <span class="exp-date">Nov 2016 – Oct 2017</span>
+                    </div>
+                    <div class="exp-location">Nairobi, Kenya</div>
+                    <ul class="exp-bullets">
+                        <li>Developed marketing and communication materials.</li>
+                        <li>Managed social media and digital campaigns.</li>
+                        <li>Increased online engagement and brand visibility.</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="exp-header">
+                        <div>
+                            <span class="job-title">Public Relations Manager</span><br>
+                            <span class="company-name">Tabaarak ICT</span>
+                        </div>
+                        <span class="exp-date">Dec 2013 – Jun 2016</span>
+                    </div>
+                    <div class="exp-location">Nairobi, Kenya</div>
+                    <ul class="exp-bullets">
+                        <li>Led PR campaigns and media relations for corporate communications.</li>
+                        <li>Strengthened brand presence and media coverage.</li>
+                    </ul>
+                </div>
+
+                <div class="experience-item">
+                    <div class="exp-header">
+                        <div>
+                            <span class="job-title">Senior Software Developer</span><br>
+                            <span class="company-name">Tabaarak ICT</span>
+                        </div>
+                        <span class="exp-date">Apr 2011 – Sep 2013</span>
+                    </div>
+                    <div class="exp-location">Nairobi, Kenya</div>
+                    <ul class="exp-bullets">
+                        <li>Developed and maintained software systems and databases.</li>
+                        <li>Translated business requirements into technical solutions.</li>
+                        <li>Enhanced system efficiency and supported digital initiatives.</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+</body>
+</html>

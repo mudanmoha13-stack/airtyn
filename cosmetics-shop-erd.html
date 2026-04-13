@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cosmetics Shop — End-to-End ERD</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #09090b;
+    color: #e4e4e7;
+    min-height: 100vh;
+    padding: 0 0 80px;
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .header {
+    background: linear-gradient(135deg, #18181b 0%, #0f0f12 100%);
+    border-bottom: 1px solid #27272a;
+    padding: 32px 48px 28px;
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  .header-top { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .logo {
+    width: 44px; height: 44px; border-radius: 14px;
+    background: linear-gradient(135deg, #ec4899, #a855f7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+  .header h1 { font-size: 22px; font-weight: 700; color: #fff; }
+  .header p { font-size: 13px; color: #71717a; margin-top: 2px; }
+  .stats { display: flex; gap: 24px; flex-wrap: wrap; }
+  .stat { display: flex; align-items: center; gap: 8px; }
+  .stat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .stat-label { font-size: 12px; color: #a1a1aa; }
+  .stat-count { font-size: 12px; font-weight: 700; color: #fff; }
+
+  /* ── Legend / Nav ────────────────────────────────────────── */
+  .nav {
+    background: #18181b;
+    border-bottom: 1px solid #27272a;
+    padding: 14px 48px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .nav-label { font-size: 11px; color: #52525b; font-weight: 600; margin-right: 4px; text-transform: uppercase; letter-spacing: .05em; }
+  .nav-chip {
+    padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 600;
+    cursor: pointer; border: 1.5px solid transparent; transition: all .15s;
+    text-decoration: none; display: inline-block;
+  }
+  .nav-chip:hover { filter: brightness(1.2); }
+
+  /* ── Main grid ───────────────────────────────────────────── */
+  .main { padding: 40px 48px; }
+  .section { margin-bottom: 52px; scroll-margin-top: 130px; }
+  .section-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #27272a;
+  }
+  .section-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .entities { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 16px; }
+
+  /* ── Entity card ─────────────────────────────────────────── */
+  .entity {
+    background: #18181b;
+    border: 1.5px solid #27272a;
+    border-radius: 16px;
+    overflow: hidden;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .entity:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  .entity-header {
+    padding: 12px 16px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid #27272a;
+  }
+  .entity-name { font-size: 13px; font-weight: 700; color: #fff; }
+  .entity-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+    border-radius: 999px; letter-spacing: .04em;
+  }
+  .entity-body { padding: 10px 0; }
+  .field {
+    display: flex; align-items: flex-start; gap: 0;
+    padding: 3px 16px;
+    font-size: 11.5px;
+    border-left: 3px solid transparent;
+    transition: background .1s;
+  }
+  .field:hover { background: #27272a; }
+  .field-icon { width: 20px; flex-shrink: 0; font-size: 10px; color: #52525b; padding-top: 1px; }
+  .field-name { flex: 1; font-family: 'Cascadia Code', 'Fira Code', monospace; color: #e4e4e7; }
+  .field-type { color: #52525b; font-size: 10.5px; font-family: monospace; text-align: right; padding-left: 8px; }
+  .field-pk  { border-left-color: #f59e0b; }
+  .field-fk  { border-left-color: #6366f1; }
+  .field-uk  { border-left-color: #22d3ee; }
+  .field-idx { border-left-color: #10b981; }
+
+  .field-pk .field-icon::before  { content: '🔑'; }
+  .field-fk .field-icon::before  { content: '🔗'; }
+  .field-uk .field-icon::before  { content: '◈'; color: #22d3ee; font-size: 12px; }
+  .field-idx .field-icon::before { content: '⬥'; color: #10b981; font-size: 12px; }
+  .field-     .field-icon::before { content: '·'; }
+
+  .divider { height: 1px; background: #27272a; margin: 6px 16px; }
+
+  /* ── Relationship table ──────────────────────────────────── */
+  .rel-section { margin-bottom: 52px; scroll-margin-top: 130px; }
+  .rel-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rel-table th {
+    text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #71717a;
+    background: #18181b; border-bottom: 1px solid #27272a;
+  }
+  .rel-table td { padding: 10px 14px; border-bottom: 1px solid #1c1c1f; vertical-align: top; }
+  .rel-table tr:last-child td { border-bottom: none; }
+  .rel-table tr:hover td { background: #18181b; }
+  .cardinality {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; font-family: monospace;
+    background: #27272a; color: #a1a1aa;
+  }
+  .entity-ref {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 600; font-family: monospace;
+    background: #1c1c1f; color: #e4e4e7; border: 1px solid #27272a;
+  }
+  .rel-note { color: #52525b; font-size: 11px; margin-top: 3px; }
+
+  /* ── Legend box ──────────────────────────────────────────── */
+  .legend {
+    display: flex; gap: 20px; flex-wrap: wrap;
+    background: #18181b; border: 1px solid #27272a;
+    border-radius: 12px; padding: 14px 20px;
+    margin-bottom: 36px; font-size: 11px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; color: #a1a1aa; }
+  .legend-bar { width: 16px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Color palette per domain ────────────────────────────── */
+  .d-catalog   { --c: #ec4899; }
+  .d-inventory { --c: #f97316; }
+  .d-customer  { --c: #a855f7; }
+  .d-sales     { --c: #22d3ee; }
+  .d-appt      { --c: #10b981; }
+  .d-promo     { --c: #f59e0b; }
+  .d-loyalty   { --c: #fb7185; }
+  .d-staff     { --c: #818cf8; }
+  .d-return    { --c: #94a3b8; }
+
+  .section-dot, .stat-dot, .legend-bar, .entity-badge { background: var(--c, #52525b); }
+  .entity-header { border-bottom-color: color-mix(in srgb, var(--c, #27272a) 20%, transparent); }
+  .entity { border-color: color-mix(in srgb, var(--c, #27272a) 25%, #27272a); }
+  .nav-chip { background: color-mix(in srgb, var(--c, #27272a) 12%, transparent); color: var(--c, #a1a1aa); border-color: color-mix(in srgb, var(--c, #27272a) 30%, transparent); }
+  .entity-badge { color: color-mix(in srgb, var(--c, #fff) 40%, #fff); background: color-mix(in srgb, var(--c, #27272a) 18%, transparent); }
+
+  @media (max-width: 900px) {
+    .header, .nav, .main { padding-left: 20px; padding-right: 20px; }
+    .entities { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- HEADER -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="header-top">
+    <div class="logo">💄</div>
+    <div>
+      <h1>Cosmetics Shop — End-to-End ERD</h1>
+      <p>Complete entity relationship diagram · 9 domains · 32 entities · 180+ attributes</p>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat d-catalog"><div class="stat-dot"></div><span class="stat-label">Product Catalog</span><span class="stat-count">7 entities</span></div>
+    <div class="stat d-inventory"><div class="stat-dot"></div><span class="stat-label">Inventory</span><span class="stat-count">5 entities</span></div>
+    <div class="stat d-customer"><div class="stat-dot"></div><span class="stat-label">Customer & CRM</span><span class="stat-count">4 entities</span></div>
+    <div class="stat d-sales"><div class="stat-dot"></div><span class="stat-label">Sales & POS</span><span class="stat-count">4 entities</span></div>
+    <div class="stat d-appt"><div class="stat-dot"></div><span class="stat-label">Appointments</span><span class="stat-count">3 entities</span></div>
+    <div class="stat d-promo"><div class="stat-dot"></div><span class="stat-label">Promotions</span><span class="stat-count">3 entities</span></div>
+    <div class="stat d-loyalty"><div class="stat-dot"></div><span class="stat-label">Loyalty</span><span class="stat-count">2 entities</span></div>
+    <div class="stat d-staff"><div class="stat-dot"></div><span class="stat-label">Staff</span><span class="stat-count">2 entities</span></div>
+    <div class="stat d-return"><div class="stat-dot"></div><span class="stat-label">Returns</span><span class="stat-count">2 entities</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- NAV -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="nav">
+  <span class="nav-label">Jump to</span>
+  <a class="nav-chip d-catalog"   href="#catalog">💄 Product Catalog</a>
+  <a class="nav-chip d-inventory" href="#inventory">📦 Inventory</a>
+  <a class="nav-chip d-customer"  href="#customer">👤 Customer & CRM</a>
+  <a class="nav-chip d-sales"     href="#sales">💳 Sales & POS</a>
+  <a class="nav-chip d-appt"      href="#appointments">📅 Appointments</a>
+  <a class="nav-chip d-promo"     href="#promotions">🏷️ Promotions</a>
+  <a class="nav-chip d-loyalty"   href="#loyalty">⭐ Loyalty</a>
+  <a class="nav-chip d-staff"     href="#staff">👩‍💼 Staff</a>
+  <a class="nav-chip d-return"    href="#returns">↩️ Returns</a>
+  <a class="nav-chip d-catalog"   style="margin-left:auto" href="#relationships">🔀 All Relationships</a>
+</div>
+
+<div class="main">
+
+<!-- ── Legend ──────────────────────────────────────────────────────────── -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-bar" style="background:#f59e0b"></div> PK — Primary Key</div>
+  <div class="legend-item"><div class="legend-bar" style="background:#6366f1"></div> FK — Foreign Key</div>
+  <div class="legend-item"><div class="legend-bar" style="background:#22d3ee"></div> UK — Unique Key</div>
+  <div class="legend-item"><div class="legend-bar" style="background:#10b981"></div> IDX — Indexed</div>
+  <div class="legend-item"><div class="legend-bar" style="background:#52525b"></div> — Regular field</div>
+  <div class="legend-item" style="margin-left:auto; color:#52525b">Hover rows for highlight · Click section links to jump</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 1. PRODUCT CATALOG -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-catalog" id="catalog">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    💄 1. Product Catalog
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">7 entities — brands, categories, products, variants, images, ingredients</span>
+  </div>
+  <div class="entities">
+
+    <!-- Brand -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">Brand</span>
+        <span class="entity-badge">CATALOG</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">slug</span><span class="field-type">varchar(100) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(120)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">country_of_origin</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">logo_url</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">description</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">website_url</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_luxury</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_cruelty_free</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_vegan</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_halal_certified</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">founded_year</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <!-- Category -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">Category</span>
+        <span class="entity-badge">CATALOG</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">parent_id</span><span class="field-type">uuid FK → Category</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">slug</span><span class="field-type">varchar(100) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">icon_emoji</span><span class="field-type">varchar(8)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">display_order</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">meta_title</span><span class="field-type">varchar(160)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">meta_description</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">image_url</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_featured</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+      </div>
+    </div>
+
+    <!-- Product -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">Product</span>
+        <span class="entity-badge">CATALOG</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">brand_id</span><span class="field-type">uuid FK → Brand</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">category_id</span><span class="field-type">uuid FK → Category</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">slug</span><span class="field-type">varchar(160) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(200)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">short_description</span><span class="field-type">varchar(500)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">full_description</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">how_to_use</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">skin_types</span><span class="field-type">text[] (oily/dry/combo/normal/sensitive)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">skin_concerns</span><span class="field-type">text[] (acne/aging/dryness/…)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">finish_type</span><span class="field-type">varchar(50) (matte/glossy/satin/…)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">coverage</span><span class="field-type">varchar(40) (sheer/medium/full)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">gender_target</span><span class="field-type">varchar(20)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">tags</span><span class="field-type">text[]</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_new_arrival</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_best_seller</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">updated_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <!-- ProductVariant -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">ProductVariant</span>
+        <span class="entity-badge">CATALOG</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">product_id</span><span class="field-type">uuid FK → Product</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">sku</span><span class="field-type">varchar(80) UK</span></div>
+        <div class="field field-idx"><span class="field-icon"></span><span class="field-name">barcode</span><span class="field-type">varchar(60) IDX</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">shade_name</span><span class="field-type">varchar(120)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">shade_hex</span><span class="field-type">varchar(7)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">size_value</span><span class="field-type">decimal(8,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">size_unit</span><span class="field-type">varchar(10) (ml/g/oz/pcs)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">scent_name</span><span class="field-type">varchar(100)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">color_family</span><span class="field-type">varchar(50)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">retail_price</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">cost_price</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">compare_at_price</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">tax_rate_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">weight_g</span><span class="field-type">decimal(8,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">expiry_months</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">pao_months</span><span class="field-type">int (Period After Opening)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_limited_edition</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">sort_order</span><span class="field-type">int</span></div>
+      </div>
+    </div>
+
+    <!-- ProductImage -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">ProductImage</span>
+        <span class="entity-badge">CATALOG</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">variant_id</span><span class="field-type">uuid FK → ProductVariant</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">url</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">alt_text</span><span class="field-type">varchar(200)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">varchar(20) (swatch/lifestyle/model/texture)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_primary</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">sort_order</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <!-- Ingredient -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">Ingredient</span>
+        <span class="entity-badge">CATALOG</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">inci_name</span><span class="field-type">varchar(200) UK (INCI standard)</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">common_name</span><span class="field-type">varchar(200)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">function_type</span><span class="field-type">varchar(60) (emollient/preservative/…)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_allergen</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_comedogenic</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">comedogenic_rating</span><span class="field-type">int (0–5)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">ewg_score</span><span class="field-type">int (1–10)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_restricted_eu</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">description</span><span class="field-type">text</span></div>
+      </div>
+    </div>
+
+    <!-- ProductIngredient (junction) -->
+    <div class="entity d-catalog">
+      <div class="entity-header">
+        <span class="entity-name">ProductIngredient</span>
+        <span class="entity-badge">JUNCTION</span>
+      </div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">product_id</span><span class="field-type">uuid FK → Product</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">ingredient_id</span><span class="field-type">uuid FK → Ingredient</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">position</span><span class="field-type">int (INCI list order)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">concentration_pct</span><span class="field-type">decimal(5,2) nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_key_ingredient</span><span class="field-type">boolean</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 2. INVENTORY -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-inventory" id="inventory">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    📦 2. Inventory & Supply Chain
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">5 entities — warehouses, stock, movements, suppliers, purchase orders</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-inventory">
+      <div class="entity-header"><span class="entity-name">Warehouse</span><span class="entity-badge">INVENTORY</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(120)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">varchar(30) (store/warehouse/3pl)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">address_line1</span><span class="field-type">varchar(200)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">city</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">country</span><span class="field-type">varchar(60)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_retail_location</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-inventory">
+      <div class="entity-header"><span class="entity-name">StockLevel</span><span class="entity-badge">INVENTORY</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">variant_id</span><span class="field-type">uuid FK → ProductVariant</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">warehouse_id</span><span class="field-type">uuid FK → Warehouse</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">(variant_id, warehouse_id)</span><span class="field-type">UK composite</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity_on_hand</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity_reserved</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity_available</span><span class="field-type">int (computed)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reorder_point</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reorder_quantity</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">max_stock</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">bin_location</span><span class="field-type">varchar(40)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">last_counted_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">updated_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-inventory">
+      <div class="entity-header"><span class="entity-name">StockMovement</span><span class="entity-badge">INVENTORY</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">variant_id</span><span class="field-type">uuid FK → ProductVariant</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">warehouse_id</span><span class="field-type">uuid FK → Warehouse</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">created_by</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">movement_type</span><span class="field-type">varchar(30) (receipt/sale/return/adjustment/transfer/writeoff)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity_delta</span><span class="field-type">int (positive=in, negative=out)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity_before</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity_after</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reference_id</span><span class="field-type">uuid (PO / Sale / Return id)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reference_type</span><span class="field-type">varchar(30)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">batch_number</span><span class="field-type">varchar(60)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">expiry_date</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reason</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-inventory">
+      <div class="entity-header"><span class="entity-name">Supplier</span><span class="entity-badge">SUPPLY CHAIN</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(150)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">contact_name</span><span class="field-type">varchar(120)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">contact_email</span><span class="field-type">varchar(254)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">contact_phone</span><span class="field-type">varchar(30)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">address</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">currency</span><span class="field-type">varchar(3) (ISO 4217)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">payment_terms_days</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">lead_time_days</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">minimum_order_value</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">tax_id</span><span class="field-type">varchar(60)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">rating</span><span class="field-type">int (1–5)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notes</span><span class="field-type">text</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-inventory">
+      <div class="entity-header"><span class="entity-name">PurchaseOrder</span><span class="entity-badge">SUPPLY CHAIN</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">supplier_id</span><span class="field-type">uuid FK → Supplier</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">warehouse_id</span><span class="field-type">uuid FK → Warehouse</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">created_by</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">po_number</span><span class="field-type">varchar(40) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (draft/sent/partial/received/cancelled)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">order_date</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">expected_date</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">received_date</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">subtotal</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">tax_total</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">total_cost</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">currency</span><span class="field-type">varchar(3)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">items</span><span class="field-type">→ PurchaseOrderLine[]</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 3. CUSTOMER & CRM -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-customer" id="customer">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    👤 3. Customer & CRM
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">4 entities — profile, address, skin profile, wishlist</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-customer">
+      <div class="entity-header"><span class="entity-name">Customer</span><span class="entity-badge">CRM</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">email</span><span class="field-type">varchar(254) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">first_name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">last_name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">phone</span><span class="field-type">varchar(30)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">date_of_birth</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">gender</span><span class="field-type">varchar(20)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">skin_type</span><span class="field-type">varchar(30)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">skin_concerns</span><span class="field-type">text[]</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">known_allergies</span><span class="field-type">text[]</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">preferred_brands</span><span class="field-type">uuid[] FK → Brand</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">loyalty_tier_id</span><span class="field-type">uuid FK → LoyaltyTier</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">loyalty_points</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">lifetime_spend</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">total_orders</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">marketing_opt_in</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">referral_code</span><span class="field-type">varchar(20)</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">referred_by</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">source</span><span class="field-type">varchar(40) (walk-in/online/referral/event)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-customer">
+      <div class="entity-header"><span class="entity-name">CustomerAddress</span><span class="entity-badge">CRM</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">varchar(20) (billing/shipping)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">label</span><span class="field-type">varchar(60) (Home/Work/…)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">first_name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">last_name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">address_line1</span><span class="field-type">varchar(200)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">address_line2</span><span class="field-type">varchar(200)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">city</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">state</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">postal_code</span><span class="field-type">varchar(20)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">country_code</span><span class="field-type">varchar(3) ISO 3166-1</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_default</span><span class="field-type">boolean</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-customer">
+      <div class="entity-header"><span class="entity-name">SkinProfile</span><span class="entity-badge">CRM</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">assessed_by</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">skin_type</span><span class="field-type">varchar(30) (oily/dry/combination/normal/sensitive)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">undertone</span><span class="field-type">varchar(20) (warm/cool/neutral)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">depth</span><span class="field-type">varchar(20) (fair/light/medium/tan/deep)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">concerns</span><span class="field-type">text[] (acne/pigmentation/wrinkles/…)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">sensitivity_level</span><span class="field-type">int (1–5)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">foundation_shade</span><span class="field-type">varchar(60)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">current_routine</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">consultant_notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">assessed_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">next_review_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-customer">
+      <div class="entity-header"><span class="entity-name">Wishlist</span><span class="entity-badge">CRM</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">variant_id</span><span class="field-type">uuid FK → ProductVariant</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notify_back_in_stock</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notify_price_drop</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">added_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 4. SALES & POS -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-sales" id="sales">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    💳 4. Sales & POS
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">4 entities — sale, line items, payment, gift cards</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-sales">
+      <div class="entity-header"><span class="entity-name">Sale</span><span class="entity-badge">POS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer nullable</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">staff_id</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">warehouse_id</span><span class="field-type">uuid FK → Warehouse</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">receipt_number</span><span class="field-type">varchar(40) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">channel</span><span class="field-type">varchar(20) (pos/online/phone/consultant)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (pending/confirmed/shipped/completed/cancelled)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">subtotal</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">discount_total</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">tax_total</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">shipping_total</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">total</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">currency</span><span class="field-type">varchar(3)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">payment_status</span><span class="field-type">varchar(20) (unpaid/partial/paid/refunded)</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">coupon_id</span><span class="field-type">uuid FK → Coupon nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">loyalty_points_earned</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">loyalty_points_redeemed</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">gift_wrapped</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">gift_message</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">shipping_address_id</span><span class="field-type">uuid FK → CustomerAddress</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-sales">
+      <div class="entity-header"><span class="entity-name">SaleLine</span><span class="entity-badge">POS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">sale_id</span><span class="field-type">uuid FK → Sale</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">variant_id</span><span class="field-type">uuid FK → ProductVariant</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">unit_price</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">cost_price</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">discount_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">discount_amount</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">tax_rate_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">line_subtotal</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">line_total</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">promotion_id</span><span class="field-type">uuid FK → Promotion nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_gift_wrapped</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">notes</span><span class="field-type">text</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-sales">
+      <div class="entity-header"><span class="entity-name">Payment</span><span class="entity-badge">POS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">sale_id</span><span class="field-type">uuid FK → Sale</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">method</span><span class="field-type">varchar(20) (cash/card/mpesa/gift_card/points/bank)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">amount</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">currency</span><span class="field-type">varchar(3)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reference</span><span class="field-type">varchar(120) (POS txn / M-Pesa ref)</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">gift_card_id</span><span class="field-type">uuid FK → GiftCard nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">card_last4</span><span class="field-type">varchar(4)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">card_brand</span><span class="field-type">varchar(20)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (pending/approved/declined/refunded)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">processed_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">change_given</span><span class="field-type">decimal(10,2)</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-sales">
+      <div class="entity-header"><span class="entity-name">GiftCard</span><span class="entity-badge">POS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">code</span><span class="field-type">varchar(40) UK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">issued_to</span><span class="field-type">uuid FK → Customer nullable</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">issued_by_sale_id</span><span class="field-type">uuid FK → Sale nullable</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">initial_value</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">remaining_value</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">currency</span><span class="field-type">varchar(3)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (active/depleted/expired/cancelled)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">expires_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">issued_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 5. APPOINTMENTS & SERVICES -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-appt" id="appointments">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    📅 5. Appointments & Beauty Services
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">3 entities — services, appointments, consultation results</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-appt">
+      <div class="entity-header"><span class="entity-name">Service</span><span class="entity-badge">APPOINTMENTS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(120)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">category</span><span class="field-type">varchar(40) (consultation/makeover/skincare/demo/patch_test)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">description</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">duration_minutes</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">price</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_complimentary</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">requires_patch_test</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">max_daily_slots</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">color_hex</span><span class="field-type">varchar(7) (calendar display)</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-appt">
+      <div class="entity-header"><span class="entity-name">Appointment</span><span class="entity-badge">APPOINTMENTS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">staff_id</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">service_id</span><span class="field-type">uuid FK → Service</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">warehouse_id</span><span class="field-type">uuid FK → Warehouse</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (booked/confirmed/arrived/completed/no_show/cancelled)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">scheduled_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">duration_minutes</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">pre_appointment_notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">outcome_notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">customer_satisfaction</span><span class="field-type">int (1–5)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">follow_up_date</span><span class="field-type">date</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">converted_to_sale_id</span><span class="field-type">uuid FK → Sale nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">cancellation_reason</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-appt">
+      <div class="entity-header"><span class="entity-name">ConsultationResult</span><span class="entity-badge">APPOINTMENTS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">appointment_id</span><span class="field-type">uuid FK → Appointment</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">skin_profile_id</span><span class="field-type">uuid FK → SkinProfile</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">recommended_variants</span><span class="field-type">uuid[] FK → ProductVariant</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">am_routine</span><span class="field-type">text (step-by-step)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">pm_routine</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">avoid_ingredients</span><span class="field-type">text[]</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">consultant_notes</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">follow_up_topics</span><span class="field-type">text[]</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 6. PROMOTIONS -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-promo" id="promotions">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    🏷️ 6. Promotions & Coupons
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">3 entities — promotions, promotion products, coupons</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-promo">
+      <div class="entity-header"><span class="entity-name">Promotion</span><span class="entity-badge">PROMOTIONS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(150)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">description</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">varchar(30) (percentage/fixed/bogo/gift_with_purchase/bundle/free_shipping)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">discount_value</span><span class="field-type">decimal(8,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">applies_to</span><span class="field-type">varchar(20) (order/line_item/category/brand)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">min_order_value</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">min_quantity</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">start_date</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">end_date</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">usage_limit</span><span class="field-type">int nullable (null = unlimited)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">used_count</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">per_customer_limit</span><span class="field-type">int</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">gift_variant_id</span><span class="field-type">uuid FK → ProductVariant nullable (GWP)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_auto_apply</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_stackable</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">channels</span><span class="field-type">text[] (pos/online/phone)</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-promo">
+      <div class="entity-header"><span class="entity-name">PromotionScope</span><span class="entity-badge">JUNCTION</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">promotion_id</span><span class="field-type">uuid FK → Promotion</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">scope_type</span><span class="field-type">varchar(20) (variant/category/brand)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">scope_id</span><span class="field-type">uuid (FK to variant/category/brand)</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-promo">
+      <div class="entity-header"><span class="entity-name">Coupon</span><span class="entity-badge">PROMOTIONS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">promotion_id</span><span class="field-type">uuid FK → Promotion</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer nullable (null = public)</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">code</span><span class="field-type">varchar(40) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">max_uses</span><span class="field-type">int nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">used_count</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">expires_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 7. LOYALTY -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-loyalty" id="loyalty">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    ⭐ 7. Loyalty & Rewards
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">2 entities — tiers, transactions</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-loyalty">
+      <div class="entity-header"><span class="entity-name">LoyaltyTier</span><span class="entity-badge">LOYALTY</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">name</span><span class="field-type">varchar(40) (Bronze/Silver/Gold/Platinum)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">min_points</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">min_lifetime_spend</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">points_per_currency</span><span class="field-type">decimal(5,2) (e.g. 1.5 pts per KES)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">discount_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">free_shipping</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">early_access</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">free_consultation</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">birthday_bonus_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">color_hex</span><span class="field-type">varchar(7)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">icon_emoji</span><span class="field-type">varchar(8)</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-loyalty">
+      <div class="entity-header"><span class="entity-name">LoyaltyTransaction</span><span class="entity-badge">LOYALTY</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">type</span><span class="field-type">varchar(20) (earn/redeem/expire/bonus/birthday/referral/adjustment)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">points</span><span class="field-type">int (positive=credit, negative=debit)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">balance_after</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reference_id</span><span class="field-type">uuid (Sale / Appointment id)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reference_type</span><span class="field-type">varchar(30)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">expires_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">note</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 8. STAFF -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-staff" id="staff">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    👩‍💼 8. Staff & Commissions
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">2 entities — staff, commissions</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-staff">
+      <div class="entity-header"><span class="entity-name">Staff</span><span class="entity-badge">STAFF</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">email</span><span class="field-type">varchar(254) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">first_name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">last_name</span><span class="field-type">varchar(80)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">phone</span><span class="field-type">varchar(30)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">role</span><span class="field-type">varchar(30) (consultant/senior_consultant/manager/cashier/stock_controller)</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">warehouse_id</span><span class="field-type">uuid FK → Warehouse (primary location)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">specializations</span><span class="field-type">text[] (skincare/makeup/fragrance/haircare)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">certifications</span><span class="field-type">text[]</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">commission_rate_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">target_monthly_sales</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">pin_hash</span><span class="field-type">varchar(120) (POS PIN)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">avatar_url</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">hired_at</span><span class="field-type">date</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_active</span><span class="field-type">boolean</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-staff">
+      <div class="entity-header"><span class="entity-name">Commission</span><span class="entity-badge">STAFF</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">staff_id</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">sale_id</span><span class="field-type">uuid FK → Sale</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">commission_type</span><span class="field-type">varchar(20) (product_sale/consultation/target_bonus)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">sale_amount</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">rate_pct</span><span class="field-type">decimal(5,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">amount</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (pending/approved/paid)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">period_month</span><span class="field-type">date (first of month)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">paid_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- 9. RETURNS -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="section d-return" id="returns">
+  <div class="section-title">
+    <div class="section-dot"></div>
+    ↩️ 9. Returns & Exchanges
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">2 entities — return header, return lines</span>
+  </div>
+  <div class="entities">
+
+    <div class="entity d-return">
+      <div class="entity-header"><span class="entity-name">Return</span><span class="entity-badge">RETURNS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">sale_id</span><span class="field-type">uuid FK → Sale</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">customer_id</span><span class="field-type">uuid FK → Customer</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">processed_by</span><span class="field-type">uuid FK → Staff</span></div>
+        <div class="field field-uk"><span class="field-icon"></span><span class="field-name">rma_number</span><span class="field-type">varchar(40) UK</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reason</span><span class="field-type">varchar(60) (defective/wrong_item/changed_mind/allergy/other)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">reason_detail</span><span class="field-type">text</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">status</span><span class="field-type">varchar(20) (pending/approved/rejected/refunded/exchanged)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">refund_method</span><span class="field-type">varchar(20) (original_payment/gift_card/store_credit/cash)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">refund_amount</span><span class="field-type">decimal(12,2)</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">exchange_sale_id</span><span class="field-type">uuid FK → Sale nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">allergy_flagged</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">created_at</span><span class="field-type">timestamptz</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">resolved_at</span><span class="field-type">timestamptz</span></div>
+      </div>
+    </div>
+
+    <div class="entity d-return">
+      <div class="entity-header"><span class="entity-name">ReturnLine</span><span class="entity-badge">RETURNS</span></div>
+      <div class="entity-body">
+        <div class="field field-pk"><span class="field-icon"></span><span class="field-name">id</span><span class="field-type">uuid PK</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">return_id</span><span class="field-type">uuid FK → Return</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">sale_line_id</span><span class="field-type">uuid FK → SaleLine</span></div>
+        <div class="field field-fk"><span class="field-icon"></span><span class="field-name">variant_id</span><span class="field-type">uuid FK → ProductVariant</span></div>
+        <div class="divider"></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">quantity</span><span class="field-type">int</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">condition</span><span class="field-type">varchar(20) (sealed/opened/used/damaged)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">is_restockable</span><span class="field-type">boolean</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">restock_warehouse_id</span><span class="field-type">uuid FK → Warehouse nullable</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">refund_line_amount</span><span class="field-type">decimal(10,2)</span></div>
+        <div class="field field-"><span class="field-icon"></span><span class="field-name">disposal_reason</span><span class="field-type">text (if not restockable)</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- RELATIONSHIPS TABLE -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="rel-section" id="relationships">
+  <div class="section-title" style="margin-bottom:16px">
+    <div class="section-dot" style="background:#6366f1"></div>
+    🔀 All Relationships
+    <span style="color:#52525b;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;margin-left:8px">Every entity link, cardinality and join type</span>
+  </div>
+  <div style="background:#18181b;border:1px solid #27272a;border-radius:16px;overflow:hidden">
+    <table class="rel-table">
+      <thead>
+        <tr>
+          <th>Parent Entity</th>
+          <th>Child Entity</th>
+          <th>Cardinality</th>
+          <th>Join Key</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="entity-ref">Brand</span></td><td><span class="entity-ref">Product</span></td><td><span class="cardinality">1 → N</span></td><td>brand_id</td><td class="rel-note">One brand, many products</td></tr>
+        <tr><td><span class="entity-ref">Category</span></td><td><span class="entity-ref">Category</span></td><td><span class="cardinality">1 → N (self)</span></td><td>parent_id</td><td class="rel-note">Infinite hierarchy (skincare → moisturiser → face cream)</td></tr>
+        <tr><td><span class="entity-ref">Category</span></td><td><span class="entity-ref">Product</span></td><td><span class="cardinality">1 → N</span></td><td>category_id</td><td class="rel-note">One category, many products</td></tr>
+        <tr><td><span class="entity-ref">Product</span></td><td><span class="entity-ref">ProductVariant</span></td><td><span class="cardinality">1 → N</span></td><td>product_id</td><td class="rel-note">Shade / size / scent variants per product</td></tr>
+        <tr><td><span class="entity-ref">ProductVariant</span></td><td><span class="entity-ref">ProductImage</span></td><td><span class="cardinality">1 → N</span></td><td>variant_id</td><td class="rel-note">Swatch, lifestyle, texture images</td></tr>
+        <tr><td><span class="entity-ref">Product</span></td><td><span class="entity-ref">ProductIngredient</span></td><td><span class="cardinality">1 → N</span></td><td>product_id</td><td class="rel-note">INCI ingredient list with position</td></tr>
+        <tr><td><span class="entity-ref">Ingredient</span></td><td><span class="entity-ref">ProductIngredient</span></td><td><span class="cardinality">1 → N</span></td><td>ingredient_id</td><td class="rel-note">Same ingredient used in many products</td></tr>
+        <tr><td><span class="entity-ref">ProductVariant</span></td><td><span class="entity-ref">StockLevel</span></td><td><span class="cardinality">1 → N</span></td><td>variant_id</td><td class="rel-note">Stock per warehouse per variant</td></tr>
+        <tr><td><span class="entity-ref">Warehouse</span></td><td><span class="entity-ref">StockLevel</span></td><td><span class="cardinality">1 → N</span></td><td>warehouse_id</td><td class="rel-note">Each warehouse tracks all variants</td></tr>
+        <tr><td><span class="entity-ref">ProductVariant</span></td><td><span class="entity-ref">StockMovement</span></td><td><span class="cardinality">1 → N</span></td><td>variant_id</td><td class="rel-note">Full audit trail of every stock change</td></tr>
+        <tr><td><span class="entity-ref">Supplier</span></td><td><span class="entity-ref">PurchaseOrder</span></td><td><span class="cardinality">1 → N</span></td><td>supplier_id</td><td class="rel-note">One supplier, many POs</td></tr>
+        <tr><td><span class="entity-ref">Warehouse</span></td><td><span class="entity-ref">PurchaseOrder</span></td><td><span class="cardinality">1 → N</span></td><td>warehouse_id</td><td class="rel-note">PO delivered to specific location</td></tr>
+        <tr><td><span class="entity-ref">LoyaltyTier</span></td><td><span class="entity-ref">Customer</span></td><td><span class="cardinality">1 → N</span></td><td>loyalty_tier_id</td><td class="rel-note">Tier recalculated on every sale</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">Customer</span></td><td><span class="cardinality">1 → N (self)</span></td><td>referred_by</td><td class="rel-note">Referral chain tracking</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">CustomerAddress</span></td><td><span class="cardinality">1 → N</span></td><td>customer_id</td><td class="rel-note">Multiple billing & shipping addresses</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">SkinProfile</span></td><td><span class="cardinality">1 → N</span></td><td>customer_id</td><td class="rel-note">New profile per consultation / season</td></tr>
+        <tr><td><span class="entity-ref">Staff</span></td><td><span class="entity-ref">SkinProfile</span></td><td><span class="cardinality">1 → N</span></td><td>assessed_by</td><td class="rel-note">Consultant who performed the assessment</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">Wishlist</span></td><td><span class="cardinality">1 → N</span></td><td>customer_id</td><td class="rel-note">Customer's saved / wanted items</td></tr>
+        <tr><td><span class="entity-ref">ProductVariant</span></td><td><span class="entity-ref">Wishlist</span></td><td><span class="cardinality">1 → N</span></td><td>variant_id</td><td class="rel-note">Variant on the wishlist</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">Sale</span></td><td><span class="cardinality">1 → N</span></td><td>customer_id</td><td class="rel-note">Walk-in sales can have null customer_id</td></tr>
+        <tr><td><span class="entity-ref">Staff</span></td><td><span class="entity-ref">Sale</span></td><td><span class="cardinality">1 → N</span></td><td>staff_id</td><td class="rel-note">Sales associate who handled the sale</td></tr>
+        <tr><td><span class="entity-ref">Sale</span></td><td><span class="entity-ref">SaleLine</span></td><td><span class="cardinality">1 → N</span></td><td>sale_id</td><td class="rel-note">Each sale has one or more line items</td></tr>
+        <tr><td><span class="entity-ref">ProductVariant</span></td><td><span class="entity-ref">SaleLine</span></td><td><span class="cardinality">1 → N</span></td><td>variant_id</td><td class="rel-note">Variant sold with price snapshot</td></tr>
+        <tr><td><span class="entity-ref">Sale</span></td><td><span class="entity-ref">Payment</span></td><td><span class="cardinality">1 → N</span></td><td>sale_id</td><td class="rel-note">Split payments (cash + card + points)</td></tr>
+        <tr><td><span class="entity-ref">GiftCard</span></td><td><span class="entity-ref">Payment</span></td><td><span class="cardinality">1 → N</span></td><td>gift_card_id</td><td class="rel-note">Gift card used as payment method</td></tr>
+        <tr><td><span class="entity-ref">Coupon</span></td><td><span class="entity-ref">Sale</span></td><td><span class="cardinality">1 → N</span></td><td>coupon_id</td><td class="rel-note">Coupon applied at checkout</td></tr>
+        <tr><td><span class="entity-ref">Promotion</span></td><td><span class="entity-ref">SaleLine</span></td><td><span class="cardinality">1 → N</span></td><td>promotion_id</td><td class="rel-note">Auto-applied promotion on line item</td></tr>
+        <tr><td><span class="entity-ref">Service</span></td><td><span class="entity-ref">Appointment</span></td><td><span class="cardinality">1 → N</span></td><td>service_id</td><td class="rel-note">Booking for a specific beauty service</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">Appointment</span></td><td><span class="cardinality">1 → N</span></td><td>customer_id</td><td class="rel-note">Customer's consultation/makeover history</td></tr>
+        <tr><td><span class="entity-ref">Staff</span></td><td><span class="entity-ref">Appointment</span></td><td><span class="cardinality">1 → N</span></td><td>staff_id</td><td class="rel-note">Consultant assigned to the appointment</td></tr>
+        <tr><td><span class="entity-ref">Appointment</span></td><td><span class="entity-ref">ConsultationResult</span></td><td><span class="cardinality">1 → 1</span></td><td>appointment_id</td><td class="rel-note">Result/routine recorded after consultation</td></tr>
+        <tr><td><span class="entity-ref">SkinProfile</span></td><td><span class="entity-ref">ConsultationResult</span></td><td><span class="cardinality">1 → N</span></td><td>skin_profile_id</td><td class="rel-note">Recommendations based on skin profile</td></tr>
+        <tr><td><span class="entity-ref">Appointment</span></td><td><span class="entity-ref">Sale</span></td><td><span class="cardinality">1 → 1</span></td><td>converted_to_sale_id</td><td class="rel-note">Appointment converted into a purchase</td></tr>
+        <tr><td><span class="entity-ref">Promotion</span></td><td><span class="entity-ref">PromotionScope</span></td><td><span class="cardinality">1 → N</span></td><td>promotion_id</td><td class="rel-note">Which variants/categories/brands apply</td></tr>
+        <tr><td><span class="entity-ref">Promotion</span></td><td><span class="entity-ref">Coupon</span></td><td><span class="cardinality">1 → N</span></td><td>promotion_id</td><td class="rel-note">Coupon codes that trigger this promotion</td></tr>
+        <tr><td><span class="entity-ref">Customer</span></td><td><span class="entity-ref">LoyaltyTransaction</span></td><td><span class="cardinality">1 → N</span></td><td>customer_id</td><td class="rel-note">Full points ledger per customer</td></tr>
+        <tr><td><span class="entity-ref">Staff</span></td><td><span class="entity-ref">Commission</span></td><td><span class="cardinality">1 → N</span></td><td>staff_id</td><td class="rel-note">Commission earned per sale</td></tr>
+        <tr><td><span class="entity-ref">Sale</span></td><td><span class="entity-ref">Commission</span></td><td><span class="cardinality">1 → 1</span></td><td>sale_id</td><td class="rel-note">One commission record per sale</td></tr>
+        <tr><td><span class="entity-ref">Sale</span></td><td><span class="entity-ref">Return</span></td><td><span class="cardinality">1 → N</span></td><td>sale_id</td><td class="rel-note">Partial or full returns on a sale</td></tr>
+        <tr><td><span class="entity-ref">Return</span></td><td><span class="entity-ref">ReturnLine</span></td><td><span class="cardinality">1 → N</span></td><td>return_id</td><td class="rel-note">One line per returned item</td></tr>
+        <tr><td><span class="entity-ref">SaleLine</span></td><td><span class="entity-ref">ReturnLine</span></td><td><span class="cardinality">1 → N</span></td><td>sale_line_id</td><td class="rel-note">Links return back to original purchase line</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;color:#3f3f46;font-size:11px;padding:32px 0 0">
+  Cosmetics Shop ERD · 32 entities · 9 domains · Generated by Airtyn
+</div>
+
+</div><!-- /main -->
+</body>
+</html>

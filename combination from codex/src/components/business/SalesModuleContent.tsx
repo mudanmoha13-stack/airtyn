@@ -1,0 +1,1981 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { BusinessModuleSpec } from '@/lib/business-os';
+
+type InventoryProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  category: string;
+  productType: string;
+  basePrice: number;
+  costPrice: number;
+};
+
+type Employee = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+type SalesOrderRow = {
+  id: string;
+  orderNo: string;
+  employeeId: string | null;
+  employeeName: string;
+  currency: string;
+  channel: 'pos' | 'warehouse' | 'ecommerce';
+  status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled';
+  total: number;
+  costTotal: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  createdAt: string;
+  lines: Array<{
+    id: string;
+    productId: string;
+    productName: string;
+    productSku: string | null;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
+  payments: Array<{
+    id: string;
+    method: 'cash' | 'card' | 'wallet' | 'bank';
+    amount: number;
+    reference?: string | null;
+  }>;
+};
+
+type PricingRule = {
+  id: string;
+  name: string;
+  kind: 'discount' | 'tier' | 'promotion';
+  value: number;
+};
+
+type CreditProfile = {
+  id: string;
+  customer: string;
+  limit: number;
+  used: number;
+};
+
+type CrmOpportunity = {
+  id: string;
+  title: string;
+  customer: string;
+  ownerId: string;
+  ownerName: string;
+  email: string;
+  value: number;
+  stage: 'draft' | 'open' | 'settled';
+  nextFollowUp: string;
+};
+
+type SubscriptionRecord = {
+  id: string;
+  customer: string;
+  plan: string;
+  ownerId: string;
+  ownerName: string;
+  amount: number;
+  cycle: 'monthly' | 'quarterly' | 'yearly';
+  status: 'active' | 'trial' | 'paused' | 'churned';
+  renewalDate: string;
+};
+
+type PaymentSplit = {
+  id: string;
+  method: 'cash' | 'card' | 'wallet' | 'bank';
+  amount: number;
+};
+
+const isPaymentMethod = (value: string): value is PaymentSplit['method'] => (
+  value === 'cash' || value === 'card' || value === 'wallet' || value === 'bank'
+);
+
+type PosLine = {
+  productId: string;
+  sku: string;
+  name: string;
+  qty: number;
+  unitPrice: number;
+  unitCost: number;
+};
+
+type OfflineSale = {
+  id: string;
+  employeeId: string;
+  currency: string;
+  channel: 'pos' | 'warehouse' | 'ecommerce';
+  status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled';
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+  };
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+  }>;
+  payments: Array<{
+    method: 'cash' | 'card' | 'wallet' | 'bank';
+    amount: number;
+    reference?: string;
+  }>;
+};
+
+type CompanyNature = 'b2b_services' | 'retail_shop' | 'restaurant' | 'rental_business' | 'mixed';
+
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: '$',
+  EUR: 'EUR ',
+  GBP: 'GBP ',
+  KES: 'KES ',
+  AED: 'AED ',
+};
+
+const SALES_FLOW: Array<'draft' | 'open' | 'settled' | 'closed' | 'canceled'> = ['draft', 'open', 'settled', 'closed', 'canceled'];
+
+const COMPANY_TOOLKIT: Record<CompanyNature, { label: string; tools: string[] }> = {
+  b2b_services: {
+    label: 'B2B Services',
+    tools: ['CRM pipeline', 'Quotations to invoice', 'Subscriptions', 'Renewal management', 'MRR dashboard'],
+  },
+  retail_shop: {
+    label: 'Retail Shop',
+    tools: ['POS Shop', 'Barcode scanning', 'Pricelists', 'Discount rules', 'Offline mode'],
+  },
+  restaurant: {
+    label: 'Restaurant',
+    tools: ['POS Restaurant', 'Table management', 'Kitchen display flow', 'Split bills & tips'],
+  },
+  rental_business: {
+    label: 'Rental Business',
+    tools: ['Rental contracts', 'Delivery tracking', 'Return tracking', 'Availability calendar'],
+  },
+  mixed: {
+    label: 'Mixed Model',
+    tools: ['Normal Sales', 'POS Shop', 'Subscriptions', 'Rental desk', 'Omnichannel stock'],
+  },
+};
+
+type SalesWorkspaceTab = 'overview' | 'orders' | 'crm' | 'subscriptions' | 'pricing' | 'pos';
+
+const SALES_TAB_LABELS: Array<{ id: SalesWorkspaceTab; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'crm', label: 'CRM' },
+  { id: 'subscriptions', label: 'Subscriptions' },
+  { id: 'pricing', label: 'Pricing & Credit' },
+  { id: 'pos', label: 'POS' },
+];
+
+const SALES_TAB_DEFAULT_SECTION: Record<SalesWorkspaceTab, string> = {
+  overview: 'sales-overview',
+  orders: 'sales-quotations',
+  crm: 'crm-workbench',
+  subscriptions: 'subscriptions-hub',
+  pricing: 'sales-pricing',
+  pos: 'sales-pos',
+};
+
+const SALES_SECTION_TAB_MAP: Record<string, SalesWorkspaceTab> = {
+  'sales-overview': 'overview',
+  'sales-quotations': 'orders',
+  operations: 'orders',
+  'crm-workbench': 'crm',
+  'subscriptions-hub': 'subscriptions',
+  'sales-pricing': 'pricing',
+  'sales-credit': 'pricing',
+  'sales-pos': 'pos',
+  'sales-payments': 'pos',
+  'pos-restaurant': 'pos',
+  'rental-desk': 'pos',
+  'sales-channels': 'pos',
+  'salesperson-tracking': 'pos',
+};
+
+function SalesLoadingCard({ title, description }: { title: string; description: string }) {
+  return (
+    <Card className="glass-card border-white/5">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="h-4 w-40 animate-pulse rounded bg-white/10" />
+        <div className="h-24 animate-pulse rounded-xl bg-white/5" />
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="h-20 animate-pulse rounded-xl bg-white/5" />
+          <div className="h-20 animate-pulse rounded-xl bg-white/5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
+  const [rows, setRows] = useState<SalesOrderRow[]>([]);
+  const [products, setProducts] = useState<InventoryProduct[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
+  const [ruleName, setRuleName] = useState('');
+  const [ruleKind, setRuleKind] = useState<'discount' | 'tier' | 'promotion'>('discount');
+  const [ruleValue, setRuleValue] = useState('0');
+
+  const [credits, setCredits] = useState<CreditProfile[]>([]);
+  const [creditCustomer, setCreditCustomer] = useState('');
+  const [creditLimit, setCreditLimit] = useState('0');
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  const [currency, setCurrency] = useState('USD');
+  const [channel, setChannel] = useState<'pos' | 'warehouse' | 'ecommerce'>('pos');
+  const [barcode, setBarcode] = useState('');
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineQueue, setOfflineQueue] = useState<OfflineSale[]>([]);
+
+  const [cart, setCart] = useState<PosLine[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedQty, setSelectedQty] = useState('1');
+  const [selectedPrice, setSelectedPrice] = useState('0');
+  const [selectedCost, setSelectedCost] = useState('0');
+
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'cash' | 'card' | 'wallet' | 'bank'>('cash');
+  const [paymentReference, setPaymentReference] = useState('');
+  const [lastReceipt, setLastReceipt] = useState<{
+    orderNo: string;
+    employeeName: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    paymentMethod: 'cash' | 'card' | 'wallet' | 'bank';
+    paymentReference?: string;
+    currency: string;
+    total: number;
+    paid: number;
+    items: Array<{ name: string; sku: string; qty: number; unitPrice: number }>;
+    at: string;
+  } | null>(null);
+
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [companyNature, setCompanyNature] = useState<CompanyNature>('mixed');
+
+  const [restaurantTable, setRestaurantTable] = useState('T-01');
+  const [restaurantGuests, setRestaurantGuests] = useState('2');
+  const [restaurantTips, setRestaurantTips] = useState('0');
+
+  const [rentalProduct, setRentalProduct] = useState('');
+  const [rentalCustomer, setRentalCustomer] = useState('');
+  const [rentalStart, setRentalStart] = useState('');
+  const [rentalEnd, setRentalEnd] = useState('');
+  const [rentalContracts, setRentalContracts] = useState<Array<{ id: string; product: string; customer: string; start: string; end: string; status: string }>>([]);
+
+  const [quoteEmployeeId, setQuoteEmployeeId] = useState('');
+  const [quoteProductId, setQuoteProductId] = useState('');
+  const [quoteQty, setQuoteQty] = useState('1');
+  const [quotePrice, setQuotePrice] = useState('0');
+
+  const [crmOpportunities, setCrmOpportunities] = useState<CrmOpportunity[]>([]);
+  const [crmTitle, setCrmTitle] = useState('');
+  const [crmCustomer, setCrmCustomer] = useState('');
+  const [crmOwnerId, setCrmOwnerId] = useState('');
+  const [crmEmail, setCrmEmail] = useState('');
+  const [crmValue, setCrmValue] = useState('0');
+  const [crmFollowUp, setCrmFollowUp] = useState('');
+  const [crmStageFilter, setCrmStageFilter] = useState<'all' | 'draft' | 'open' | 'settled'>('all');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const sendTestEmail = async () => {
+    setTestEmailSending(true);
+    setTestEmailResult('idle');
+    try {
+      const response = await fetch('/api/email/test', { method: 'POST' });
+      const data = await response.json() as { ok: boolean; id?: string; error?: string };
+      setTestEmailResult(data.ok ? 'success' : 'error');
+    } catch {
+      setTestEmailResult('error');
+    } finally {
+      setTestEmailSending(false);
+    }
+  };
+
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
+  const [subscriptionCustomer, setSubscriptionCustomer] = useState('');
+  const [subscriptionPlan, setSubscriptionPlan] = useState('');
+  const [subscriptionOwnerId, setSubscriptionOwnerId] = useState('');
+  const [subscriptionAmount, setSubscriptionAmount] = useState('0');
+  const [subscriptionCycle, setSubscriptionCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [subscriptionRenewalDate, setSubscriptionRenewalDate] = useState('');
+  const [subscriptionFilter, setSubscriptionFilter] = useState<'all' | 'active' | 'trial' | 'paused' | 'churned'>('all');
+
+  const [pricingBaseAmount, setPricingBaseAmount] = useState('100');
+  const [selectedPricingRuleId, setSelectedPricingRuleId] = useState('');
+
+  const [selectedCreditId, setSelectedCreditId] = useState('');
+
+  const [activeTab, setActiveTab] = useState<SalesWorkspaceTab>('overview');
+  const [hasLoadedOrders, setHasLoadedOrders] = useState(false);
+  const [hasLoadedProducts, setHasLoadedProducts] = useState(false);
+  const [hasLoadedEmployees, setHasLoadedEmployees] = useState(false);
+  const [hasLoadedPricingCredit, setHasLoadedPricingCredit] = useState(false);
+  const [hasLoadedPosCache, setHasLoadedPosCache] = useState(false);
+  const [hasLoadedCrmCache, setHasLoadedCrmCache] = useState(false);
+  const [hasLoadedSubscriptionsCache, setHasLoadedSubscriptionsCache] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+
+  const loadSalesOrders = async () => {
+    if (ordersLoading || hasLoadedOrders) return;
+    setOrdersLoading(true);
+    try {
+      const salesResponse = await fetch('/api/business/sales/orders', { cache: 'no-store' });
+      const salesData = (await salesResponse.json()) as { ok: boolean; orders?: SalesOrderRow[] };
+      setRows(salesData.ok && salesData.orders ? salesData.orders : []);
+      setHasLoadedOrders(true);
+    } catch {
+      setRows([]);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const loadCatalog = async () => {
+    if (productsLoading || hasLoadedProducts) return;
+    setProductsLoading(true);
+    try {
+      const productsResponse = await fetch('/api/business/products', { cache: 'no-store' });
+      const productsData = (await productsResponse.json()) as {
+        ok: boolean;
+        products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string; basePrice: number | null; costPrice?: number | null }>;
+      };
+
+      if (productsData.ok && productsData.products) {
+        setProducts(productsData.products.map((item) => ({
+          id: item.id,
+          name: item.name,
+          sku: item.sku ?? item.name,
+          category: item.category ?? 'general',
+          productType: item.productType,
+          basePrice: item.basePrice ?? 0,
+          costPrice: item.costPrice ?? 0,
+        })));
+      }
+      setHasLoadedProducts(true);
+    } finally {
+      setProductsLoading(false);
+    }
+  };
+
+  const loadEmployees = async () => {
+    if (employeesLoading || hasLoadedEmployees) return;
+    setEmployeesLoading(true);
+    try {
+      const employeesResponse = await fetch('/api/business/hr/employees', { cache: 'no-store' });
+      const employeesData = (await employeesResponse.json()) as {
+        ok: boolean;
+        employees?: Array<{ id: string; name: string; email: string }>;
+      };
+
+      if (employeesData.ok && employeesData.employees) {
+        setEmployees(employeesData.employees);
+      }
+      setHasLoadedEmployees(true);
+    } finally {
+      setEmployeesLoading(false);
+    }
+  };
+
+  const hydratePricingAndCredit = () => {
+    if (typeof window === 'undefined' || hasLoadedPricingCredit) return;
+    const rulesRaw = window.localStorage.getItem('pinkplan:sales:pricing-rules');
+    const creditsRaw = window.localStorage.getItem('pinkplan:sales:credits');
+
+    if (rulesRaw) setPricingRules(JSON.parse(rulesRaw) as PricingRule[]);
+    else {
+      setPricingRules([
+        { id: 'rule-seed-1', name: 'Retail launch 10%', kind: 'promotion', value: 10 },
+        { id: 'rule-seed-2', name: 'Tier Gold 7%', kind: 'tier', value: 7 },
+      ]);
+    }
+
+    if (creditsRaw) setCredits(JSON.parse(creditsRaw) as CreditProfile[]);
+    else {
+      setCredits([
+        { id: 'credit-seed-1', customer: 'Apex Retail', limit: 15000, used: 6400 },
+        { id: 'credit-seed-2', customer: 'Northwind B2B', limit: 9000, used: 2000 },
+      ]);
+    }
+
+    setHasLoadedPricingCredit(true);
+  };
+
+  const hydratePosCache = () => {
+    if (typeof window === 'undefined' || hasLoadedPosCache) return;
+    const queueRaw = window.localStorage.getItem('pinkplan:sales:offline-queue');
+    if (queueRaw) setOfflineQueue(JSON.parse(queueRaw) as OfflineSale[]);
+    setHasLoadedPosCache(true);
+  };
+
+  const hydrateCrmCache = () => {
+    if (typeof window === 'undefined' || hasLoadedCrmCache) return;
+    const crmRaw = window.localStorage.getItem('pinkplan:sales:crm-opportunities');
+    if (crmRaw) setCrmOpportunities(JSON.parse(crmRaw) as CrmOpportunity[]);
+    setHasLoadedCrmCache(true);
+  };
+
+  const hydrateSubscriptionsCache = () => {
+    if (typeof window === 'undefined' || hasLoadedSubscriptionsCache) return;
+    const subscriptionsRaw = window.localStorage.getItem('pinkplan:sales:subscriptions');
+    if (subscriptionsRaw) {
+      setSubscriptions(JSON.parse(subscriptionsRaw) as SubscriptionRecord[]);
+    } else {
+      setSubscriptions([
+        {
+          id: 'sub-seed-1',
+          customer: 'Northwind B2B',
+          plan: 'Growth',
+          ownerId: 'seed-owner-1',
+          ownerName: 'Account Team',
+          amount: 299,
+          cycle: 'monthly',
+          status: 'active',
+          renewalDate: new Date().toISOString().slice(0, 10),
+        },
+      ]);
+    }
+    setHasLoadedSubscriptionsCache(true);
+  };
+
+  const switchToTab = (tab: SalesWorkspaceTab, sectionId?: string) => {
+    setActiveTab(tab);
+    if (typeof window === 'undefined') return;
+    const targetSection = sectionId ?? SALES_TAB_DEFAULT_SECTION[tab];
+    const url = new URL(window.location.href);
+    url.hash = targetSection;
+    window.history.replaceState({}, '', url);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const el = document.getElementById(targetSection);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 40);
+    });
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const natureRaw = window.localStorage.getItem('pinkplan:sales:company-nature');
+    if (
+      natureRaw === 'b2b_services' ||
+      natureRaw === 'retail_shop' ||
+      natureRaw === 'restaurant' ||
+      natureRaw === 'rental_business' ||
+      natureRaw === 'mixed'
+    ) {
+      setCompanyNature(natureRaw);
+    }
+
+    const syncHashTab = () => {
+      const hash = window.location.hash.replace('#', '');
+      const nextTab = SALES_SECTION_TAB_MAP[hash];
+      if (nextTab) {
+        setActiveTab(nextTab);
+      }
+    };
+
+    syncHashTab();
+    window.addEventListener('hashchange', syncHashTab);
+    return () => window.removeEventListener('hashchange', syncHashTab);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'overview' || activeTab === 'orders' || activeTab === 'pos') {
+      void loadSalesOrders();
+    }
+  }, [activeTab, module.records]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'pos') {
+      void loadCatalog();
+    }
+  }, [activeTab, module.records]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'crm' || activeTab === 'subscriptions' || activeTab === 'pos') {
+      void loadEmployees();
+    }
+  }, [activeTab, module.records]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'pricing') hydratePricingAndCredit();
+    if (activeTab === 'crm') hydrateCrmCache();
+    if (activeTab === 'subscriptions') hydrateSubscriptionsCache();
+    if (activeTab === 'pos') hydratePosCache();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasLoadedPricingCredit) return;
+    window.localStorage.setItem('pinkplan:sales:pricing-rules', JSON.stringify(pricingRules));
+  }, [hasLoadedPricingCredit, pricingRules]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasLoadedPricingCredit) return;
+    window.localStorage.setItem('pinkplan:sales:credits', JSON.stringify(credits));
+  }, [credits, hasLoadedPricingCredit]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasLoadedPosCache) return;
+    window.localStorage.setItem('pinkplan:sales:offline-queue', JSON.stringify(offlineQueue));
+  }, [hasLoadedPosCache, offlineQueue]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('pinkplan:sales:company-nature', companyNature);
+  }, [companyNature]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasLoadedCrmCache) return;
+    window.localStorage.setItem('pinkplan:sales:crm-opportunities', JSON.stringify(crmOpportunities));
+  }, [crmOpportunities, hasLoadedCrmCache]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasLoadedSubscriptionsCache) return;
+    window.localStorage.setItem('pinkplan:sales:subscriptions', JSON.stringify(subscriptions));
+  }, [hasLoadedSubscriptionsCache, subscriptions]);
+
+  useEffect(() => {
+    if (!selectedProductId) return;
+    const product = products.find((item) => item.id === selectedProductId);
+    if (product) {
+      setSelectedPrice(String(product.basePrice));
+      setSelectedCost(String(product.costPrice ?? 0));
+    }
+  }, [selectedProductId, products]);
+
+  const filteredRows = useMemo(() => {
+    if (statusFilter === 'all') return rows;
+    return rows.filter((row) => row.status.toLowerCase() === statusFilter.toLowerCase());
+  }, [rows, statusFilter]);
+
+  const posTotal = useMemo(
+    () => cart.reduce((sum, line) => sum + line.qty * line.unitPrice, 0),
+    [cart]
+  );
+
+  const paidTotal = posTotal;
+
+  const remaining = Math.max(posTotal - paidTotal, 0);
+
+  const posCostTotal = useMemo(
+    () => cart.reduce((sum, line) => sum + line.qty * line.unitCost, 0),
+    [cart]
+  );
+
+  const posProfit = Math.max(posTotal - posCostTotal, 0);
+
+  const stockByChannel = useMemo(() => {
+    const totalUnits = Math.max(products.length * 36, 0);
+    const posUnits = Math.floor(totalUnits * 0.32);
+    const warehouseUnits = Math.floor(totalUnits * 0.48);
+    const ecommerceUnits = Math.max(totalUnits - posUnits - warehouseUnits, 0);
+    return [
+      { channel: 'POS', units: posUnits },
+      { channel: 'Warehouse', units: warehouseUnits },
+      { channel: 'E-commerce', units: ecommerceUnits },
+    ];
+  }, [products.length]);
+
+  const salespersonTracking = useMemo(() => {
+    return employees.map((employee) => {
+      const employeeOrders = rows.filter((order) => order.employeeId === employee.id);
+      return {
+        id: employee.id,
+        name: employee.name,
+        orders: employeeOrders.length,
+        amount: employeeOrders.reduce((sum, order) => sum + order.total, 0),
+      };
+    });
+  }, [employees, rows]);
+
+  const draftOrders = useMemo(() => rows.filter((row) => row.status === 'draft'), [rows]);
+  const openOrders = useMemo(() => rows.filter((row) => row.status === 'open'), [rows]);
+  const settledOrders = useMemo(() => rows.filter((row) => row.status === 'settled'), [rows]);
+
+  const crmDraftCount = useMemo(() => crmOpportunities.filter((item) => item.stage === 'draft').length, [crmOpportunities]);
+  const crmOpenCount = useMemo(() => crmOpportunities.filter((item) => item.stage === 'open').length, [crmOpportunities]);
+  const crmSettledCount = useMemo(() => crmOpportunities.filter((item) => item.stage === 'settled').length, [crmOpportunities]);
+
+  const crmForecast = useMemo(() => crmOpportunities.reduce((sum, item) => {
+    const weight = item.stage === 'settled' ? 1 : item.stage === 'open' ? 0.65 : 0.3;
+    return sum + (item.value * weight);
+  }, 0), [crmOpportunities]);
+
+  const dueFollowUps = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return crmOpportunities.filter((item) => item.nextFollowUp && item.nextFollowUp <= today);
+  }, [crmOpportunities]);
+
+  const visibleCrmOpportunities = useMemo(() => {
+    if (crmStageFilter === 'all') return crmOpportunities;
+    return crmOpportunities.filter((item) => item.stage === crmStageFilter);
+  }, [crmOpportunities, crmStageFilter]);
+
+  const toolkit = COMPANY_TOOLKIT[companyNature];
+
+  const activeSubscriptions = useMemo(
+    () => subscriptions.filter((item) => item.status === 'active').length,
+    [subscriptions]
+  );
+
+  const estimatedMrr = useMemo(
+    () => subscriptions
+      .filter((item) => item.status === 'active' || item.status === 'trial')
+      .reduce((sum, item) => {
+        const monthlyValue = item.cycle === 'monthly' ? item.amount : item.cycle === 'quarterly' ? item.amount / 3 : item.amount / 12;
+        return sum + monthlyValue;
+      }, 0),
+    [subscriptions]
+  );
+
+  const renewalsDueThisCycle = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    return subscriptions.filter((item) => {
+      if (item.status !== 'active' && item.status !== 'trial') return false;
+      if (!item.renewalDate) return false;
+      const renewal = new Date(item.renewalDate);
+      return renewal.getFullYear() === year && renewal.getMonth() === month;
+    }).length;
+  }, [subscriptions]);
+
+  const churnRate = useMemo(() => {
+    if (subscriptions.length === 0) return 0;
+    const churned = subscriptions.filter((item) => item.status === 'churned').length;
+    return Math.round((churned / subscriptions.length) * 100);
+  }, [subscriptions]);
+
+  const visibleSubscriptions = useMemo(() => {
+    if (subscriptionFilter === 'all') return subscriptions;
+    return subscriptions.filter((item) => item.status === subscriptionFilter);
+  }, [subscriptions, subscriptionFilter]);
+
+  const selectedPricingRule = useMemo(
+    () => pricingRules.find((rule) => rule.id === selectedPricingRuleId) ?? pricingRules[0] ?? null,
+    [pricingRules, selectedPricingRuleId]
+  );
+
+  const pricingPreview = useMemo(() => {
+    const base = Number(pricingBaseAmount);
+    if (Number.isNaN(base) || base < 0) return { base: 0, effect: 0, final: 0 };
+    const rule = selectedPricingRule;
+    if (!rule) return { base, effect: 0, final: base };
+    const effect = (base * rule.value) / 100;
+    return { base, effect, final: Math.max(base - effect, 0) };
+  }, [pricingBaseAmount, selectedPricingRule]);
+
+  const selectedCreditProfile = useMemo(
+    () => credits.find((profile) => profile.id === selectedCreditId) ?? null,
+    [credits, selectedCreditId]
+  );
+
+  const selectedCreditAvailable = selectedCreditProfile ? Math.max(selectedCreditProfile.limit - selectedCreditProfile.used, 0) : 0;
+
+  const nextConfirmationAmount = useMemo(() => {
+    const next = draftOrders[0];
+    return next ? next.total : 0;
+  }, [draftOrders]);
+
+  const confirmationAllowed = selectedCreditProfile ? selectedCreditAvailable >= nextConfirmationAmount : false;
+
+  const bookedRevenue = useMemo(() => settledOrders.reduce((sum, row) => sum + row.total, 0), [settledOrders]);
+
+  const conversionRate = useMemo(() => {
+    const created = draftOrders.length + openOrders.length + settledOrders.length;
+    if (created === 0) return 0;
+    return Math.round((settledOrders.length / created) * 100);
+  }, [draftOrders.length, openOrders.length, settledOrders.length]);
+
+  const averageOrderValue = useMemo(() => {
+    if (rows.length === 0) return 0;
+    return rows.reduce((sum, row) => sum + row.total, 0) / rows.length;
+  }, [rows]);
+
+  const scrollToSection = (sectionId: string) => {
+    const targetTab = SALES_SECTION_TAB_MAP[sectionId];
+    if (targetTab) {
+      switchToTab(targetTab, sectionId);
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    const el = document.getElementById(sectionId);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const openOperationsView = (filter: string) => {
+    setStatusFilter(filter);
+    scrollToSection('operations');
+  };
+
+  const addPricingRule = () => {
+    const value = Number(ruleValue);
+    if (!ruleName.trim() || Number.isNaN(value) || value < 0) return;
+    const next: PricingRule = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      name: ruleName.trim(),
+      kind: ruleKind,
+      value,
+    };
+    setPricingRules((prev) => [next, ...prev]);
+    setRuleName('');
+    setRuleKind('discount');
+    setRuleValue('0');
+  };
+
+  const addCreditProfile = () => {
+    const limit = Number(creditLimit);
+    if (!creditCustomer.trim() || Number.isNaN(limit) || limit <= 0) return;
+    const next: CreditProfile = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      customer: creditCustomer.trim(),
+      limit,
+      used: 0,
+    };
+    setCredits((prev) => [next, ...prev]);
+    setCreditCustomer('');
+    setCreditLimit('0');
+  };
+
+  const addBarcodeLine = () => {
+    if (!selectedEmployeeId || !barcode.trim()) return;
+    const matched = products.find((item) => item.sku.toLowerCase() === barcode.trim().toLowerCase());
+    if (!matched) return;
+
+    setCart((prev) => {
+      const existing = prev.find((line) => line.productId === matched.id);
+      if (existing) {
+        return prev.map((line) =>
+          line.productId === matched.id ? { ...line, qty: line.qty + 1 } : line
+        );
+      }
+      return [
+        ...prev,
+        {
+          productId: matched.id,
+          sku: matched.sku,
+          name: matched.name,
+          qty: 1,
+          unitPrice: matched.basePrice,
+          unitCost: matched.costPrice ?? 0,
+        },
+      ];
+    });
+    setBarcode('');
+  };
+
+  const addManualLine = () => {
+    const qty = Number(selectedQty);
+    const unitPrice = Number(selectedPrice);
+    if (!selectedEmployeeId || !selectedProductId || Number.isNaN(qty) || qty <= 0 || Number.isNaN(unitPrice) || unitPrice < 0) return;
+
+    const product = products.find((item) => item.id === selectedProductId);
+    if (!product) return;
+
+    setCart((prev) => {
+      const existing = prev.find((line) => line.productId === product.id);
+      if (existing) {
+        return prev.map((line) =>
+          line.productId === product.id
+            ? { ...line, qty: line.qty + qty, unitPrice, unitCost: product.costPrice ?? 0 }
+            : line
+        );
+      }
+      return [
+        ...prev,
+        {
+          productId: product.id,
+          sku: product.sku,
+          name: product.name,
+          qty,
+          unitPrice,
+          unitCost: product.costPrice ?? 0,
+        },
+      ];
+    });
+
+    setSelectedQty('1');
+    setSelectedPrice(String(product.basePrice));
+    setSelectedCost(String(product.costPrice ?? 0));
+  };
+
+
+
+  const advanceRecord = (id: string) => {
+    setRows((prev) => prev.map((row) => {
+      if (row.id !== id) return row;
+      const index = SALES_FLOW.findIndex((state) => state === row.status);
+      const next = SALES_FLOW[(index + 1 + SALES_FLOW.length) % SALES_FLOW.length];
+      void fetch('/api/business/sales/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: row.id, status: next }),
+      });
+      return { ...row, status: next };
+    }));
+  };
+
+  const printReceipt = () => {
+    const linesSource = lastReceipt?.items ?? cart.map((line) => ({
+      name: line.name,
+      sku: line.sku,
+      qty: line.qty,
+      unitPrice: line.unitPrice,
+    }));
+    if (linesSource.length === 0) return;
+
+    const lines = linesSource.map((line) => `${line.name} (${line.sku}) x${line.qty} = ${(line.qty * line.unitPrice).toFixed(2)}`);
+    const receiptOrderNo = lastReceipt && lastReceipt.orderNo ? lastReceipt.orderNo : 'Preview';
+    const receiptEmployee = lastReceipt && lastReceipt.employeeName ? lastReceipt.employeeName : 'N/A';
+    const receiptCustomerName = lastReceipt && lastReceipt.customerName ? lastReceipt.customerName : (customerName || 'N/A');
+    const receiptCustomerEmail = lastReceipt && lastReceipt.customerEmail ? lastReceipt.customerEmail : (customerEmail || 'N/A');
+    const receiptCustomerPhone = lastReceipt && lastReceipt.customerPhone ? lastReceipt.customerPhone : (customerPhone || 'N/A');
+    const receiptPaymentMethod = String(lastReceipt ? lastReceipt.paymentMethod : selectedPaymentMethod).toUpperCase();
+    const receiptPaymentRef = lastReceipt && lastReceipt.paymentReference ? ` (${lastReceipt.paymentReference})` : '';
+    const receiptCurrency = lastReceipt && lastReceipt.currency ? lastReceipt.currency : currency;
+    const receiptTotal = lastReceipt ? lastReceipt.total : posTotal;
+    const receiptPaid = lastReceipt ? lastReceipt.paid : paidTotal;
+
+    const body = [
+      'Airtyn POS Receipt',
+      `Order: ${receiptOrderNo}`,
+      `Sales Rep: ${receiptEmployee}`,
+      `Customer: ${receiptCustomerName}`,
+      `Email: ${receiptCustomerEmail}`,
+      `Phone: ${receiptCustomerPhone}`,
+      `Payment: ${receiptPaymentMethod}${receiptPaymentRef}`,
+      `Currency: ${receiptCurrency}`,
+      ...lines,
+      `Total: ${receiptTotal.toFixed(2)}`,
+      `Paid: ${receiptPaid.toFixed(2)}`,
+      `Change/Due: ${(receiptPaid - receiptTotal).toFixed(2)}`,
+      `Printed At: ${new Date().toLocaleString()}`,
+    ].join('\n');
+
+    const receiptWindow = window.open('', '_blank', 'width=420,height=640');
+    if (!receiptWindow) return;
+    receiptWindow.document.write(`<pre>${body}</pre>`);
+    receiptWindow.document.close();
+    receiptWindow.focus();
+    receiptWindow.print();
+  };
+
+  const persistSale = async (sale: OfflineSale) => {
+    const response = await fetch('/api/business/sales/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sale),
+    });
+    return response.ok;
+  };
+
+  const refreshOrders = async () => {
+    const refresh = await fetch('/api/business/sales/orders', { cache: 'no-store' });
+    const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
+    if (data.ok && data.orders) {
+      setRows(data.orders);
+      setHasLoadedOrders(true);
+    }
+  };
+
+  const createQuotation = async () => {
+    const qty = Number(quoteQty);
+    const price = Number(quotePrice);
+    if (!quoteEmployeeId || !quoteProductId || Number.isNaN(qty) || qty <= 0 || Number.isNaN(price) || price < 0) return;
+
+    const response = await fetch('/api/business/sales/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employeeId: quoteEmployeeId,
+        currency,
+        channel: 'ecommerce',
+        status: 'draft',
+        customer: {
+          name: 'Quotation Customer',
+          email: 'quotation@airtyn.local',
+          phone: 'N/A',
+        },
+        lines: [{ productId: quoteProductId, quantity: qty, unitPrice: price }],
+        payments: [],
+      }),
+    });
+
+    if (response.ok) {
+      await refreshOrders();
+      setQuoteQty('1');
+    }
+  };
+
+  const updateOrderStatus = async (id: string, status: 'draft' | 'open' | 'settled' | 'closed' | 'canceled') => {
+    const response = await fetch('/api/business/sales/orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    });
+
+    if (response.ok) {
+      await refreshOrders();
+    }
+  };
+
+  const checkout = async () => {
+    if (cart.length === 0 || posTotal <= 0 || !selectedEmployeeId) return;
+    if (!customerName.trim() || !customerEmail.trim() || !customerPhone.trim()) return;
+
+    const currentEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
+
+    const sale: OfflineSale = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      employeeId: selectedEmployeeId,
+      currency,
+      channel,
+      status: offlineMode ? 'draft' : 'settled',
+      customer: {
+        name: customerName.trim(),
+        email: customerEmail.trim().toLowerCase(),
+        phone: customerPhone.trim(),
+      },
+      lines: cart.map((line) => ({
+        productId: line.productId,
+        quantity: line.qty,
+        unitPrice: line.unitPrice,
+      })),
+      payments: [{
+        method: selectedPaymentMethod,
+        amount: posTotal,
+      }],
+    };
+
+    let saved = false;
+    let orderNo = 'PENDING';
+
+    if (offlineMode) {
+      setOfflineQueue((prev) => [sale, ...prev]);
+    } else {
+      const response = await fetch('/api/business/sales/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sale),
+      });
+      saved = response.ok;
+      if (saved) {
+        const data = (await response.json()) as { ok: boolean; orderNo?: string };
+        orderNo = data.orderNo ?? orderNo;
+        await refreshOrders();
+      } else {
+        setOfflineQueue((prev) => [sale, ...prev]);
+      }
+    }
+
+    setLastReceipt({
+      orderNo: saved ? orderNo : 'OFFLINE-QUEUED',
+      employeeName: currentEmployee?.name ?? selectedEmployeeId,
+      customerName: sale.customer.name,
+      customerEmail: sale.customer.email,
+      customerPhone: sale.customer.phone,
+      paymentMethod: selectedPaymentMethod,
+      paymentReference: paymentReference.trim() || undefined,
+      currency,
+      total: posTotal,
+      paid: posTotal,
+      items: cart.map((line) => ({ name: line.name, sku: line.sku, qty: line.qty, unitPrice: line.unitPrice })),
+      at: new Date().toISOString(),
+    });
+
+    setCart([]);
+    setSelectedEmployeeId('');
+    setSelectedProductId('');
+    setSelectedQty('1');
+    setSelectedPrice('0');
+    setSelectedCost('0');
+    setCustomerName('');
+    setCustomerEmail('');
+    setCustomerPhone('');
+    setSelectedPaymentMethod('cash');
+    setPaymentReference('');
+  };
+
+  const syncOfflineQueue = async () => {
+    if (offlineQueue.length === 0) return;
+
+    const queued = [...offlineQueue];
+    const stillQueued: OfflineSale[] = [];
+
+    for (const item of queued) {
+      // Serial sync keeps order deterministic for receipts and reconciliation.
+      const ok = await persistSale({ ...item, status: 'settled' });
+      if (!ok) stillQueued.push(item);
+    }
+
+    setOfflineQueue(stillQueued);
+    await refreshOrders();
+  };
+
+  const addRentalContract = () => {
+    if (!rentalProduct.trim() || !rentalCustomer.trim() || !rentalStart || !rentalEnd) return;
+
+    const next = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      product: rentalProduct.trim(),
+      customer: rentalCustomer.trim(),
+      start: rentalStart,
+      end: rentalEnd,
+      status: 'reserved',
+    };
+
+    setRentalContracts((prev) => [next, ...prev]);
+    setRentalProduct('');
+    setRentalCustomer('');
+    setRentalStart('');
+    setRentalEnd('');
+  };
+
+  const addCrmOpportunity = () => {
+    const parsedValue = Number(crmValue);
+    if (!crmTitle.trim() || !crmCustomer.trim() || !crmOwnerId || Number.isNaN(parsedValue) || parsedValue <= 0) return;
+    const owner = employees.find((employee) => employee.id === crmOwnerId);
+    if (!owner) return;
+
+    const next: CrmOpportunity = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      title: crmTitle.trim(),
+      customer: crmCustomer.trim(),
+      ownerId: owner.id,
+      ownerName: owner.name,
+      email: crmEmail.trim(),
+      value: parsedValue,
+      stage: 'draft',
+      nextFollowUp: crmFollowUp,
+    };
+
+    setCrmOpportunities((prev) => [next, ...prev]);
+    setCrmTitle('');
+    setCrmCustomer('');
+    setCrmOwnerId('');
+    setCrmEmail('');
+    setCrmValue('0');
+    setCrmFollowUp('');
+  };
+
+  const advanceCrmOpportunity = (id: string) => {
+    setCrmOpportunities((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      const nextStage = item.stage === 'draft' ? 'open' : item.stage === 'open' ? 'settled' : 'draft';
+      return { ...item, stage: nextStage };
+    }));
+  };
+
+  const runFollowUpAutomation = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setCrmOpportunities((prev) => prev.map((item) => {
+      if (!item.nextFollowUp || item.nextFollowUp > today) return item;
+      const nextDate = new Date(item.nextFollowUp);
+      nextDate.setDate(nextDate.getDate() + 7);
+      const nextFollowUp = nextDate.toISOString().slice(0, 10);
+      return { ...item, nextFollowUp };
+    }));
+  };
+
+  const addSubscription = () => {
+    const parsedAmount = Number(subscriptionAmount);
+    if (!subscriptionCustomer.trim() || !subscriptionPlan.trim() || !subscriptionOwnerId || Number.isNaN(parsedAmount) || parsedAmount <= 0) return;
+    const owner = employees.find((employee) => employee.id === subscriptionOwnerId);
+    if (!owner) return;
+
+    const next: SubscriptionRecord = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      customer: subscriptionCustomer.trim(),
+      plan: subscriptionPlan.trim(),
+      ownerId: owner.id,
+      ownerName: owner.name,
+      amount: parsedAmount,
+      cycle: subscriptionCycle,
+      status: 'active',
+      renewalDate: subscriptionRenewalDate,
+    };
+
+    setSubscriptions((prev) => [next, ...prev]);
+    setSubscriptionCustomer('');
+    setSubscriptionPlan('');
+    setSubscriptionOwnerId('');
+    setSubscriptionAmount('0');
+    setSubscriptionCycle('monthly');
+    setSubscriptionRenewalDate('');
+  };
+
+  const cycleSubscriptionStatus = (id: string) => {
+    setSubscriptions((prev) => prev.map((item) => {
+      if (item.id !== id) return item;
+      const nextStatus = item.status === 'active' ? 'paused' : item.status === 'paused' ? 'churned' : item.status === 'churned' ? 'trial' : 'active';
+      return { ...item, status: nextStatus };
+    }));
+  };
+
+  const renewSubscription = (id: string) => {
+    setSubscriptions((prev) => prev.map((item) => {
+      if (item.id !== id || !item.renewalDate) return item;
+      const nextDate = new Date(item.renewalDate);
+      if (item.cycle === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
+      if (item.cycle === 'quarterly') nextDate.setMonth(nextDate.getMonth() + 3);
+      if (item.cycle === 'yearly') nextDate.setFullYear(nextDate.getFullYear() + 1);
+      return {
+        ...item,
+        status: item.status === 'churned' ? 'active' : item.status,
+        renewalDate: nextDate.toISOString().slice(0, 10),
+      };
+    }));
+  };
+
+  const overviewCards = [
+    { label: 'Booked Revenue', value: `${CURRENCY_SYMBOL[currency] ?? ''}${bookedRevenue.toFixed(2)}` },
+    { label: 'Open Orders', value: String(openOrders.length) },
+    { label: 'Settled Orders', value: String(settledOrders.length) },
+    { label: 'Average Order', value: `${CURRENCY_SYMBOL[currency] ?? ''}${averageOrderValue.toFixed(2)}` },
+  ];
+
+  const ordersTabReady = hasLoadedOrders && hasLoadedProducts && hasLoadedEmployees && hasLoadedPricingCredit;
+  const crmTabReady = hasLoadedEmployees && hasLoadedCrmCache;
+  const subscriptionsTabReady = hasLoadedEmployees && hasLoadedSubscriptionsCache;
+  const pricingTabReady = hasLoadedPricingCredit;
+  const posTabReady = hasLoadedOrders && hasLoadedProducts && hasLoadedEmployees && hasLoadedPosCache;
+
+  return (
+    <>
+      <Card className="glass-card border-white/5">
+        <CardHeader>
+          <CardTitle>Sales Setup by Company Type</CardTitle>
+          <CardDescription>Configure tenant business nature so teams get the right sales tools and workflow focus.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            <select
+              value={companyNature}
+              onChange={(event) => setCompanyNature(event.target.value as CompanyNature)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="mixed">Mixed model</option>
+              <option value="b2b_services">B2B services</option>
+              <option value="retail_shop">Retail shop</option>
+              <option value="restaurant">Restaurant</option>
+              <option value="rental_business">Rental business</option>
+            </select>
+            <div className="md:col-span-2 flex items-center rounded-xl border border-white/5 bg-card/40 px-3 py-2 text-sm text-muted-foreground">
+              Active toolkit: {toolkit.label}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {toolkit.tools.map((tool) => (
+              <Badge key={tool} variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                {tool}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+        <Tabs value={activeTab} onValueChange={(value) => switchToTab(value as SalesWorkspaceTab)} className="space-y-4">
+          <div className="overflow-x-auto pb-1">
+            <TabsList className="h-auto min-w-max gap-2 rounded-2xl border border-white/5 bg-card/40 p-1">
+              {SALES_TAB_LABELS.map((tab) => (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  className="rounded-xl px-4 py-2 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                >
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+        </Tabs>
+
+        {activeTab === 'overview' ? (
+          <div id="sales-overview" className="grid gap-4 xl:grid-cols-12 scroll-mt-24">
+            <Card className="glass-card border-white/5 xl:col-span-12">
+              <CardHeader>
+                <CardTitle>Sales Overview</CardTitle>
+                <CardDescription>Load only the summary first, then open the workspace you need.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {ordersLoading && !hasLoadedOrders ? (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {overviewCards.map((card) => (
+                      <div key={card.label} className="h-24 animate-pulse rounded-2xl border border-white/5 bg-card/40" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {overviewCards.map((card) => (
+                      <div key={card.label} className="rounded-2xl border border-white/5 bg-card/40 p-4">
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{card.label}</p>
+                        <p className="mt-3 text-2xl font-semibold text-foreground">{card.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => switchToTab('orders', 'sales-quotations')}>
+                    Continue to Orders
+                  </Button>
+                  <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => switchToTab('crm', 'crm-workbench')}>
+                    Open CRM Workspace
+                  </Button>
+                  <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => switchToTab('pos', 'sales-pos')}>
+                    Open POS Workspace
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+
+        {activeTab === 'orders' || activeTab === 'crm' || activeTab === 'subscriptions' ? (
+          <div className="grid gap-4 xl:grid-cols-12">
+            {activeTab === 'orders' ? (
+              ordersTabReady ? (
+                <Card id="sales-quotations" className="glass-card border-white/5 xl:col-span-12 scroll-mt-24">
+                  <CardHeader>
+                    <CardTitle>Sales</CardTitle>
+                    <CardDescription>Quotations to invoices, pricelists, discount rules, order confirmations, and sales analytics.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm text-muted-foreground">
+                    <p className="text-xs uppercase tracking-[0.14em] text-primary">1. Sales Workflow</p>
+                    <div className="grid gap-2">
+                      <select
+                        value={quoteEmployeeId}
+                        onChange={(event) => setQuoteEmployeeId(event.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Select employee</option>
+                        {employees.map((employee) => (
+                          <option key={employee.id} value={employee.id}>{employee.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={quoteProductId}
+                        onChange={(event) => {
+                          setQuoteProductId(event.target.value);
+                          const product = products.find((item) => item.id === event.target.value);
+                          if (product) setQuotePrice(String(product.basePrice));
+                        }}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Select product</option>
+                        {products.map((item) => (
+                          <option key={item.id} value={item.id}>{item.name}</option>
+                        ))}
+                      </select>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input placeholder="Qty" value={quoteQty} onChange={(event) => setQuoteQty(event.target.value)} />
+                        <Input placeholder="Unit price" value={quotePrice} onChange={(event) => setQuotePrice(event.target.value)} />
+                      </div>
+                      <Button className="gradient-amber text-black font-semibold" onClick={createQuotation}>Create Quotation</Button>
+                    </div>
+
+                    <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                      <p className="text-xs uppercase tracking-[0.14em] text-primary">1.1 Core Tasks</p>
+                      <div className="mt-2 grid gap-2 md:grid-cols-3">
+                        <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('draft')}>
+                          Draft quotations: {draftOrders.length}
+                        </Button>
+                        <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
+                          Open confirmations: {openOrders.length}
+                        </Button>
+                        <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
+                          Settled invoices: {settledOrders.length}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {draftOrders.slice(0, 2).map((order) => (
+                        <div key={order.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                          <p className="text-xs text-foreground">{order.orderNo} • {order.employeeName}</p>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'open')}>
+                              Confirm Order
+                            </Button>
+                            <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'settled')}>
+                              Convert to Invoice
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {draftOrders.length === 0 ? (
+                        <div className="flex items-center justify-between rounded-lg border border-dashed border-white/10 bg-card/30 p-2">
+                          <p className="text-xs">No draft quotations available.</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-white/10 bg-card/40"
+                            onClick={() => {
+                              scrollToSection('sales-quotations');
+                            }}
+                          >
+                            Start New Quote
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">2. Pricing & Discounts</p>
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input placeholder="Base amount" value={pricingBaseAmount} onChange={(event) => setPricingBaseAmount(event.target.value)} />
+                        <select
+                          value={selectedPricingRuleId}
+                          onChange={(event) => setSelectedPricingRuleId(event.target.value)}
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">Auto best rule</option>
+                          {pricingRules.map((rule) => (
+                            <option key={rule.id} value={rule.id}>{rule.name} ({rule.value}%)</option>
+                          ))}
+                        </select>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedPricingRule ? `${selectedPricingRule.name}: -${pricingPreview.effect.toFixed(2)}` : 'No pricing rule selected'} | Final: {pricingPreview.final.toFixed(2)}
+                      </p>
+                      <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-pricing')}>
+                        Open Pricing Rules
+                      </Button>
+                    </div>
+
+                    <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">3. Credit Management</p>
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+                      <select
+                        value={selectedCreditId}
+                        onChange={(event) => setSelectedCreditId(event.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Select customer profile</option>
+                        {credits.map((profile) => (
+                          <option key={profile.id} value={profile.id}>{profile.customer}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground">
+                        Required for next confirmation: {nextConfirmationAmount.toFixed(2)} | Available credit: {selectedCreditAvailable.toFixed(2)}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={confirmationAllowed ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}
+                      >
+                        {confirmationAllowed ? 'Confirmation allowed' : 'Confirmation gated by credit'}
+                      </Badge>
+                      <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-credit')}>
+                        Open Customer Credit
+                      </Button>
+                    </div>
+
+                    <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">4. Sales Operations & Analytics</p>
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+                      <p className="text-xs text-muted-foreground">Booked revenue: {bookedRevenue.toFixed(2)} | Avg order: {averageOrderValue.toFixed(2)} | Conversion: {conversionRate}%</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('all')}>
+                          Open Feed
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
+                          View Open Orders
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
+                          View Settled Orders
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="xl:col-span-12">
+                  <SalesLoadingCard title="Loading Orders Workspace" description="Preparing quotations, catalog, and team references." />
+                </div>
+              )
+            ) : null}
+
+            {activeTab === 'crm' || activeTab === 'subscriptions' ? (
+              <div className="space-y-4 xl:col-span-12">
+                {activeTab === 'crm' ? (
+                  crmTabReady ? (
+                    <Card id="crm-workbench" className="glass-card border-white/5 scroll-mt-24">
+                      <CardHeader>
+                        <CardTitle>CRM</CardTitle>
+                        <CardDescription>Visual pipeline, lead management, automated follow-ups, email integration, and sales forecasting.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm text-muted-foreground">
+                        <div className="grid gap-2">
+                          <Input placeholder="Opportunity title" value={crmTitle} onChange={(event) => setCrmTitle(event.target.value)} />
+                          <Input placeholder="Customer" value={crmCustomer} onChange={(event) => setCrmCustomer(event.target.value)} />
+                          <select
+                            value={crmOwnerId}
+                            onChange={(event) => setCrmOwnerId(event.target.value)}
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Select owner</option>
+                            {employees.map((employee) => (
+                              <option key={employee.id} value={employee.id}>{employee.name}</option>
+                            ))}
+                          </select>
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <Input placeholder="Customer email" type="email" value={crmEmail} onChange={(event) => setCrmEmail(event.target.value)} />
+                            <Input placeholder="Opportunity value" value={crmValue} onChange={(event) => setCrmValue(event.target.value)} />
+                          </div>
+                          <Input type="date" value={crmFollowUp} onChange={(event) => setCrmFollowUp(event.target.value)} />
+                          <Button className="gradient-amber text-black font-semibold" onClick={addCrmOpportunity}>Add Opportunity</Button>
+                        </div>
+
+                        <div className="grid gap-2 md:grid-cols-3">
+                          <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('open')}>
+                            Open opportunities: {crmOpenCount}
+                          </Button>
+                          <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('draft')}>
+                            Draft opportunities: {crmDraftCount}
+                          </Button>
+                          <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('settled')}>
+                            Settled/won opportunities: {crmSettledCount}
+                          </Button>
+                        </div>
+
+                        <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                          <p>Forecasted revenue: {CURRENCY_SYMBOL[currency] ?? ''}{crmForecast.toFixed(2)}</p>
+                          <p>Due follow-ups: {dueFollowUps.length}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => setCrmStageFilter('all')}>
+                              Show All
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={runFollowUpAutomation}>
+                              Run Follow-up Automation
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className={testEmailResult === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : testEmailResult === 'error' ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-white/10 bg-card/40'}
+                              onClick={sendTestEmail}
+                              disabled={testEmailSending}
+                            >
+                              {testEmailSending ? 'Sending…' : testEmailResult === 'success' ? 'Email sent ✓' : testEmailResult === 'error' ? 'Failed – retry' : 'Send Test Email'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {visibleCrmOpportunities.length === 0 ? (
+                            <p className="text-xs">No opportunities for this view.</p>
+                          ) : (
+                            visibleCrmOpportunities.slice(0, 4).map((item) => (
+                              <div key={item.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                                <p className="text-xs text-foreground">{item.title} • {item.customer}</p>
+                                <p className="text-xs">{item.stage} • {CURRENCY_SYMBOL[currency] ?? ''}{item.value.toFixed(2)} • Follow-up: {item.nextFollowUp || 'Not set'}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => advanceCrmOpportunity(item.id)}>
+                                    Advance Stage
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-white/10 bg-card/40"
+                                    disabled={!item.email}
+                                    onClick={() => {
+                                      if (!item.email) return;
+                                      window.open(`mailto:${item.email}?subject=${encodeURIComponent(`Follow-up: ${item.title}`)}`);
+                                    }}
+                                  >
+                                    Send Follow-up Email
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <SalesLoadingCard title="Loading CRM Workspace" description="Preparing opportunities, owners, and follow-up automation." />
+                  )
+                ) : null}
+
+                {activeTab === 'subscriptions' ? (
+                  subscriptionsTabReady ? (
+                    <Card id="subscriptions-hub" className="glass-card border-white/5 scroll-mt-24">
+                      <CardHeader>
+                        <CardTitle>Subscriptions</CardTitle>
+                        <CardDescription>Recurring billing, renewal management, churn tracking, and MRR dashboard.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm text-muted-foreground">
+                        <div className="grid gap-2">
+                          <Input placeholder="Customer" value={subscriptionCustomer} onChange={(event) => setSubscriptionCustomer(event.target.value)} />
+                          <Input placeholder="Plan" value={subscriptionPlan} onChange={(event) => setSubscriptionPlan(event.target.value)} />
+                          <select
+                            value={subscriptionOwnerId}
+                            onChange={(event) => setSubscriptionOwnerId(event.target.value)}
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Select owner</option>
+                            {employees.map((employee) => (
+                              <option key={employee.id} value={employee.id}>{employee.name}</option>
+                            ))}
+                          </select>
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <Input placeholder="Recurring amount" value={subscriptionAmount} onChange={(event) => setSubscriptionAmount(event.target.value)} />
+                            <select
+                              value={subscriptionCycle}
+                              onChange={(event) => setSubscriptionCycle(event.target.value as 'monthly' | 'quarterly' | 'yearly')}
+                              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="monthly">monthly</option>
+                              <option value="quarterly">quarterly</option>
+                              <option value="yearly">yearly</option>
+                            </select>
+                          </div>
+                          <Input type="date" value={subscriptionRenewalDate} onChange={(event) => setSubscriptionRenewalDate(event.target.value)} />
+                          <Button className="gradient-amber text-black font-semibold" onClick={addSubscription}>Add Subscription</Button>
+                        </div>
+
+                        <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                          <div>Active subscriptions: {activeSubscriptions}</div>
+                          <div>Estimated MRR: {CURRENCY_SYMBOL[currency] ?? ''}{estimatedMrr.toFixed(0)}</div>
+                          <div>Renewals due this cycle: {renewalsDueThisCycle}</div>
+                          <div>Churn rate: {churnRate}%</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {['all', 'active', 'trial', 'paused', 'churned'].map((status) => (
+                            <Button
+                              key={status}
+                              type="button"
+                              size="sm"
+                              variant={subscriptionFilter === status ? 'default' : 'outline'}
+                              className={subscriptionFilter === status ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
+                              onClick={() => setSubscriptionFilter(status as 'all' | 'active' | 'trial' | 'paused' | 'churned')}
+                            >
+                              {status}
+                            </Button>
+                          ))}
+                        </div>
+
+                        <div className="space-y-2">
+                          {visibleSubscriptions.length === 0 ? (
+                            <p className="text-xs">No subscriptions in this view.</p>
+                          ) : (
+                            visibleSubscriptions.slice(0, 4).map((subscription) => (
+                              <div key={subscription.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                                <p className="text-xs text-foreground">{subscription.customer} • {subscription.plan}</p>
+                                <p className="text-xs">
+                                  {subscription.status} • {CURRENCY_SYMBOL[currency] ?? ''}{subscription.amount.toFixed(2)} / {subscription.cycle} • Renewal: {subscription.renewalDate || 'Not set'}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => renewSubscription(subscription.id)}>
+                                    Renew
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => cycleSubscriptionStatus(subscription.id)}>
+                                    Cycle Status
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <SalesLoadingCard title="Loading Subscription Workspace" description="Preparing recurring revenue, renewals, and customer plans." />
+                  )
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+      {activeTab === 'pricing' ? (
+      pricingTabReady ? (
+      <div className="grid gap-4 xl:grid-cols-12">
+        <Card id="sales-pricing" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Pricing Rules</CardTitle>
+            <CardDescription>Discounts, tier pricing, and promotions for sales channels.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <Input placeholder="Rule name" value={ruleName} onChange={(event) => setRuleName(event.target.value)} />
+              <select
+                value={ruleKind}
+                onChange={(event) => setRuleKind(event.target.value as 'discount' | 'tier' | 'promotion')}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="discount">discount</option>
+                <option value="tier">tier</option>
+                <option value="promotion">promotion</option>
+              </select>
+              <Input placeholder="Value %" value={ruleValue} onChange={(event) => setRuleValue(event.target.value)} />
+            </div>
+            <Button className="gradient-amber text-black font-semibold" onClick={addPricingRule}>Add Pricing Rule</Button>
+
+            <div className="space-y-2">
+              {pricingRules.map((rule) => (
+                <div key={rule.id} className="rounded-xl border border-white/5 bg-card/40 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-foreground">{rule.name}</p>
+                    <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+                      {rule.kind}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{rule.value}% effect</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card id="sales-credit" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Customer Credit & Limits</CardTitle>
+            <CardDescription>Track credit ceilings and current usage by account.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input placeholder="Customer name" value={creditCustomer} onChange={(event) => setCreditCustomer(event.target.value)} />
+              <Input placeholder="Credit limit" value={creditLimit} onChange={(event) => setCreditLimit(event.target.value)} />
+            </div>
+            <Button className="gradient-amber text-black font-semibold" onClick={addCreditProfile}>Add Credit Profile</Button>
+
+            <div className="space-y-2">
+              {credits.map((profile) => {
+                const available = Math.max(profile.limit - profile.used, 0);
+                return (
+                  <div key={profile.id} className="rounded-xl border border-white/5 bg-card/40 p-3">
+                    <p className="font-medium text-foreground">{profile.customer}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Limit {profile.limit.toLocaleString()} • Used {profile.used.toLocaleString()} • Available {available.toLocaleString()}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      ) : (
+        <SalesLoadingCard title="Loading Pricing Workspace" description="Preparing pricing rules and customer credit controls." />
+      )
+      ) : null}
+
+      {activeTab === 'pos' ? (
+      posTabReady ? (
+      <div className="grid gap-4 xl:grid-cols-12">
+        <Card id="sales-pos" className="glass-card border-white/5 xl:col-span-12 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>POS Shop</CardTitle>
+            <CardDescription>
+              Touch-screen retail interface, barcode scanning, loyalty-ready checkout, split payments, and offline mode.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-4">
+              <select
+                value={selectedEmployeeId}
+                onChange={(event) => setSelectedEmployeeId(event.target.value)}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
+              >
+                <option value="">1) Select employee</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
+              </select>
+              <select
+                value={selectedProductId}
+                onChange={(event) => setSelectedProductId(event.target.value)}
+                disabled={!selectedEmployeeId}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium disabled:opacity-60"
+              >
+                <option value="">2) Select product</option>
+                {products.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name} ({item.sku})</option>
+                ))}
+              </select>
+              <Input placeholder="3) Quantity" value={selectedQty} onChange={(event) => setSelectedQty(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="4) Sales Price (auto)" value={selectedPrice} readOnly className="h-12 text-base font-medium" />
+              <Input placeholder="Cost/Item" value={selectedCost} readOnly className="h-12 text-base font-medium" />
+              <Button variant="outline" className="h-12 border-white/10 bg-card/40 text-base font-semibold" onClick={addManualLine}>Add POS Line</Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <Input placeholder="Customer name" value={customerName} onChange={(event) => setCustomerName(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="Customer email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="Customer telfoon" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="h-12 text-base font-medium" />
+              <select
+                value={selectedPaymentMethod}
+                onChange={(event) => setSelectedPaymentMethod(event.target.value as 'cash' | 'card' | 'wallet' | 'bank')}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
+              >
+                <option value="cash">Payment: cash</option>
+                <option value="card">Payment: card</option>
+                <option value="wallet">Payment: wallet</option>
+                <option value="bank">Payment: bank</option>
+              </select>
+              <Input placeholder="Payment reference (optional)" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} className="h-12 text-base font-medium" />
+              <Input placeholder="Barcode / SKU" value={barcode} onChange={(event) => setBarcode(event.target.value)} className="h-12 text-base font-medium" />
+              <Button variant="outline" className="h-12 border-white/10 bg-card/40 text-base font-semibold" onClick={addBarcodeLine}>Scan Barcode</Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-4">
+              <select
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value)}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
+              >
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="KES">KES</option>
+                <option value="AED">AED</option>
+              </select>
+              <select
+                value={channel}
+                onChange={(event) => setChannel(event.target.value as 'pos' | 'warehouse' | 'ecommerce')}
+                className="h-12 rounded-md border border-input bg-background px-4 text-base font-medium"
+              >
+                <option value="pos">POS</option>
+                <option value="warehouse">Warehouse</option>
+                <option value="ecommerce">E-commerce</option>
+              </select>
+              <Button
+                variant={offlineMode ? 'default' : 'outline'}
+                className={offlineMode ? 'gradient-amber text-black font-semibold h-12 text-base' : 'border-white/10 bg-card/40 h-12 text-base font-semibold'}
+                onClick={() => setOfflineMode((prev) => !prev)}
+              >
+                {offlineMode ? 'Offline Mode: ON' : 'Offline Mode: OFF'}
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-white/5">
+              <table className="min-w-full text-sm">
+                <thead className="bg-card/50 text-left text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Item</th>
+                    <th className="px-4 py-3 font-medium">SKU</th>
+                    <th className="px-4 py-3 font-medium">Qty</th>
+                    <th className="px-4 py-3 font-medium">Sales Price</th>
+                    <th className="px-4 py-3 font-medium">Cost/Item</th>
+                    <th className="px-4 py-3 font-medium">Sales Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-4 text-muted-foreground">Cart is empty.</td>
+                    </tr>
+                  ) : (
+                    cart.map((line) => (
+                      <tr key={line.productId} className="border-t border-white/5">
+                        <td className="px-4 py-3 text-foreground">{line.name}</td>
+                        <td className="px-4 py-3 text-primary">{line.sku}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{line.qty}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{line.unitPrice.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{line.unitCost.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-foreground">{(line.qty * line.unitPrice).toFixed(2)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div id="sales-payments" className="space-y-3 scroll-mt-24">
+              <p className="text-sm font-medium text-foreground">Payment Confirmation</p>
+              <div className="rounded-xl border border-white/5 bg-card/40 p-3 text-sm text-muted-foreground">
+                Method: <span className="text-foreground uppercase">{selectedPaymentMethod}</span>
+                {paymentReference.trim() ? ` • Ref: ${paymentReference.trim()}` : ''}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-card/40 p-4">
+              <p className="text-sm text-muted-foreground">POS Total: {CURRENCY_SYMBOL[currency] ?? ''}{posTotal.toFixed(2)}</p>
+              <p className="text-sm text-muted-foreground">Cost Total: {CURRENCY_SYMBOL[currency] ?? ''}{posCostTotal.toFixed(2)}</p>
+              <p className="text-sm text-primary">Sales Value (Profit): {CURRENCY_SYMBOL[currency] ?? ''}{posProfit.toFixed(2)}</p>
+              <p className="text-sm text-muted-foreground">Paid: {CURRENCY_SYMBOL[currency] ?? ''}{paidTotal.toFixed(2)}</p>
+              <p className="text-sm text-primary">Remaining: {CURRENCY_SYMBOL[currency] ?? ''}{remaining.toFixed(2)}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="gradient-amber text-black font-semibold"
+                onClick={checkout}
+                disabled={cart.length === 0 || !selectedEmployeeId || !customerName.trim() || !customerEmail.trim() || !customerPhone.trim()}
+              >
+                Confirm Sale
+              </Button>
+              <Button variant="outline" className="border-white/10 bg-card/40" onClick={printReceipt}>Print Receipt</Button>
+              <Button variant="outline" className="border-white/10 bg-card/40" onClick={syncOfflineQueue} disabled={offlineQueue.length === 0}>
+                Sync Offline Queue ({offlineQueue.length})
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card id="pos-restaurant" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>POS Restaurant</CardTitle>
+            <CardDescription>Table management, kitchen display flow, split bills, and tips for hospitality operations.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-3">
+              <Input placeholder="Table" value={restaurantTable} onChange={(event) => setRestaurantTable(event.target.value)} />
+              <Input placeholder="Guests" value={restaurantGuests} onChange={(event) => setRestaurantGuests(event.target.value)} />
+              <Input placeholder="Tips" value={restaurantTips} onChange={(event) => setRestaurantTips(event.target.value)} />
+            </div>
+            <div className="rounded-xl border border-white/5 bg-card/40 p-3 text-sm text-muted-foreground">
+              Table {restaurantTable || 'T-01'} • Guests {restaurantGuests || '0'} • Tips {restaurantTips || '0'}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card id="rental-desk" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Rental</CardTitle>
+            <CardDescription>Contract creation, delivery/return tracking, and product availability calendar workflow.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input placeholder="Product / Asset" value={rentalProduct} onChange={(event) => setRentalProduct(event.target.value)} />
+              <Input placeholder="Customer" value={rentalCustomer} onChange={(event) => setRentalCustomer(event.target.value)} />
+              <Input type="date" value={rentalStart} onChange={(event) => setRentalStart(event.target.value)} />
+              <Input type="date" value={rentalEnd} onChange={(event) => setRentalEnd(event.target.value)} />
+            </div>
+            <Button className="gradient-amber text-black font-semibold" onClick={addRentalContract}>Create Rental Contract</Button>
+            <div className="space-y-2">
+              {rentalContracts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No rental contracts yet.</p>
+              ) : (
+                rentalContracts.map((contract) => (
+                  <div key={contract.id} className="rounded-xl border border-white/5 bg-card/40 p-3">
+                    <p className="text-sm font-medium text-foreground">{contract.product} • {contract.customer}</p>
+                    <p className="text-xs text-muted-foreground">{contract.start} to {contract.end} • {contract.status}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      ) : (
+        <SalesLoadingCard title="Loading POS Workspace" description="Preparing products, employees, and offline checkout tools." />
+      )
+      ) : null}
+
+      {activeTab === 'pos' ? (
+      posTabReady ? (
+      <div className="grid gap-4 xl:grid-cols-12">
+        <Card id="sales-channels" className="glass-card border-white/5 xl:col-span-7 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Omnichannel & Online Store Integration</CardTitle>
+            <CardDescription>Unified stock visibility across POS, warehouse, and e-commerce channels.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {stockByChannel.map((channel) => (
+              <div key={channel.channel} className="flex items-center justify-between rounded-xl border border-white/5 bg-card/40 p-3">
+                <p className="text-sm text-foreground">{channel.channel}</p>
+                <Badge variant="outline" className="border-white/10 text-muted-foreground">
+                  {channel.units} units
+                </Badge>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Channel stock counters are linked to current catalog size and update after POS activity for unified visibility.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card id="salesperson-tracking" className="glass-card border-white/5 xl:col-span-5 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Salesperson Tracking</CardTitle>
+            <CardDescription>Computed from Sales Orders linked to employee IDs.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              {salespersonTracking.map((rep) => (
+                <div key={rep.id} className="rounded-xl border border-white/5 bg-card/40 p-3">
+                  <p className="font-medium text-foreground">{rep.name} ({rep.id.slice(0, 8)})</p>
+                  <p className="text-xs text-muted-foreground mt-1">{rep.orders} orders • {rep.amount.toFixed(2)} booked</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      ) : null
+      ) : null}
+
+      {activeTab === 'orders' ? (
+      <Card id="operations" className="glass-card border-white/5 scroll-mt-24">
+        <CardHeader>
+          <CardTitle>Sales Operations Feed</CardTitle>
+          <CardDescription>Relational sales orders linked to employees and products.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {['all', 'draft', 'open', 'settled', 'closed', 'canceled'].map((option) => (
+              <Button
+                key={option}
+                size="sm"
+                variant={statusFilter === option ? 'default' : 'outline'}
+                className={statusFilter === option ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
+                onClick={() => setStatusFilter(option)}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            {filteredRows.map((row) => (
+              <div key={row.id} className="flex flex-col gap-3 rounded-xl border border-white/5 bg-card/40 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-medium text-foreground">{row.orderNo} • {row.employeeName}</p>
+                  <p className="text-sm text-muted-foreground">{row.customerName || 'Walk-in customer'} • {row.customerEmail || 'N/A'} • {row.customerPhone || 'N/A'}</p>
+                  <p className="text-sm text-muted-foreground">{row.channel.toUpperCase()} • {new Date(row.createdAt).toLocaleString()}</p>
+                  <p className="text-xs text-primary">{CURRENCY_SYMBOL[row.currency] ?? ''}{row.total.toFixed(2)} • Cost {CURRENCY_SYMBOL[row.currency] ?? ''}{row.costTotal.toFixed(2)} • Sales Value {CURRENCY_SYMBOL[row.currency] ?? ''}{(row.total - row.costTotal).toFixed(2)} • {row.lines.length} lines</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="border-white/10 text-muted-foreground">{row.status}</Badge>
+                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => advanceRecord(row.id)}>
+                    Advance
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      ) : null}
+    </>
+  );
+}
