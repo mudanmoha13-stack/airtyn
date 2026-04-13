@@ -52,15 +52,15 @@ export default function RestaurantFloorMap() {
   const getStatusColor = (status: string): string => {
     switch (status) {
       case "available":
-        return "bg-lime-300 text-black"
+        return "bg-lime-300/20 border-lime-300 text-lime-300"
       case "occupied":
-        return "bg-slate-900 text-white"
+        return "bg-rose-500/20 border-rose-500 text-rose-400"
       case "reserved":
-        return "bg-violet-200 text-slate-900"
+        return "bg-violet-500/20 border-violet-500 text-violet-400"
       case "cleaning":
-        return "bg-amber-200 text-slate-900"
+        return "bg-amber-500/20 border-amber-500 text-amber-400"
       default:
-        return "bg-neutral-100"
+        return "bg-neutral-800 text-neutral-400"
     }
   }
 
@@ -102,35 +102,35 @@ export default function RestaurantFloorMap() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-200 p-4">
-      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-100 p-4 shadow-2xl">
+    <div className="bg-black min-h-screen p-4">
+      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-900 p-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
           {/* LEFT: Floor Plan */}
           <div>
             {/* Header Card */}
-            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+            <div className="mb-4 rounded-[28px] bg-neutral-800 p-5">
               <div className="mb-4">
-                <h2 className="text-2xl font-semibold text-slate-900">Floor Plan</h2>
-                <p className="text-sm text-slate-500">{new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>
+                <h2 className="text-2xl font-semibold text-white">Floor Plan</h2>
+                <p className="text-sm text-neutral-400">{new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>
               </div>
 
               {/* Status Legend */}
               <div className="mb-4 flex flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-lime-300" />
-                  <span className="text-xs text-slate-600">Available</span>
+                  <span className="text-xs text-neutral-400">Available</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-slate-900" />
-                  <span className="text-xs text-slate-600">Occupied</span>
+                  <div className="h-3 w-3 rounded-full bg-rose-500" />
+                  <span className="text-xs text-neutral-400">Occupied</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-violet-200" />
-                  <span className="text-xs text-slate-600">Reserved</span>
+                  <div className="h-3 w-3 rounded-full bg-violet-500" />
+                  <span className="text-xs text-neutral-400">Reserved</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-amber-200" />
-                  <span className="text-xs text-slate-600">Cleaning</span>
+                  <div className="h-3 w-3 rounded-full bg-amber-500" />
+                  <span className="text-xs text-neutral-400">Cleaning</span>
                 </div>
               </div>
 
@@ -143,7 +143,7 @@ export default function RestaurantFloorMap() {
                     className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       filterStatus === status
                         ? "bg-lime-300 text-black"
-                        : "bg-neutral-100 text-slate-600 hover:bg-neutral-200"
+                        : "bg-neutral-800 text-neutral-400 hover:brightness-110"
                     }`}
                   >
                     {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -154,33 +154,33 @@ export default function RestaurantFloorMap() {
               {/* Stats */}
               <div className="grid grid-cols-4 gap-2 text-sm">
                 <div>
-                  <p className="text-xs text-slate-500">Available</p>
-                  <p className="font-semibold text-slate-900">{statusCounts.available}</p>
+                  <p className="text-xs text-neutral-400">Available</p>
+                  <p className="font-semibold text-white">{statusCounts.available}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Occupied</p>
-                  <p className="font-semibold text-slate-900">{statusCounts.occupied}</p>
+                  <p className="text-xs text-neutral-400">Occupied</p>
+                  <p className="font-semibold text-white">{statusCounts.occupied}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Reserved</p>
-                  <p className="font-semibold text-slate-900">{statusCounts.reserved}</p>
+                  <p className="text-xs text-neutral-400">Reserved</p>
+                  <p className="font-semibold text-white">{statusCounts.reserved}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Cleaning</p>
-                  <p className="font-semibold text-slate-900">{statusCounts.cleaning}</p>
+                  <p className="text-xs text-neutral-400">Cleaning</p>
+                  <p className="font-semibold text-white">{statusCounts.cleaning}</p>
                 </div>
               </div>
             </div>
 
             {/* Zone A - Indoor */}
-            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
-              <h3 className="mb-4 font-semibold text-slate-900">Zone A · Indoor (8 covers)</h3>
+            <div className="mb-4 rounded-[28px] bg-neutral-800 p-5">
+              <h3 className="mb-4 font-semibold text-white">Zone A · Indoor (8 covers)</h3>
               <div className="grid grid-cols-4 gap-3">
                 {indoorTables.map(table => (
                   <button
                     key={table.id}
                     onClick={() => handleSelectTable(table.id)}
-                    className={`rounded-[16px] px-2 py-3 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                    className={`border-2 rounded-[16px] px-2 py-3 text-xs font-medium transition hover:brightness-110 ${getStatusColor(table.status)}`}
                   >
                     <div className="font-semibold">{table.tableNum}</div>
                     <div className="mt-1 text-xs opacity-70">{table.status}</div>
@@ -190,17 +190,17 @@ export default function RestaurantFloorMap() {
             </div>
 
             {/* Zone B - Terrace */}
-            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
-              <h3 className="mb-4 font-semibold text-slate-900">Zone B · Terrace (12 covers)</h3>
+            <div className="mb-4 rounded-[28px] bg-neutral-800 p-5">
+              <h3 className="mb-4 font-semibold text-white">Zone B · Terrace (12 covers)</h3>
               <div className="space-y-3">
                 <div>
-                  <p className="mb-2 text-xs font-medium text-slate-500">Large Tables</p>
+                  <p className="mb-2 text-xs font-medium text-neutral-400">Large Tables</p>
                   <div className="grid grid-cols-3 gap-3">
                     {terraceTablesByGroup.rects.map(table => (
                       <button
                         key={table.id}
                         onClick={() => handleSelectTable(table.id)}
-                        className={`rounded-[16px] px-2 py-4 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                        className={`border-2 rounded-[16px] px-2 py-4 text-xs font-medium transition hover:brightness-110 ${getStatusColor(table.status)}`}
                       >
                         <div className="font-semibold">{table.tableNum}</div>
                         <div className="mt-1 text-xs opacity-70">{table.status}</div>
@@ -209,13 +209,13 @@ export default function RestaurantFloorMap() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs font-medium text-slate-500">Round Tables</p>
+                  <p className="mb-2 text-xs font-medium text-neutral-400">Round Tables</p>
                   <div className="grid grid-cols-3 gap-3">
                     {terraceTablesByGroup.rounds.map(table => (
                       <button
                         key={table.id}
                         onClick={() => handleSelectTable(table.id)}
-                        className={`rounded-full h-20 w-20 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                        className={`border-2 rounded-full h-20 w-20 text-xs font-medium transition hover:brightness-110 ${getStatusColor(table.status)}`}
                       >
                         <div className="flex h-full flex-col items-center justify-center">
                           <div className="font-semibold">{table.tableNum}</div>
@@ -229,14 +229,14 @@ export default function RestaurantFloorMap() {
             </div>
 
             {/* Zone C - Bar */}
-            <div className="rounded-[28px] bg-white p-5 shadow-sm">
-              <h3 className="mb-4 font-semibold text-slate-900">Zone C · Bar (4 seats)</h3>
+            <div className="rounded-[28px] bg-neutral-800 p-5">
+              <h3 className="mb-4 font-semibold text-white">Zone C · Bar (4 seats)</h3>
               <div className="flex gap-3">
                 {barStools.map(table => (
                   <button
                     key={table.id}
                     onClick={() => handleSelectTable(table.id)}
-                    className={`rounded-full h-16 w-16 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                    className={`border-2 rounded-full h-16 w-16 text-xs font-medium transition hover:brightness-110 ${getStatusColor(table.status)}`}
                   >
                     <div className="flex h-full flex-col items-center justify-center">
                       <div className="font-semibold text-xs">{table.tableNum}</div>
@@ -248,25 +248,25 @@ export default function RestaurantFloorMap() {
           </div>
 
           {/* RIGHT: Table Detail Panel */}
-          <div className="rounded-[28px] bg-white p-5 shadow-sm">
+          <div className="rounded-[28px] bg-neutral-800 p-5">
             {!currentTable ? (
               <div className="flex h-full flex-col items-center justify-center text-center">
-                <ChefHat size={40} className="mb-3 text-neutral-300" />
-                <p className="text-sm text-slate-500">Select a table to view details</p>
+                <ChefHat size={40} className="mb-3 text-neutral-600" />
+                <p className="text-sm text-neutral-400">Select a table to view details</p>
               </div>
             ) : (
               <>
                 {/* Table Header */}
-                <div className="mb-4 pb-4 border-b border-neutral-200">
+                <div className="mb-4 pb-4 border-b border-neutral-700">
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-2xl font-semibold text-slate-900">
+                    <h3 className="text-2xl font-semibold text-white">
                       {currentTable.id} {currentTable.zone !== "bar" && `· ${currentTable.zone.charAt(0).toUpperCase() + currentTable.zone.slice(1)}`}
                     </h3>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(currentTable.status)}`}>
+                    <span className={`border-2 rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(currentTable.status)}`}>
                       {currentTable.status.charAt(0).toUpperCase() + currentTable.status.slice(1)}
                     </span>
                   </div>
-                  <div className="space-y-1 text-sm text-slate-600">
+                  <div className="space-y-1 text-sm text-neutral-400">
                     <p>Capacity: {currentTable.capacity} {currentTable.capacity === 1 ? "person" : "people"}</p>
                     <p>Shape: {currentTable.shape === "round" ? "Round" : currentTable.shape === "rect" ? "Rectangular" : "Bar Stool"}</p>
                   </div>
@@ -275,35 +275,35 @@ export default function RestaurantFloorMap() {
                 {/* Occupied Content */}
                 {currentTable.status === "occupied" && currentTable.currentGuests && (
                   <>
-                    <div className="mb-4 rounded-[24px] bg-neutral-50 p-4">
-                      <p className="mb-3 text-xs font-medium text-slate-500">CURRENT ORDER</p>
+                    <div className="mb-4 rounded-[24px] bg-neutral-700 p-4">
+                      <p className="mb-3 text-xs font-medium text-neutral-400">CURRENT ORDER</p>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Waiter</span>
-                          <span className="font-medium text-slate-900">{currentTable.waiter}</span>
+                          <span className="text-neutral-400">Waiter</span>
+                          <span className="font-medium text-white">{currentTable.waiter}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Seated</span>
-                          <span className="font-medium text-slate-900">{currentTable.seatedTime ? formatTime(Date.now() - currentTable.seatedTime) : "—"}</span>
+                          <span className="text-neutral-400">Seated</span>
+                          <span className="font-medium text-white">{currentTable.seatedTime ? formatTime(Date.now() - currentTable.seatedTime) : "—"}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Guests</span>
-                          <span className="font-medium text-slate-900">{currentTable.currentGuests}</span>
+                          <span className="text-neutral-400">Guests</span>
+                          <span className="font-medium text-white">{currentTable.currentGuests}</span>
                         </div>
-                        <div className="border-t border-neutral-200 pt-2">
+                        <div className="border-t border-neutral-700 pt-2">
                           <div className="flex justify-between">
-                            <span className="text-slate-600">Running Total</span>
-                            <span className="font-light text-lg text-slate-900">KES {currentTable.orderTotal?.toLocaleString()}</span>
+                            <span className="text-neutral-400">Running Total</span>
+                            <span className="font-light text-lg text-white">KES {currentTable.orderTotal?.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <button className="w-full rounded-full bg-black py-3 text-sm font-medium text-white hover:bg-slate-800">
+                      <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:brightness-110">
                         View Full Order
                       </button>
-                      <button className="w-full rounded-full bg-neutral-100 py-3 text-sm font-medium text-slate-600 hover:bg-neutral-200">
+                      <button className="w-full rounded-full bg-neutral-700 py-3 text-sm font-medium text-white hover:brightness-110">
                         Move Table
                       </button>
                     </div>
@@ -313,21 +313,21 @@ export default function RestaurantFloorMap() {
                 {/* Available Content */}
                 {currentTable.status === "available" && (
                   <>
-                    <p className="mb-4 text-sm text-slate-600">Seat new guests at this table</p>
-                    <div className="mb-4 rounded-[24px] bg-neutral-50 p-4 space-y-3">
+                    <p className="mb-4 text-sm text-neutral-400">Seat new guests at this table</p>
+                    <div className="mb-4 rounded-[24px] bg-neutral-700 p-4 space-y-3">
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-2">Party Size</label>
+                        <label className="block text-xs font-medium text-neutral-400 mb-2">Party Size</label>
                         <div className="flex items-center justify-between">
                           <button
                             onClick={() => setPaxCount(Math.max(1, paxCount - 1))}
-                            className="rounded-full bg-lime-300 px-3 py-2 text-black hover:bg-lime-400"
+                            className="rounded-full bg-lime-300 px-3 py-2 text-black hover:brightness-110"
                           >
                             −
                           </button>
-                          <span className="text-lg font-semibold text-slate-900">{paxCount}</span>
+                          <span className="text-lg font-semibold text-white">{paxCount}</span>
                           <button
                             onClick={() => setPaxCount(Math.min(currentTable.capacity, paxCount + 1))}
-                            className="rounded-full bg-lime-300 px-3 py-2 text-black hover:bg-lime-400"
+                            className="rounded-full bg-lime-300 px-3 py-2 text-black hover:brightness-110"
                           >
                             +
                           </button>
@@ -335,7 +335,7 @@ export default function RestaurantFloorMap() {
                       </div>
                     </div>
 
-                    <button className="w-full rounded-full bg-black py-3 text-sm font-medium text-white hover:bg-slate-800">
+                    <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:brightness-110">
                       Open POS
                     </button>
                   </>
@@ -344,26 +344,26 @@ export default function RestaurantFloorMap() {
                 {/* Reserved Content */}
                 {currentTable.status === "reserved" && (
                   <>
-                    <div className="mb-4 rounded-[24px] bg-neutral-50 p-4 space-y-2">
+                    <div className="mb-4 rounded-[24px] bg-neutral-700 p-4 space-y-2">
                       <div className="text-sm">
-                        <p className="text-xs text-slate-500 mb-1">GUEST NAME</p>
-                        <p className="font-semibold text-slate-900">Sarah Kowalski</p>
+                        <p className="text-xs text-neutral-400 mb-1">GUEST NAME</p>
+                        <p className="font-semibold text-white">Sarah Kowalski</p>
                       </div>
                       <div className="text-sm">
-                        <p className="text-xs text-slate-500 mb-1">TIME</p>
-                        <p className="font-semibold text-slate-900">7:30 PM</p>
+                        <p className="text-xs text-neutral-400 mb-1">TIME</p>
+                        <p className="font-semibold text-white">7:30 PM</p>
                       </div>
                       <div className="text-sm">
-                        <p className="text-xs text-slate-500 mb-1">PARTY SIZE</p>
-                        <p className="font-semibold text-slate-900">4 Guests</p>
+                        <p className="text-xs text-neutral-400 mb-1">PARTY SIZE</p>
+                        <p className="font-semibold text-white">4 Guests</p>
                       </div>
                       <div className="text-sm">
-                        <p className="text-xs text-slate-500 mb-1">PHONE</p>
-                        <p className="font-semibold text-slate-900">+254 712 345 678</p>
+                        <p className="text-xs text-neutral-400 mb-1">PHONE</p>
+                        <p className="font-semibold text-white">+254 712 345 678</p>
                       </div>
                     </div>
 
-                    <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:bg-lime-400">
+                    <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:brightness-110">
                       Confirm Arrival
                     </button>
                   </>
@@ -371,7 +371,7 @@ export default function RestaurantFloorMap() {
 
                 {/* Cleaning Content */}
                 {currentTable.status === "cleaning" && (
-                  <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:bg-lime-400">
+                  <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:brightness-110">
                     Mark Available
                   </button>
                 )}

@@ -102,19 +102,19 @@ export default function RestaurantReservations() {
   const getStatusColor = (status: string): string => {
     switch (status) {
       case "booked":
-        return "bg-sky-200 text-sky-900"
+        return "bg-sky-500/20 text-sky-400 border-l-2 border-sky-500"
       case "confirmed":
-        return "bg-lime-300 text-black"
+        return "bg-violet-500/30 text-violet-300 border-l-2 border-violet-400"
       case "seated":
-        return "bg-violet-300 text-violet-900"
+        return "bg-lime-300/30 text-lime-300 border-l-2 border-lime-300"
       case "completed":
-        return "bg-neutral-200 text-slate-900"
+        return "bg-neutral-700/50 text-neutral-400 border-l-2 border-neutral-500"
       case "cancelled":
-        return "bg-rose-200 text-rose-900"
+        return "bg-rose-500/20 text-rose-400 border-l-2 border-rose-500"
       case "no-show":
-        return "bg-amber-200 text-amber-900"
+        return "bg-amber-500/20 text-amber-400 border-l-2 border-amber-400"
       default:
-        return "bg-neutral-100"
+        return "bg-neutral-800"
     }
   }
 
@@ -126,35 +126,35 @@ export default function RestaurantReservations() {
   })
 
   return (
-    <div className="min-h-screen bg-neutral-200 p-4">
-      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-100 p-4 shadow-2xl">
+    <div className="min-h-screen bg-black p-4">
+      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-900 p-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
           {/* LEFT: Main Content */}
           <div>
             {/* Header Card */}
-            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+            <div className="mb-4 rounded-[28px] bg-neutral-800 p-5">
               <div className="mb-4">
-                <h1 className="font-light text-4xl text-slate-900">Reservations</h1>
-                <p className="mt-1 text-sm text-slate-500">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
+                <h1 className="font-light text-4xl text-white">Reservations</h1>
+                <p className="mt-1 text-sm text-neutral-400">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
               </div>
 
               {/* Stats Row */}
               <div className="mb-4 grid grid-cols-4 gap-3">
-                <div className="rounded-[24px] bg-neutral-50 p-4 text-center">
-                  <p className="text-xs text-slate-500">Booked</p>
-                  <p className="font-light text-3xl text-sky-600">{stats.booked}</p>
+                <div className="rounded-[24px] bg-neutral-700/50 p-4 text-center">
+                  <p className="text-xs text-neutral-400">Booked</p>
+                  <p className="font-light text-3xl text-sky-400">{stats.booked}</p>
                 </div>
-                <div className="rounded-[24px] bg-neutral-50 p-4 text-center">
-                  <p className="text-xs text-slate-500">Confirmed</p>
-                  <p className="font-light text-3xl text-lime-600">{stats.confirmed}</p>
+                <div className="rounded-[24px] bg-neutral-700/50 p-4 text-center">
+                  <p className="text-xs text-neutral-400">Confirmed</p>
+                  <p className="font-light text-3xl text-lime-300">{stats.confirmed}</p>
                 </div>
-                <div className="rounded-[24px] bg-neutral-50 p-4 text-center">
-                  <p className="text-xs text-slate-500">Seated</p>
-                  <p className="font-light text-3xl text-violet-600">{stats.seated}</p>
+                <div className="rounded-[24px] bg-neutral-700/50 p-4 text-center">
+                  <p className="text-xs text-neutral-400">Seated</p>
+                  <p className="font-light text-3xl text-lime-300">{stats.seated}</p>
                 </div>
-                <div className="rounded-[24px] bg-neutral-50 p-4 text-center">
-                  <p className="text-xs text-slate-500">Completed</p>
-                  <p className="font-light text-3xl text-slate-600">{stats.completed}</p>
+                <div className="rounded-[24px] bg-neutral-700/50 p-4 text-center">
+                  <p className="text-xs text-neutral-400">Completed</p>
+                  <p className="font-light text-3xl text-neutral-400">{stats.completed}</p>
                 </div>
               </div>
 
@@ -167,7 +167,7 @@ export default function RestaurantReservations() {
                     className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                       selectedDate === date
                         ? "bg-lime-300 text-black"
-                        : "bg-neutral-100 text-slate-600 hover:bg-neutral-200"
+                        : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
                     }`}
                   >
                     {date.charAt(0).toUpperCase() + date.slice(1)}
@@ -177,15 +177,15 @@ export default function RestaurantReservations() {
             </div>
 
             {/* Timeline */}
-            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">Timeline View</h2>
+            <div className="mb-4 rounded-[28px] bg-neutral-800 p-5">
+              <h2 className="mb-4 text-lg font-semibold text-white">Timeline View</h2>
               <div className="overflow-x-auto">
                 <div className="min-w-max">
                   {/* Time Header */}
                   <div className="mb-3 flex gap-2">
                     <div className="w-12 flex-shrink-0" />
                     {timeSlots.map((time, idx) => (
-                      <div key={idx} className="w-24 flex-shrink-0 text-center text-xs text-slate-500">
+                      <div key={idx} className="w-24 flex-shrink-0 text-center text-xs text-neutral-400">
                         {time}
                       </div>
                     ))}
@@ -195,7 +195,7 @@ export default function RestaurantReservations() {
                   <div className="space-y-2">
                     {["T01", "T05", "T08", "T11", "T12"].map((table, idx) => (
                       <div key={table} className="flex gap-2 items-center">
-                        <div className="w-12 flex-shrink-0 text-xs font-medium text-slate-600">{table}</div>
+                        <div className="w-12 flex-shrink-0 text-xs font-medium text-neutral-400">{table}</div>
                         <div className="flex gap-2">
                           {reservations
                             .filter(r => r.table === table)
@@ -205,7 +205,7 @@ export default function RestaurantReservations() {
                               return (
                                 <div
                                   key={res.id}
-                                  className={`rounded-[12px] px-2 py-1 text-xs font-medium ${getStatusColor(res.status)} w-24 text-center truncate cursor-pointer hover:shadow-md`}
+                                  className={`rounded-[12px] px-2 py-1 text-xs font-medium ${getStatusColor(res.status)} w-24 text-center truncate cursor-pointer`}
                                   onClick={() => handleSelectReservation(res)}
                                   title={res.guestName}
                                 >
@@ -222,8 +222,8 @@ export default function RestaurantReservations() {
             </div>
 
             {/* Reservations List */}
-            <div className="rounded-[28px] bg-white p-5 shadow-sm">
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">All Reservations</h2>
+            <div className="rounded-[28px] bg-neutral-800 p-5">
+              <h2 className="mb-4 text-lg font-semibold text-white">All Reservations</h2>
 
               {/* Filter Tabs */}
               <div className="mb-4 flex gap-1 overflow-x-auto pb-2">
@@ -234,7 +234,7 @@ export default function RestaurantReservations() {
                     className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       filterStatus === status
                         ? "bg-lime-300 text-black"
-                        : "bg-neutral-100 text-slate-600 hover:bg-neutral-200"
+                        : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
                     }`}
                   >
                     {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -248,15 +248,15 @@ export default function RestaurantReservations() {
                   <button
                     key={res.id}
                     onClick={() => handleSelectReservation(res)}
-                    className="w-full rounded-[24px] bg-neutral-50 p-4 text-left transition hover:bg-neutral-100"
+                    className="w-full rounded-[24px] bg-neutral-800 p-4 text-left transition hover:bg-neutral-700"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900">{res.time}</span>
-                          <span className="text-sm font-medium text-slate-700">{res.guestName}</span>
-                          <span className="rounded-full bg-black px-2 py-0.5 text-xs text-white">{res.pax}</span>
-                          {res.table && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{res.table}</span>}
+                          <span className="font-semibold text-white">{res.time}</span>
+                          <span className="text-sm font-medium text-neutral-300">{res.guestName}</span>
+                          <span className="rounded-full bg-lime-300 px-2 py-0.5 text-xs text-black">{res.pax}</span>
+                          {res.table && <span className="rounded-full bg-neutral-700 px-2 py-0.5 text-xs text-neutral-300">{res.table}</span>}
                         </div>
                       </div>
                       <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(res.status)}`}>
@@ -270,12 +270,12 @@ export default function RestaurantReservations() {
           </div>
 
           {/* RIGHT: Form / Detail Panel */}
-          <div className="rounded-[28px] bg-white p-5 shadow-sm h-fit">
+          <div className="rounded-[32px] bg-neutral-900 p-5 h-fit">
             {!selectedReservation ? (
               <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
                 <div className="text-4xl">📋</div>
-                <p className="text-sm text-slate-500">Select a reservation or create a new one</p>
-                <button className="mt-2 flex items-center gap-2 rounded-full bg-black px-4 py-2 text-xs font-medium text-white hover:bg-slate-800">
+                <p className="text-sm text-neutral-400">Select a reservation or create a new one</p>
+                <button className="mt-2 flex items-center gap-2 rounded-full bg-lime-300 px-4 py-2 text-xs font-medium text-black hover:bg-lime-400">
                   <Plus size={16} />
                   New Reservation
                 </button>
@@ -283,13 +283,13 @@ export default function RestaurantReservations() {
             ) : (
               <>
                 {/* Header */}
-                <div className="mb-4 flex items-center justify-between pb-4 border-b border-neutral-200">
-                  <h3 className="font-semibold text-slate-900">
+                <div className="mb-4 flex items-center justify-between pb-4 border-b border-neutral-700">
+                  <h3 className="font-semibold text-white">
                     {selectedReservation.status === "booked" ? "Edit Reservation" : "View Reservation"}
                   </h3>
                   <button
                     onClick={() => setSelectedReservation(null)}
-                    className="rounded-full hover:bg-neutral-100 p-2"
+                    className="rounded-full hover:bg-neutral-800 p-2 text-neutral-400"
                   >
                     <X size={18} />
                   </button>
@@ -298,61 +298,61 @@ export default function RestaurantReservations() {
                 {/* Form Fields */}
                 <div className="mb-4 space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Guest Name</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">Guest Name</label>
                     <input
                       type="text"
                       value={editForm.guestName || ""}
                       onChange={e => setEditForm({ ...editForm, guestName: e.target.value })}
-                      className="w-full rounded-full bg-neutral-50 border border-neutral-200 px-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                      className="w-full rounded-full bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-300"
                       placeholder="Guest name"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">Phone</label>
                     <input
                       type="tel"
                       value={editForm.phone || ""}
                       onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
-                      className="w-full rounded-full bg-neutral-50 border border-neutral-200 px-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                      className="w-full rounded-full bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-300"
                       placeholder="+254 7XX XXX XXX"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">Email</label>
                     <input
                       type="email"
                       value={editForm.email || ""}
                       onChange={e => setEditForm({ ...editForm, email: e.target.value })}
-                      className="w-full rounded-full bg-neutral-50 border border-neutral-200 px-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                      className="w-full rounded-full bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-300"
                       placeholder="email@example.com"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Date</label>
+                      <label className="block text-xs font-medium text-neutral-400 mb-1">Date</label>
                       <input
                         type="date"
                         value={editForm.date || ""}
                         onChange={e => setEditForm({ ...editForm, date: e.target.value })}
-                        className="w-full rounded-full bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                        className="w-full rounded-full bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-lime-300"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Time</label>
+                      <label className="block text-xs font-medium text-neutral-400 mb-1">Time</label>
                       <input
                         type="time"
                         value={editForm.time || ""}
                         onChange={e => setEditForm({ ...editForm, time: e.target.value })}
-                        className="w-full rounded-full bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                        className="w-full rounded-full bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-lime-300"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-2">Party Size</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-2">Party Size</label>
                     <div className="flex items-center justify-between">
                       <button
                         onClick={() => setPaxEdit(Math.max(1, paxEdit - 1))}
@@ -360,7 +360,7 @@ export default function RestaurantReservations() {
                       >
                         <Minus size={16} />
                       </button>
-                      <span className="font-semibold text-slate-900">{paxEdit}</span>
+                      <span className="font-semibold text-white">{paxEdit}</span>
                       <button
                         onClick={() => setPaxEdit(paxEdit + 1)}
                         className="rounded-full bg-lime-300 p-2 text-black hover:bg-lime-400"
@@ -371,11 +371,11 @@ export default function RestaurantReservations() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Table</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">Table</label>
                     <select
                       value={editForm.table || ""}
                       onChange={e => setEditForm({ ...editForm, table: e.target.value })}
-                      className="w-full rounded-full bg-neutral-50 border border-neutral-200 px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                      className="w-full rounded-full bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-lime-300"
                     >
                       <option value="">Select table</option>
                       {["T01", "T05", "T08", "T11", "T12"].map(t => (
@@ -385,25 +385,25 @@ export default function RestaurantReservations() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Special Requests</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-1">Special Requests</label>
                     <textarea
                       value={editForm.specialRequests || ""}
                       onChange={e => setEditForm({ ...editForm, specialRequests: e.target.value })}
-                      className="w-full rounded-[20px] bg-neutral-50 border border-neutral-200 px-4 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                      className="w-full rounded-[20px] bg-neutral-800 border border-neutral-700 px-4 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-lime-300"
                       placeholder="Window seat, allergies, etc."
                       rows={3}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-2">Status</label>
+                    <label className="block text-xs font-medium text-neutral-400 mb-2">Status</label>
                     <div className="flex flex-wrap gap-2">
                       {["booked", "confirmed", "seated"].map(status => (
                         <button
                           key={status}
                           onClick={() => setEditForm({ ...editForm, status: status as any })}
                           className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                            editForm.status === status ? getStatusColor(status) : "bg-neutral-100 text-slate-600"
+                            editForm.status === status ? getStatusColor(status) : "bg-neutral-800 text-neutral-400"
                           }`}
                         >
                           {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -419,7 +419,7 @@ export default function RestaurantReservations() {
                     <>
                       <button
                         onClick={handleSaveReservation}
-                        className="w-full rounded-full bg-black py-3 text-sm font-medium text-white hover:bg-slate-800"
+                        className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:bg-lime-400"
                       >
                         Save Reservation
                       </button>
@@ -431,7 +431,7 @@ export default function RestaurantReservations() {
                       </button>
                       <button
                         onClick={handleCancelReservation}
-                        className="w-full rounded-full bg-rose-400 py-3 text-sm font-medium text-white hover:bg-rose-500"
+                        className="w-full rounded-full bg-rose-500 py-3 text-sm font-medium text-white hover:bg-rose-600"
                       >
                         Cancel Reservation
                       </button>
@@ -448,7 +448,7 @@ export default function RestaurantReservations() {
                       </button>
                       <button
                         onClick={handleCancelReservation}
-                        className="w-full rounded-full bg-rose-400 py-3 text-sm font-medium text-white hover:bg-rose-500"
+                        className="w-full rounded-full bg-rose-500 py-3 text-sm font-medium text-white hover:bg-rose-600"
                       >
                         Cancel Reservation
                       </button>
@@ -458,7 +458,7 @@ export default function RestaurantReservations() {
                   {selectedReservation.status === "seated" && (
                     <button
                       onClick={handleCompleteReservation}
-                      className="w-full rounded-full bg-black py-3 text-sm font-medium text-white hover:bg-slate-800"
+                      className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:bg-lime-400"
                     >
                       Complete & Close
                     </button>
@@ -467,7 +467,7 @@ export default function RestaurantReservations() {
                   {(selectedReservation.status === "completed" || selectedReservation.status === "cancelled" || selectedReservation.status === "no-show") && (
                     <button
                       onClick={() => setSelectedReservation(null)}
-                      className="w-full rounded-full bg-neutral-100 py-3 text-sm font-medium text-slate-500 cursor-not-allowed"
+                      className="w-full rounded-full bg-neutral-800 py-3 text-sm font-medium text-neutral-500 cursor-not-allowed"
                     >
                       No Actions Available
                     </button>
@@ -475,7 +475,7 @@ export default function RestaurantReservations() {
 
                   <button
                     onClick={() => setSelectedReservation(null)}
-                    className="w-full rounded-full bg-neutral-100 py-3 text-sm font-medium text-slate-600 hover:bg-neutral-200"
+                    className="w-full rounded-full bg-neutral-800 py-3 text-sm font-medium text-neutral-400 hover:bg-neutral-700"
                   >
                     Close
                   </button>

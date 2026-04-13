@@ -317,19 +317,19 @@ export default function RestaurantPOS() {
 
   const getTableStatusColor = (status: OrderStatus): string => {
     const colors: Record<OrderStatus, string> = {
-      occupied: 'bg-slate-900 text-white',
-      available: 'bg-white',
-      reserved: 'bg-violet-200',
-      priority: 'bg-lime-300',
-      cleaning: 'bg-amber-200',
+      occupied: 'bg-rose-500/20 text-rose-400',
+      available: 'bg-cyan-500/20 text-cyan-400',
+      reserved: 'bg-violet-500/20 text-violet-400',
+      priority: 'bg-lime-300 text-black',
+      cleaning: 'bg-amber-500/20 text-amber-400',
     };
     return colors[status];
   };
 
   // Stat mini cards
   const StatCard = ({ label, value }: { label: string; value: string | number }) => (
-    <div className="bg-white/10 rounded-[24px] p-3 text-center">
-      <div className="text-xs text-white/70 font-medium">{label}</div>
+    <div className="bg-neutral-800 rounded-[24px] p-3 text-center">
+      <div className="text-xs text-neutral-400 font-medium">{label}</div>
       <div className="text-xl font-light text-white mt-1">{value}</div>
     </div>
   );
@@ -341,7 +341,7 @@ export default function RestaurantPOS() {
       className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
         mode === value
           ? 'bg-lime-300 text-black'
-          : 'bg-white/10 text-white hover:bg-white/20'
+          : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
       }`}
     >
       {label}
@@ -349,22 +349,22 @@ export default function RestaurantPOS() {
   );
 
   return (
-    <div className="min-h-screen bg-neutral-200 p-4 md:p-8">
-      <div className="bg-neutral-100 rounded-[32px] p-4 shadow-2xl">
+    <div className="min-h-screen bg-black p-4 md:p-8">
+      <div className="bg-neutral-900 rounded-[32px] p-4">
         <div className="grid lg:grid-cols-[320px_1fr_280px] gap-4 h-[calc(100vh-140px)]">
           {/* LEFT SIDEBAR */}
-          <div className="bg-black rounded-[28px] p-4 text-white flex flex-col shadow-xl overflow-hidden">
+          <div className="bg-black rounded-[28px] p-4 text-white flex flex-col overflow-hidden">
             {/* Logo */}
             <div className="flex items-center gap-2 mb-6">
               <div className="w-8 h-8 bg-lime-300 rounded-2xl flex items-center justify-center text-black font-bold text-sm">
                 ✳
               </div>
-              <span className="text-sm font-semibold">Pinkplan POS</span>
+              <span className="text-sm font-semibold text-white">Pinkplan POS</span>
             </div>
 
             {/* Mode Selector */}
             <div className="space-y-2 mb-6">
-              <div className="text-xs font-semibold text-white/70 px-1">MODE</div>
+              <div className="text-xs font-semibold text-neutral-400 px-1">MODE</div>
               <div className="grid grid-cols-2 gap-2">
                 <ModePill label="Counter" value="counter" />
                 <ModePill label="Dine-In" value="dine-in" />
@@ -386,7 +386,7 @@ export default function RestaurantPOS() {
             {/* Table List */}
             {mode === 'dine-in' && (
               <div className="mb-6">
-                <div className="text-xs font-semibold text-white/70 px-1 mb-2">
+                <div className="text-xs font-semibold text-neutral-400 px-1 mb-2">
                   TABLES
                 </div>
                 <ScrollArea className="h-64">
@@ -410,12 +410,12 @@ export default function RestaurantPOS() {
             )}
 
             {/* Shift Control */}
-            <div className="mt-auto pt-4 border-t border-white/10">
+            <div className="mt-auto pt-4 border-t border-neutral-800">
               <button
                 onClick={() => setShiftDialogOpen(true)}
                 className={`w-full rounded-full py-3 font-semibold text-sm transition-all ${
                   shiftOpen
-                    ? 'bg-rose-400/90 text-white'
+                    ? 'bg-rose-500/20 text-rose-400'
                     : 'bg-lime-300 text-black'
                 }`}
               >
@@ -433,16 +433,16 @@ export default function RestaurantPOS() {
           </div>
 
           {/* CENTER PANEL - MENU */}
-          <div className="flex flex-col bg-neutral-100 rounded-[28px] p-4 gap-4 overflow-hidden">
+          <div className="flex flex-col bg-neutral-900 rounded-[28px] p-4 gap-4 overflow-hidden">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-neutral-500" size={18} />
               <input
                 type="text"
                 placeholder="Search menu..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-full border border-neutral-200 bg-white px-4 py-3 pl-12 text-slate-900 placeholder:text-slate-400"
+                className="w-full rounded-full border border-neutral-800 bg-neutral-800 px-4 py-3 pl-12 text-white placeholder:text-neutral-500"
               />
             </div>
 
@@ -456,7 +456,7 @@ export default function RestaurantPOS() {
                     className={`px-4 py-2 rounded-full font-medium text-sm whitespace-nowrap transition-all ${
                       selectedCategory === cat
                         ? 'bg-lime-300 text-black'
-                        : 'text-slate-500 hover:text-slate-900'
+                        : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'
                     }`}
                   >
                     {cat}
@@ -472,14 +472,14 @@ export default function RestaurantPOS() {
                   <button
                     key={item.id}
                     onClick={() => handleAddItem(item)}
-                    className="bg-white rounded-[24px] shadow-sm p-4 text-left hover:ring-2 hover:ring-lime-300 transition-all hover:scale-105"
+                    className="bg-neutral-800 rounded-[24px] p-4 text-left hover:ring-2 hover:ring-lime-300 transition-all hover:scale-105"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="w-8 h-8 bg-lime-300 rounded-full flex items-center justify-center text-lg">
                         {item.emoji}
                       </div>
                     </div>
-                    <h3 className="font-medium text-slate-900 text-sm mb-2 line-clamp-2">
+                    <h3 className="font-medium text-white text-sm mb-2 line-clamp-2">
                       {item.name}
                     </h3>
                     <div className="flex gap-1 flex-wrap mb-3 min-h-6">
@@ -492,14 +492,14 @@ export default function RestaurantPOS() {
                         return (
                           <span
                             key={tag}
-                            className="text-xs bg-neutral-100 rounded-full px-2 py-1 text-slate-600"
+                            className="text-xs bg-neutral-700 rounded-full px-2 py-1 text-neutral-300"
                           >
                             {tagEmoji[tag]}
                           </span>
                         );
                       })}
                     </div>
-                    <div className="text-lg font-light text-slate-900">
+                    <div className="text-lg font-light text-white">
                       KES {item.price}
                     </div>
                   </button>
@@ -509,18 +509,18 @@ export default function RestaurantPOS() {
           </div>
 
           {/* RIGHT PANEL - ORDER TICKET */}
-          <div className="bg-white rounded-[28px] shadow-sm p-4 flex flex-col">
+          <div className="bg-neutral-900 rounded-[28px] p-4 flex flex-col">
             {/* Header */}
             <div className="mb-4">
-              <div className="text-xs text-slate-500 font-medium mb-1">
+              <div className="text-xs text-neutral-500 font-medium mb-1">
                 {mode === 'dine-in' ? `TABLE ${activeTable}` : 'COUNTER ORDER'}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-2xl font-medium text-slate-900">
+                <span className="text-2xl font-medium text-white">
                   {currentOrder.orderNumber}
                 </span>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs text-slate-500">PAX:</span>
+                  <span className="text-xs text-neutral-400">PAX:</span>
                   <input
                     type="number"
                     min="1"
@@ -532,18 +532,18 @@ export default function RestaurantPOS() {
                         return updated;
                       });
                     }}
-                    className="w-10 text-center border border-neutral-200 rounded-full bg-neutral-50 text-sm"
+                    className="w-10 text-center border border-neutral-800 rounded-full bg-neutral-800 text-sm text-white"
                   />
                 </div>
               </div>
             </div>
 
-            <Separator className="my-2" />
+            <Separator className="my-2 bg-neutral-800" />
 
             {/* Items */}
             <ScrollArea className="flex-1 -mx-4 px-4 mb-4">
               {currentOrder.items.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-slate-400 text-sm">
+                <div className="flex items-center justify-center h-32 text-neutral-500 text-sm">
                   No items added
                 </div>
               ) : (
@@ -551,39 +551,39 @@ export default function RestaurantPOS() {
                   {currentOrder.items.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-neutral-50 rounded-[24px] p-3 flex items-center justify-between"
+                      className="bg-neutral-800 rounded-[24px] p-3 flex items-center justify-between"
                     >
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-slate-900">
+                        <div className="text-sm font-medium text-white">
                           {item.name}
                         </div>
                         {item.modifiers && item.modifiers.length > 0 && (
-                          <div className="text-xs text-slate-500 mt-1">
+                          <div className="text-xs text-neutral-500 mt-1">
                             {item.modifiers.join(', ')}
                           </div>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 bg-neutral-100 rounded-full p-1">
+                        <div className="flex items-center gap-1 bg-neutral-700 rounded-full p-1">
                           <button
                             onClick={() => handleUpdateQuantity(item.id, -1)}
-                            className="w-6 h-6 rounded-full bg-neutral-200 flex items-center justify-center hover:bg-neutral-300"
+                            className="w-6 h-6 rounded-full bg-neutral-600 flex items-center justify-center hover:bg-neutral-500"
                           >
                             <Minus size={14} />
                           </button>
-                          <span className="w-6 text-center text-xs font-medium">
+                          <span className="w-6 text-center text-xs font-medium text-white">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => handleUpdateQuantity(item.id, 1)}
-                            className="w-6 h-6 rounded-full bg-neutral-200 flex items-center justify-center hover:bg-neutral-300"
+                            className="w-6 h-6 rounded-full bg-neutral-600 flex items-center justify-center hover:bg-neutral-500"
                           >
                             <Plus size={14} />
                           </button>
                         </div>
                         <button
                           onClick={() => handleRemoveItem(item.id)}
-                          className="w-6 h-6 rounded-full bg-rose-400/20 text-rose-400 flex items-center justify-center hover:bg-rose-400/30"
+                          className="w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center hover:bg-rose-500/30"
                         >
                           <X size={14} />
                         </button>
@@ -594,37 +594,37 @@ export default function RestaurantPOS() {
               )}
             </ScrollArea>
 
-            <Separator className="my-2" />
+            <Separator className="my-2 bg-neutral-800" />
 
             {/* Pricing */}
             <div className="space-y-2 mb-4">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Subtotal</span>
-                <span className="font-medium text-slate-900">
+                <span className="text-neutral-400">Subtotal</span>
+                <span className="font-medium text-white">
                   KES {subtotal.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <button
                   onClick={handleApplyDiscount}
-                  className="text-lime-600 hover:text-lime-700 font-medium"
+                  className="text-lime-300 hover:text-lime-200 font-medium"
                 >
                   Discount
                 </button>
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-white">
                   {currentOrder.discount > 0 ? `-KES ${currentOrder.discount.toLocaleString()}` : '—'}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Tax (16% VAT)</span>
-                <span className="font-medium text-slate-900">
+                <span className="text-neutral-400">Tax (16% VAT)</span>
+                <span className="font-medium text-white">
                   KES {taxAmount.toLocaleString()}
                 </span>
               </div>
-              <Separator className="my-2" />
+              <Separator className="my-2 bg-neutral-800" />
               <div className="flex justify-between">
-                <span className="font-semibold text-slate-900">Total</span>
-                <span className="font-light text-3xl text-slate-900 tracking-tight">
+                <span className="font-semibold text-white">Total</span>
+                <span className="font-light text-3xl text-white tracking-tight">
                   KES {total.toLocaleString()}
                 </span>
               </div>
@@ -641,7 +641,7 @@ export default function RestaurantPOS() {
                   return updated;
                 });
               }}
-              className="w-full rounded-[20px] bg-neutral-50 border border-neutral-200 p-3 text-xs text-slate-900 placeholder:text-slate-400 mb-3 resize-none h-16"
+              className="w-full rounded-[20px] bg-neutral-800 border border-neutral-700 p-3 text-xs text-white placeholder:text-neutral-500 mb-3 resize-none h-16"
             />
 
             {/* Action Buttons */}
@@ -649,18 +649,18 @@ export default function RestaurantPOS() {
               <button
                 onClick={() => setPaymentDialogOpen(true)}
                 disabled={currentOrder.items.length === 0}
-                className="w-full rounded-full bg-black text-white font-semibold py-4 text-lg hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="w-full rounded-full bg-lime-300 text-black font-semibold py-4 text-lg hover:bg-lime-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 Charge KES {total.toLocaleString()}
               </button>
               <div className="grid grid-cols-3 gap-2">
-                <button className="rounded-full bg-neutral-100 text-slate-900 py-2 font-medium text-sm hover:bg-neutral-200">
+                <button className="rounded-full bg-neutral-800 text-white py-2 font-medium text-sm hover:bg-neutral-700">
                   Split
                 </button>
-                <button className="rounded-full bg-neutral-100 text-slate-900 py-2 font-medium text-sm hover:bg-neutral-200">
+                <button className="rounded-full bg-neutral-800 text-white py-2 font-medium text-sm hover:bg-neutral-700">
                   Comp
                 </button>
-                <button className="rounded-full bg-neutral-100 text-slate-900 py-2 font-medium text-sm hover:bg-neutral-200">
+                <button className="rounded-full bg-neutral-800 text-white py-2 font-medium text-sm hover:bg-neutral-700">
                   Void
                 </button>
               </div>
@@ -671,8 +671,8 @@ export default function RestaurantPOS() {
 
       {/* PAYMENT DIALOG */}
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent className="bg-neutral-100 rounded-[32px] border-0 p-6 max-w-md">
-          <h2 className="text-2xl font-semibold text-slate-900 mb-6">Payment</h2>
+        <DialogContent className="bg-neutral-900 rounded-[32px] border-0 p-6 max-w-md">
+          <h2 className="text-2xl font-semibold text-white mb-6">Payment</h2>
 
           {/* Payment Method Tabs */}
           <Tabs
@@ -680,28 +680,28 @@ export default function RestaurantPOS() {
             onValueChange={(val) => setSelectedPaymentMethod(val as PaymentMethod)}
             className="mb-6"
           >
-            <TabsList className="grid grid-cols-4 bg-neutral-200 rounded-full p-1">
+            <TabsList className="grid grid-cols-4 bg-neutral-800 rounded-full p-1">
               <TabsTrigger
                 value="cash"
-                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black"
+                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black text-neutral-400"
               >
                 Cash
               </TabsTrigger>
               <TabsTrigger
                 value="card"
-                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black"
+                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black text-neutral-400"
               >
                 Card
               </TabsTrigger>
               <TabsTrigger
                 value="mpesa"
-                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black"
+                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black text-neutral-400"
               >
                 M-Pesa
               </TabsTrigger>
               <TabsTrigger
                 value="split"
-                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black"
+                className="rounded-full data-[state=active]:bg-lime-300 data-[state=active]:text-black text-neutral-400"
               >
                 Split
               </TabsTrigger>
@@ -710,13 +710,13 @@ export default function RestaurantPOS() {
             {/* Cash Method */}
             <TabsContent value="cash" className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold text-slate-900">Amount</Label>
-                <div className="text-4xl font-light text-slate-900 tracking-tight mb-4">
+                <Label className="text-xs font-semibold text-white">Amount</Label>
+                <div className="text-4xl font-light text-white tracking-tight mb-4">
                   KES {total.toLocaleString()}
                 </div>
               </div>
               <div>
-                <Label className="text-xs font-semibold text-slate-900 mb-2 block">
+                <Label className="text-xs font-semibold text-white mb-2 block">
                   Tendered
                 </Label>
                 <input
@@ -724,7 +724,7 @@ export default function RestaurantPOS() {
                   value={tendered}
                   onChange={(e) => setTendered(e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900 text-center text-xl font-light"
+                  className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white text-center text-xl font-light"
                 />
               </div>
               {change > 0 && (
@@ -740,14 +740,14 @@ export default function RestaurantPOS() {
             {/* Card Method */}
             <TabsContent value="card" className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold text-slate-900">Card Last 4</Label>
+                <Label className="text-xs font-semibold text-white">Card Last 4</Label>
                 <input
                   type="text"
                   placeholder="•••• •••• •••• 4242"
-                  className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900"
+                  className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white"
                 />
               </div>
-              <div className="bg-gradient-to-br from-slate-900 to-slate-700 rounded-[24px] p-6 text-white">
+              <div className="bg-gradient-to-br from-neutral-800 to-neutral-700 rounded-[24px] p-6 text-white">
                 <div className="text-xs font-medium opacity-70 mb-12">VISA</div>
                 <div className="text-xl font-mono mb-6">•••• •••• •••• 4242</div>
                 <div className="flex justify-between">
@@ -761,7 +761,7 @@ export default function RestaurantPOS() {
                   </div>
                 </div>
               </div>
-              <div className="text-center text-slate-500 text-sm">
+              <div className="text-center text-neutral-400 text-sm">
                 Amount: KES {total.toLocaleString()}
               </div>
             </TabsContent>
@@ -769,23 +769,23 @@ export default function RestaurantPOS() {
             {/* M-Pesa Method */}
             <TabsContent value="mpesa" className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold text-slate-900">Phone Number</Label>
+                <Label className="text-xs font-semibold text-white">Phone Number</Label>
                 <input
                   type="tel"
                   placeholder="+254 712 123 456"
-                  className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900"
+                  className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white"
                 />
               </div>
               <div>
-                <Label className="text-xs font-semibold text-slate-900">M-Pesa Reference</Label>
+                <Label className="text-xs font-semibold text-white">M-Pesa Reference</Label>
                 <input
                   type="text"
                   placeholder="Transaction reference"
-                  className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900"
+                  className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white"
                 />
               </div>
-              <div className="bg-sky-400/20 rounded-[24px] p-4 border border-sky-400/40">
-                <div className="flex items-center gap-2 text-sky-700">
+              <div className="bg-cyan-500/20 rounded-[24px] p-4 border border-cyan-500/40">
+                <div className="flex items-center gap-2 text-cyan-400">
                   <Smartphone size={16} />
                   <span className="text-sm font-medium">
                     Amount: KES {total.toLocaleString()}
@@ -797,16 +797,16 @@ export default function RestaurantPOS() {
             {/* Split Payment */}
             <TabsContent value="split" className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold text-slate-900">Split between</Label>
-                <select className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900">
+                <Label className="text-xs font-semibold text-white">Split between</Label>
+                <select className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white">
                   <option>2 ways</option>
                   <option>3 ways</option>
                   <option>4 ways</option>
                 </select>
               </div>
-              <div className="bg-neutral-50 rounded-[24px] p-4">
-                <div className="text-sm font-medium text-slate-900 mb-3">Per Person</div>
-                <div className="text-3xl font-light text-slate-900 tracking-tight">
+              <div className="bg-neutral-800 rounded-[24px] p-4">
+                <div className="text-sm font-medium text-white mb-3">Per Person</div>
+                <div className="text-3xl font-light text-white tracking-tight">
                   KES {Math.round(total / 2).toLocaleString()}
                 </div>
               </div>
@@ -816,7 +816,7 @@ export default function RestaurantPOS() {
           {/* Confirm Button */}
           <button
             onClick={handleConfirmPayment}
-            className="w-full rounded-full bg-black text-white font-semibold py-4 text-lg hover:bg-slate-900 transition-all"
+            className="w-full rounded-full bg-lime-300 text-black font-semibold py-4 text-lg hover:bg-lime-200 transition-all"
           >
             Confirm Payment
           </button>
@@ -825,8 +825,8 @@ export default function RestaurantPOS() {
 
       {/* SHIFT DIALOG */}
       <Dialog open={shiftDialogOpen} onOpenChange={setShiftDialogOpen}>
-        <DialogContent className="bg-neutral-100 rounded-[32px] border-0 p-6 max-w-md">
-          <h2 className="text-2xl font-semibold text-slate-900 mb-6">
+        <DialogContent className="bg-neutral-900 rounded-[32px] border-0 p-6 max-w-md">
+          <h2 className="text-2xl font-semibold text-white mb-6">
             {shiftOpen ? 'Close Shift' : 'Open Shift'}
           </h2>
 
@@ -834,48 +834,48 @@ export default function RestaurantPOS() {
             // Close Shift Form
             <div className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold text-slate-900 mb-2 block">
+                <Label className="text-xs font-semibold text-white mb-2 block">
                   Expected Amount
                 </Label>
-                <div className="text-3xl font-light text-slate-900 tracking-tight">
+                <div className="text-3xl font-light text-white tracking-tight">
                   KES 45,200
                 </div>
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-slate-900 mb-2 block">
+                <Label className="text-xs font-semibold text-white mb-2 block">
                   Actual Amount
                 </Label>
                 <input
                   type="number"
                   placeholder="0"
-                  className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900"
+                  className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white"
                 />
               </div>
 
-              <div className="bg-rose-400/20 rounded-[24px] p-4 border border-rose-400/40">
-                <div className="text-xs text-rose-700 font-medium mb-1">Variance</div>
-                <div className="text-2xl font-light text-rose-600">-KES 1,200</div>
+              <div className="bg-rose-500/20 rounded-[24px] p-4 border border-rose-500/40">
+                <div className="text-xs text-rose-400 font-medium mb-1">Variance</div>
+                <div className="text-2xl font-light text-rose-400">-KES 1,200</div>
               </div>
 
-              <Separator />
+              <Separator className="bg-neutral-800" />
 
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Orders</span>
-                  <span className="font-medium text-slate-900">24</span>
+                  <span className="text-neutral-400">Orders</span>
+                  <span className="font-medium text-white">24</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Cash Revenue</span>
-                  <span className="font-medium text-slate-900">KES 32,500</span>
+                  <span className="text-neutral-400">Cash Revenue</span>
+                  <span className="font-medium text-white">KES 32,500</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Card Revenue</span>
-                  <span className="font-medium text-slate-900">KES 14,200</span>
+                  <span className="text-neutral-400">Card Revenue</span>
+                  <span className="font-medium text-white">KES 14,200</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-600">M-Pesa Revenue</span>
-                  <span className="font-medium text-slate-900">KES 8,500</span>
+                  <span className="text-neutral-400">M-Pesa Revenue</span>
+                  <span className="font-medium text-white">KES 8,500</span>
                 </div>
               </div>
 
@@ -884,7 +884,7 @@ export default function RestaurantPOS() {
                   setShiftOpen(false);
                   setShiftDialogOpen(false);
                 }}
-                className="w-full rounded-full bg-black text-white font-semibold py-4 text-lg hover:bg-slate-900 transition-all mt-6"
+                className="w-full rounded-full bg-lime-300 text-black font-semibold py-4 text-lg hover:bg-lime-200 transition-all mt-6"
               >
                 Close Shift
               </button>
@@ -893,19 +893,19 @@ export default function RestaurantPOS() {
             // Open Shift Form
             <div className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold text-slate-900 mb-2 block">
+                <Label className="text-xs font-semibold text-white mb-2 block">
                   Float Amount
                 </Label>
                 <input
                   type="number"
                   placeholder="0"
                   defaultValue="5000"
-                  className="w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-3 text-slate-900"
+                  className="w-full rounded-[24px] border border-neutral-800 bg-neutral-800 px-4 py-3 text-white"
                 />
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-slate-900 mb-3 block">
+                <Label className="text-xs font-semibold text-white mb-3 block">
                   Denominations
                 </Label>
                 <div className="grid grid-cols-2 gap-2">
@@ -920,7 +920,7 @@ export default function RestaurantPOS() {
                       type="number"
                       placeholder={denom.label}
                       defaultValue={denom.value}
-                      className="rounded-[20px] border border-neutral-200 bg-white px-3 py-2 text-slate-900 text-sm"
+                      className="rounded-[20px] border border-neutral-800 bg-neutral-800 px-3 py-2 text-white text-sm"
                     />
                   ))}
                 </div>
@@ -931,7 +931,7 @@ export default function RestaurantPOS() {
                   setShiftOpen(true);
                   setShiftDialogOpen(false);
                 }}
-                className="w-full rounded-full bg-lime-300 text-black font-semibold py-4 text-lg hover:bg-lime-400 transition-all mt-6"
+                className="w-full rounded-full bg-lime-300 text-black font-semibold py-4 text-lg hover:bg-lime-200 transition-all mt-6"
               >
                 Open Shift
               </button>
