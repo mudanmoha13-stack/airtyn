@@ -5,6 +5,23 @@ import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
 import { resolveBusinessOwnerEmail, resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
+function inferKitchenStation(productName: string, categoryName: string): string {
+  const source = `${productName} ${categoryName}`.toLowerCase();
+  if (/drink|juice|soda|tea|coffee|cocktail|bar/.test(source)) return 'drinks';
+  if (/salad|dessert|ice cream|fruit/.test(source)) return 'cold';
+  if (/fry|fries|burger|steak|grill|bbq/.test(source)) return 'grill';
+  if (/soup|pasta|rice|stew|pizza|hot/.test(source)) return 'hot';
+  return 'pass';
+}
+
+function inferStationSlaMinutes(station: string): number {
+  if (station === 'drinks') return 4;
+  if (station === 'cold') return 6;
+  if (station === 'pass') return 3;
+  if (station === 'grill') return 14;
+  return 10;
+}
+
 const closeDineInSchema = z.object({
   sessionId: z.string().min(1),
   branchId: z.string().min(1),
@@ -58,6 +75,8 @@ export async function POST(request: NextRequest) {
 
     const productPrice = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, Number(snap.data()?.basePrice ?? 0)]));
     const productCost = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, Number(snap.data()?.costPrice ?? 0)]));
+    const productName = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, String(snap.data()?.name ?? '')]));
+    const productCategory = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, String(snap.data()?.category ?? '')]));
 
     const preparedLines = payload.lines.map((line) => {
       const unitPrice = line.unitPrice ?? productPrice.get(line.productId) ?? 0;
@@ -190,17 +209,41 @@ export async function POST(request: NextRequest) {
       });
 
     const ticketId = makeId(col.bizRestaurantKitchenTickets);
+    const kitchenLines = preparedLines.map((line) => {
+      const station = inferKitchenStation(productName.get(line.productId) ?? '', productCategory.get(line.productId) ?? '');
+      return {
+        id: makeId(col.bizRestaurantKitchenTickets),
+        productId: line.productId,
+        productName: productName.get(line.productId) ?? '',
+        qty: line.quantity,
+        status: 'queued',
+        station,
+        slaMinutes: inferStationSlaMinutes(station),
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      };
+    });
     const ticketWrites = adminFirestore.collection(col.bizRestaurantKitchenTickets).doc(ticketId).set({
       id: ticketId,
       tenantId,
       branchId: payload.branchId,
       tableId: payload.tableId,
       orderId,
-      status: 'served',
-      stationSummary: ['grill', 'fryer', 'salad', 'drinks'],
-      lines: preparedLines.map((line) => ({ productId: line.productId, qty: line.quantity })),
-      servedAt: nowIso(),
+      status: 'queued',
+      stationSummary: Array.from(new Set(kitchenLines.map((line) => line.station))),
+      lines: kitchenLines,
+      slaTargetMinutes: Math.max(...kitchenLines.map((line) => line.slaMinutes), 0),
+      lifecycle: [
+        {
+          action: 'queued',
+          status: 'queued',
+          station: null,
+          notes: payload.notes?.trim() ?? null,
+          at: nowIso(),
+        },
+      ],
       createdAt: nowIso(),
+      updatedAt: nowIso(),
     });
 
     await Promise.all([...lineWrites, ...paymentWrites, ticketWrites]);
