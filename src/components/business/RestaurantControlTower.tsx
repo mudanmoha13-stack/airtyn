@@ -374,7 +374,7 @@ export function RestaurantControlTower({ mode = 'control' }: { mode?: 'control' 
               <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
                 <option value="all">All stations</option><option value="hot">Hot line</option><option value="grill">Grill</option><option value="drinks">Drinks</option><option value="cold">Cold</option><option value="pass">Pass</option>
               </select>
-              {mode === 'control' ? <><Button asChild variant="outline"><Link href="/business/restaurant/waiter">Open Waiter Mode</Link></Button><Button asChild variant="outline"><Link href="/business/restaurant/expo">Open Expo Mode</Link></Button></> : <Button asChild variant="outline"><Link href="/business/restaurant">Back to Control Tower</Link></Button>}
+              {mode === 'control' ? <><Button asChild variant="outline"><Link href="/business/restaurant/pos">Open POS</Link></Button><Button asChild variant="outline"><Link href="/business/restaurant/waiter">Open Waiter Mode</Link></Button><Button asChild variant="outline"><Link href="/business/restaurant/expo">Open Expo Mode</Link></Button></> : <Button asChild variant="outline"><Link href="/business/restaurant">Back to Control Tower</Link></Button>}
             </div>
           </div>
         </CardHeader>
@@ -447,7 +447,7 @@ export function RestaurantControlTower({ mode = 'control' }: { mode?: 'control' 
           <div>
             <Badge className="mb-2 w-fit rounded-full border-primary/20 bg-primary/10 px-3 py-1 text-primary hover:bg-primary/10">Restaurant Phase 4</Badge>
             <h1 className="text-3xl font-bold">{mode === 'expo' ? 'Restaurant Expo Board' : 'Restaurant Control Tower'}</h1>
-            <p className="text-sm text-muted-foreground">{mode === 'expo' ? 'Dedicated expo screen for kitchen coordination, SLA monitoring, and ready-to-serve control.' : 'Run branch setup, recipe-driven dine-in settlement with procurement replenishment, kitchen sequencing with labor costing, delivery operations, waiter handoff, GL accounting, and branch performance monitoring from one workflow.'}</p>
+            <p className="text-sm text-muted-foreground">{mode === 'expo' ? 'Dedicated expo screen for kitchen coordination, SLA monitoring, and ready-to-serve control.' : 'Central dashboard for branch operations. Access built-in POS, waiter handheld, kitchen expo, delivery dispatch, procurement replenishment, labor costing, GL accounting, and branch analytics.'}</p>
           </div>
           <Button variant="outline" onClick={() => void refreshAll()} disabled={loading}>Refresh</Button>
         </div>
