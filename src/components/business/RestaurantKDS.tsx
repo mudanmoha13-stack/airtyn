@@ -1,584 +1,472 @@
-'use client'
+"use client"
 
-import { useState, useMemo, useEffect } from 'react'
-import { Clock, Volume2, Zap } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { useState, useMemo, useEffect } from "react"
+import { RotateCw, Flame, Zap } from "lucide-react"
 
 interface KOTItem {
-  name: string
   qty: number
-  modifiers?: string[]
+  name: string
+  notes?: string
 }
 
 interface KOT {
   id: string
-  orderNumber: string
-  table: string
-  channel: 'dine-in' | 'delivery' | 'takeout'
+  orderNum: string
+  tableId: string
+  tableNum: string
   items: KOTItem[]
-  station: 'Grill' | 'Cold' | 'Hot' | 'Drinks' | 'Pass'
-  status: 'queued' | 'in_prep' | 'ready' | 'served'
-  createdAt: Date
-  elapsedSeconds: number
+  station: "grill" | "fryer" | "cold" | "drinks" | "pass"
+  status: "queued" | "in_prep" | "ready" | "served"
+  startedAt: number
+  createdAt: number
 }
 
-const STATION_SLAS: Record<string, number> = {
-  'Grill': 14 * 60,
-  'Cold': 8 * 60,
-  'Hot': 12 * 60,
-  'Drinks': 5 * 60,
-  'Pass': 3 * 60,
+const stationConfig: Record<string, { slaMinutes: number; emoji: string }> = {
+  grill: { slaMinutes: 14, emoji: "🔥" },
+  fryer: { slaMinutes: 10, emoji: "🫕" },
+  cold: { slaMinutes: 8, emoji: "❄️" },
+  drinks: { slaMinutes: 5, emoji: "🍹" },
+  pass: { slaMinutes: 3, emoji: "✋" }
 }
 
 export default function RestaurantKDS() {
-  const [currentTime, setCurrentTime] = useState<string>('')
-  const [kotElapsed, setKotElapsed] = useState<Record<string, number>>({})
-  const [kotStatus, setKotStatus] = useState<Record<string, KOT['status']>>({})
-  const [filterStation, setFilterStation] = useState<string>('all')
-  const [overdue, setOverdue] = useState<Set<string>>(new Set())
+  const [kots, setKots] = useState<KOT[]>([])
+  const [selectedStation, setSelectedStation] = useState<string>("all")
+  const [currentTime, setCurrentTime] = useState<number>(Date.now())
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date()
-      setCurrentTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-    }, 1000)
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  const mockKOTs: KOT[] = [
-    {
-      id: 'K1',
-      orderNumber: '#2401',
-      table: 'T2',
-      channel: 'dine-in',
-      items: [
-        { name: 'Grilled Salmon', qty: 1, modifiers: ['Medium', 'Extra Lemon'] },
-        { name: 'Caesar Salad', qty: 1, modifiers: ['No Croutons'] },
-      ],
-      station: 'Grill',
-      status: 'queued',
-      createdAt: new Date(Date.now() - 5 * 60 * 1000),
-      elapsedSeconds: 300,
-    },
-    {
-      id: 'K2',
-      orderNumber: '#2402',
-      table: 'T3',
-      channel: 'dine-in',
-      items: [
-        { name: 'Burger', qty: 1, modifiers: ['Medium', 'No Onions'] },
-        { name: 'Fries', qty: 1, modifiers: ['Extra Salt'] },
-      ],
-      station: 'Grill',
-      status: 'in_prep',
-      createdAt: new Date(Date.now() - 3 * 60 * 1000),
-      elapsedSeconds: 180,
-    },
-    {
-      id: 'K3',
-      orderNumber: '#2403',
-      table: 'T6',
-      channel: 'dine-in',
-      items: [
-        { name: 'Pasta Carbonara', qty: 2, modifiers: ['Al Dente'] },
-        { name: 'Grilled Vegetables', qty: 1 },
-      ],
-      station: 'Hot',
-      status: 'in_prep',
-      createdAt: new Date(Date.now() - 5 * 60 * 1000 - 20 * 1000),
-      elapsedSeconds: 320,
-    },
-    {
-      id: 'K4',
-      orderNumber: '#2404',
-      table: 'T8',
-      channel: 'dine-in',
-      items: [
-        { name: 'Mojito', qty: 1 },
-        { name: 'Espresso Martini', qty: 1 },
-        { name: 'Iced Latte', qty: 1 },
-      ],
-      station: 'Drinks',
-      status: 'ready',
-      createdAt: new Date(Date.now() - 2 * 60 * 1000),
-      elapsedSeconds: 120,
-    },
-    {
-      id: 'K5',
-      orderNumber: '#2405',
-      table: 'T11',
-      channel: 'dine-in',
-      items: [
-        { name: 'Steak', qty: 1, modifiers: ['Medium Rare'] },
-        { name: 'Truffle Fries', qty: 1 },
-      ],
-      station: 'Grill',
-      status: 'in_prep',
-      createdAt: new Date(Date.now() - 4 * 60 * 1000 - 50 * 1000),
-      elapsedSeconds: 290,
-    },
-    {
-      id: 'K6',
-      orderNumber: '#2406',
-      table: 'T14',
-      channel: 'dine-in',
-      items: [
-        { name: 'Fish & Chips', qty: 1 },
-        { name: 'Coleslaw', qty: 1 },
-      ],
-      station: 'Grill',
-      status: 'queued',
-      createdAt: new Date(Date.now() - 90 * 1000),
-      elapsedSeconds: 90,
-    },
-    {
-      id: 'K7',
-      orderNumber: '#2407',
-      table: 'T2',
-      channel: 'dine-in',
-      items: [
-        { name: 'Chocolate Mousse', qty: 1 },
-        { name: 'Tiramisu', qty: 1 },
-      ],
-      station: 'Cold',
-      status: 'ready',
-      createdAt: new Date(Date.now() - 90 * 1000),
-      elapsedSeconds: 90,
-    },
-    {
-      id: 'K8',
-      orderNumber: '#2408',
-      table: 'T6',
-      channel: 'dine-in',
-      items: [
-        { name: 'Lobster Bisque', qty: 1 },
-        { name: 'Bread Basket', qty: 1 },
-      ],
-      station: 'Hot',
-      status: 'queued',
-      createdAt: new Date(Date.now() - 60 * 1000),
-      elapsedSeconds: 60,
-    },
-    {
-      id: 'K9',
-      orderNumber: '#2409',
-      table: 'Delivery',
-      channel: 'delivery',
-      items: [
-        { name: 'Chicken Tikka Masala', qty: 2, modifiers: ['Medium Spice'] },
-        { name: 'Basmati Rice', qty: 1 },
-        { name: 'Naan', qty: 2 },
-      ],
-      station: 'Hot',
-      status: 'queued',
-      createdAt: new Date(Date.now() - 2 * 60 * 1000),
-      elapsedSeconds: 120,
-    },
-    {
-      id: 'K10',
-      orderNumber: '#2410',
-      table: 'Takeout',
-      channel: 'takeout',
-      items: [
-        { name: 'Turkey Club Sandwich', qty: 1, modifiers: ['Toasted'] },
-        { name: 'Sweet Potato Fries', qty: 1 },
-      ],
-      station: 'Grill',
-      status: 'ready',
-      createdAt: new Date(Date.now() - 3 * 60 * 1000),
-      elapsedSeconds: 180,
-    },
-    {
-      id: 'K11',
-      orderNumber: '#2411',
-      table: 'T9',
-      channel: 'dine-in',
-      items: [
-        { name: 'Caprese Salad', qty: 1 },
-        { name: 'Focaccia Bread', qty: 1 },
-      ],
-      station: 'Cold',
-      status: 'in_prep',
-      createdAt: new Date(Date.now() - 4 * 60 * 1000),
-      elapsedSeconds: 240,
-    },
-    {
-      id: 'K12',
-      orderNumber: '#2412',
-      table: 'T13',
-      channel: 'dine-in',
-      items: [
-        { name: 'Duck Confit', qty: 2 },
-        { name: 'Herb Puree', qty: 1 },
-      ],
-      station: 'Hot',
-      status: 'in_prep',
-      createdAt: new Date(Date.now() - 6 * 60 * 1000),
-      elapsedSeconds: 360,
-    },
-  ]
-
-  // Initialize status from mock data
+  // Initialize mock KOTs
   useEffect(() => {
-    const initialStatus: Record<string, KOT['status']> = {}
-    mockKOTs.forEach(kot => {
-      initialStatus[kot.id] = kotStatus[kot.id] || kot.status
-    })
-    setKotStatus(initialStatus)
-  }, [])
+    const baseTime = currentTime - 60000 // 1 minute ago
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setKotElapsed(prev => {
-        const updated = { ...prev }
-        mockKOTs.forEach(kot => {
-          updated[kot.id] = (updated[kot.id] || kot.elapsedSeconds) + 1
-        })
-        return updated
-      })
+    const mockKots: KOT[] = [
+      {
+        id: "1",
+        orderNum: "2847",
+        tableId: "T08",
+        tableNum: "08",
+        items: [
+          { qty: 1, name: "Grilled Salmon", notes: "Medium, no butter" },
+          { qty: 1, name: "Asparagus" }
+        ],
+        station: "grill",
+        status: "in_prep",
+        startedAt: baseTime + 120000,
+        createdAt: baseTime
+      },
+      {
+        id: "2",
+        orderNum: "2846",
+        tableId: "T12",
+        tableNum: "12",
+        items: [{ qty: 2, name: "Ribeye Steak", notes: "Rare" }],
+        station: "grill",
+        status: "ready",
+        startedAt: baseTime + 60000,
+        createdAt: baseTime - 300000
+      },
+      {
+        id: "3",
+        orderNum: "2845",
+        tableId: "T05",
+        tableNum: "05",
+        items: [
+          { qty: 1, name: "Fish Fillet" },
+          { qty: 1, name: "Sweet Potato Fries" }
+        ],
+        station: "fryer",
+        status: "queued",
+        startedAt: 0,
+        createdAt: baseTime
+      },
+      {
+        id: "4",
+        orderNum: "2844",
+        tableId: "T15",
+        tableNum: "15",
+        items: [
+          { qty: 2, name: "Chicken Wings" },
+          { qty: 1, name: "Tempura Vegetables" }
+        ],
+        station: "fryer",
+        status: "in_prep",
+        startedAt: baseTime + 180000,
+        createdAt: baseTime - 180000
+      },
+      {
+        id: "5",
+        orderNum: "2843",
+        tableId: "T03",
+        tableNum: "03",
+        items: [
+          { qty: 1, name: "Caesar Salad" },
+          { qty: 1, name: "House Dressing" }
+        ],
+        station: "cold",
+        status: "queued",
+        startedAt: 0,
+        createdAt: baseTime
+      },
+      {
+        id: "6",
+        orderNum: "2842",
+        tableId: "T10",
+        tableNum: "10",
+        items: [
+          { qty: 3, name: "Watermelon Salad" },
+          { qty: 1, name: "Feta Cheese" }
+        ],
+        station: "cold",
+        status: "ready",
+        startedAt: baseTime + 240000,
+        createdAt: baseTime - 420000
+      },
+      {
+        id: "7",
+        orderNum: "2841",
+        tableId: "T07",
+        tableNum: "07",
+        items: [
+          { qty: 2, name: "Espresso Martini" },
+          { qty: 1, name: "Old Fashioned" }
+        ],
+        station: "drinks",
+        status: "in_prep",
+        startedAt: baseTime + 90000,
+        createdAt: baseTime - 60000
+      },
+      {
+        id: "8",
+        orderNum: "2840",
+        tableId: "Bar",
+        tableNum: "Bar",
+        items: [{ qty: 4, name: "House Wine Glass" }],
+        station: "drinks",
+        status: "ready",
+        startedAt: baseTime,
+        createdAt: baseTime - 180000
+      },
+      {
+        id: "9",
+        orderNum: "2839",
+        tableId: "T02",
+        tableNum: "02",
+        items: [
+          { qty: 2, name: "Chocolate Lava Cake" },
+          { qty: 2, name: "Vanilla Ice Cream" }
+        ],
+        station: "pass",
+        status: "queued",
+        startedAt: 0,
+        createdAt: baseTime - 120000
+      },
+      {
+        id: "10",
+        orderNum: "2838",
+        tableId: "T06",
+        tableNum: "06",
+        items: [{ qty: 1, name: "Tiramisu" }],
+        station: "pass",
+        status: "ready",
+        startedAt: baseTime + 30000,
+        createdAt: baseTime - 240000
+      },
+      {
+        id: "11",
+        orderNum: "2837",
+        tableId: "T14",
+        tableNum: "14",
+        items: [
+          { qty: 1, name: "Beef Wellington" },
+          { qty: 1, name: "Truffle Mash" }
+        ],
+        station: "grill",
+        status: "queued",
+        startedAt: 0,
+        createdAt: baseTime - 420000
+      },
+      {
+        id: "12",
+        orderNum: "2836",
+        tableId: "T11",
+        tableNum: "11",
+        items: [
+          { qty: 1, name: "Lobster Tail" },
+          { qty: 1, name: "Drawn Butter" }
+        ],
+        station: "grill",
+        status: "ready",
+        startedAt: baseTime + 240000,
+        createdAt: baseTime - 600000
+      }
+    ]
 
-      // Check for overdue tickets
-      const overdueSLAs = new Set<string>()
-      mockKOTs.forEach(kot => {
-        const elapsed = kotElapsed[kot.id] || kot.elapsedSeconds
-        const sla = STATION_SLAS[kot.station] || 600
-        if (elapsed > sla && (kotStatus[kot.id] === 'queued' || kotStatus[kot.id] === 'in_prep')) {
-          overdueSLAs.add(kot.id)
+    setKots(mockKots)
+  }, [currentTime])
+
+  const handleUpdateStatus = (kotId: string, newStatus: KOT["status"]) => {
+    setKots(kots.map(kot => {
+      if (kot.id === kotId) {
+        return {
+          ...kot,
+          status: newStatus,
+          startedAt: newStatus === "in_prep" && kot.startedAt === 0 ? currentTime : kot.startedAt
         }
-      })
-      setOverdue(overdueSLAs)
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [kotStatus])
+      }
+      return kot
+    }))
+  }
 
-  const stations = ['Grill', 'Cold', 'Hot', 'Drinks', 'Pass']
+  const handleBumpAll = () => {
+    setKots(kots.map(kot => {
+      if (kot.status === "ready") {
+        return { ...kot, status: "served" }
+      }
+      return kot
+    }))
+  }
 
-  const filteredKOTs = useMemo(() => {
-    if (filterStation === 'all') {
-      return mockKOTs
+  const filteredKots = selectedStation === "all" ? kots : kots.filter(k => k.station === selectedStation)
+
+  const stationGroups = useMemo(() => {
+    const groups: Record<string, KOT[]> = {
+      grill: [],
+      fryer: [],
+      cold: [],
+      drinks: [],
+      pass: []
     }
-    return mockKOTs.filter(kot => kot.station === filterStation)
-  }, [filterStation])
 
-  const kotsByStation = useMemo(() => {
-    const grouped: Record<string, typeof mockKOTs> = {}
-    stations.forEach(station => {
-      grouped[station] = filteredKOTs.filter(kot => kot.station === station).sort((a, b) => {
-        const statusOrder = { 'queued': 0, 'in_prep': 1, 'ready': 2, 'served': 3 }
-        const statusDiff = statusOrder[a.status] - statusOrder[b.status]
-        if (statusDiff !== 0) return statusDiff
-        return (kotElapsed[a.id] || a.elapsedSeconds) - (kotElapsed[b.id] || b.elapsedSeconds)
-      })
+    filteredKots.forEach(kot => {
+      groups[kot.station].push(kot)
     })
-    return grouped
-  }, [filteredKOTs, kotElapsed])
+
+    return groups
+  }, [filteredKots])
 
   const stats = useMemo(() => {
-    const allKOTs = Object.values(kotsByStation).flat()
     return {
-      inQueue: allKOTs.filter(k => k.status === 'queued').length,
-      inPrep: allKOTs.filter(k => k.status === 'in_prep').length,
-      ready: allKOTs.filter(k => k.status === 'ready').length,
-      avgWaitTime: allKOTs.length > 0
-        ? Math.round(allKOTs.reduce((sum, k) => sum + (kotElapsed[k.id] || k.elapsedSeconds), 0) / allKOTs.length)
-        : 0,
+      queued: filteredKots.filter(k => k.status === "queued").length,
+      in_prep: filteredKots.filter(k => k.status === "in_prep").length,
+      ready: filteredKots.filter(k => k.status === "ready").length,
+      avgWait: Math.round(
+        filteredKots.reduce((sum, k) => sum + (currentTime - k.createdAt), 0) / Math.max(filteredKots.length, 1) / 1000 / 60
+      )
     }
-  }, [kotsByStation, kotElapsed])
+  }, [filteredKots, currentTime])
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
+  const getElapsedSeconds = (startTime: number): number => {
+    if (startTime === 0) return 0
+    return Math.round((currentTime - startTime) / 1000)
   }
 
-  const getSLAPercentage = (kotId: string, station: string) => {
-    const elapsed = kotElapsed[kotId] || mockKOTs.find(k => k.id === kotId)?.elapsedSeconds || 0
-    const sla = STATION_SLAS[station] || 600
-    return Math.min(100, (elapsed / sla) * 100)
+  const getSLAColor = (elapsed: number, slaMins: number): string => {
+    const slaSeconds = slaMins * 60
+    if (elapsed <= slaSeconds * 0.6) return "bg-lime-300"
+    if (elapsed <= slaSeconds * 0.9) return "bg-amber-400"
+    return "bg-rose-400"
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'queued':
-        return 'border-l-4 border-l-yellow-500 bg-yellow-500/5'
-      case 'in_prep':
-        return 'border-l-4 border-l-blue-500 bg-blue-500/5'
-      case 'ready':
-        return 'border-l-4 border-l-green-500 bg-green-500/5'
-      case 'served':
-        return 'border-l-4 border-l-gray-500 bg-gray-500/5'
-      default:
-        return 'border-l-4 border-l-slate-500 bg-slate-500/5'
-    }
+  const getKOTBorder = (kot: KOT): string => {
+    if (kot.status === "queued") return "border-sky-200"
+    if (kot.status === "in_prep") return "border-violet-300"
+    if (kot.status === "ready") return "border-lime-300 ring-2 ring-lime-300/50"
+    return "border-neutral-200"
   }
 
-  const handleStatusChange = (kotId: string) => {
-    setKotStatus(prev => {
-      const current = prev[kotId] || 'queued'
-      const nextStatus: Record<string, KOT['status']> = {
-        'queued': 'in_prep',
-        'in_prep': 'ready',
-        'ready': 'served',
-        'served': 'served',
-      }
-      return {
-        ...prev,
-        [kotId]: nextStatus[current] || 'queued',
-      }
-    })
-  }
-
-  const handleBumpKOT = (kotId: string) => {
-    // Bump moves to top of queue
-    console.log(`Bumping KOT ${kotId}`)
-  }
-
-  const handleBumpAllReady = () => {
-    const readyKOTs = Object.entries(kotStatus).filter(([_, status]) => status === 'ready')
-    readyKOTs.forEach(([kotId]) => {
-      setKotStatus(prev => ({
-        ...prev,
-        [kotId]: 'served',
-      }))
-    })
-  }
+  const stations = ["grill", "fryer", "cold", "drinks", "pass"] as const
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-white mb-1">Kitchen Display System</h1>
-          <p className="text-slate-400">Kanban view • All stations</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-3xl font-mono font-bold text-blue-400">{currentTime}</div>
-          </div>
-          {overdue.size > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/50">
-              <Volume2 className="w-5 h-5 text-red-400 animate-pulse" />
-              <span className="text-red-300 font-semibold">{overdue.size} Overdue</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="mb-6 flex items-center gap-4">
-        <div className="flex-1">
-          <Select value={filterStation} onValueChange={setFilterStation}>
-            <SelectTrigger className="w-48 bg-slate-800 border-slate-700 text-white">
-              <SelectValue placeholder="Filter by station" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-700">
-              <SelectItem value="all">All Stations</SelectItem>
-              <SelectItem value="Grill">Grill</SelectItem>
-              <SelectItem value="Cold">Cold</SelectItem>
-              <SelectItem value="Hot">Hot</SelectItem>
-              <SelectItem value="Drinks">Drinks</SelectItem>
-              <SelectItem value="Pass">Pass</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          onClick={handleBumpAllReady}
-          className="bg-green-600 hover:bg-green-700 text-white"
-          disabled={stats.ready === 0}
-        >
-          <Zap className="w-4 h-4 mr-2" />
-          Bump All Ready ({stats.ready})
-        </Button>
-      </div>
-
-      {/* Kanban Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        {filterStation === 'all' ? (
-          stations.map(station => (
-            <div key={station} className="flex flex-col">
-              <div className="mb-4 pb-4 border-b border-slate-700">
-                <h2 className="text-lg font-bold text-white">{station}</h2>
-                <p className="text-xs text-slate-400">SLA: {STATION_SLAS[station] / 60}m</p>
+    <div className="min-h-screen bg-neutral-200 p-4">
+      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-100 p-4 shadow-2xl">
+        {/* Header */}
+        <div className="mb-4 rounded-[28px] bg-black p-4 text-white">
+          <div className="flex items-center justify-between gap-4">
+            {/* Left: Logo */}
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-lime-300 p-2 text-black">
+                <Flame size={24} />
               </div>
-              <div className="flex-1 space-y-3 overflow-y-auto max-h-[calc(100vh-300px)]">
-                {kotsByStation[station]?.map(kot => (
-                  <div
-                    key={kot.id}
-                    className={`p-4 rounded-lg transition-all duration-200 ${getStatusColor(kotStatus[kot.id] || kot.status)} ${overdue.has(kot.id) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="font-bold text-white">{kot.orderNumber}</div>
-                        <div className="text-xs text-slate-400">{kot.table} • {kot.channel}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-mono font-bold text-blue-300">
-                          {formatTime(kotElapsed[kot.id] || kot.elapsedSeconds)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-3 space-y-1">
-                      {kot.items.map((item, idx) => (
-                        <div key={idx} className="text-sm text-slate-200">
-                          <span className="font-semibold">{item.qty}x</span> {item.name}
-                          {item.modifiers && (
-                            <div className="text-xs text-slate-400 ml-4">{item.modifiers.join(', ')}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* SLA Bar */}
-                    <div className="mb-3">
-                      <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${getSLAPercentage(kot.id, station) < 50 ? 'bg-green-500' : getSLAPercentage(kot.id, station) < 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                          style={{ width: `${getSLAPercentage(kot.id, station)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleStatusChange(kot.id)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8"
-                      >
-                        {kotStatus[kot.id] === 'queued' ? 'Start Prep' :
-                         kotStatus[kot.id] === 'in_prep' ? 'Mark Ready' :
-                         kotStatus[kot.id] === 'ready' ? 'Served' :
-                         'Done'}
-                      </Button>
-                      {kotStatus[kot.id] !== 'served' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleBumpKOT(kot.id)}
-                          className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs h-8"
-                        >
-                          Bump
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {kotsByStation[station]?.length === 0 && (
-                  <div className="text-center py-12 text-slate-500">
-                    <p>No active KOTs</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
-        ) : (
-          // Single station view
-          <div className="col-span-full">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700">
-              <h2 className="text-2xl font-bold text-white">{filterStation} Station</h2>
-              <p className="text-slate-400">SLA: {STATION_SLAS[filterStation] / 60} minutes</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {kotsByStation[filterStation]?.map(kot => (
-                <div
-                  key={kot.id}
-                  className={`p-4 rounded-lg transition-all duration-200 ${getStatusColor(kotStatus[kot.id] || kot.status)} ${overdue.has(kot.id) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="font-bold text-white">{kot.orderNumber}</div>
-                      <div className="text-xs text-slate-400">{kot.table} • {kot.channel}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-mono font-bold text-blue-300">
-                        {formatTime(kotElapsed[kot.id] || kot.elapsedSeconds)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mb-3 space-y-1">
-                    {kot.items.map((item, idx) => (
-                      <div key={idx} className="text-sm text-slate-200">
-                        <span className="font-semibold">{item.qty}x</span> {item.name}
-                        {item.modifiers && (
-                          <div className="text-xs text-slate-400 ml-4">{item.modifiers.join(', ')}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* SLA Bar */}
-                  <div className="mb-3">
-                    <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-300 ${getSLAPercentage(kot.id, filterStation) < 50 ? 'bg-green-500' : getSLAPercentage(kot.id, filterStation) < 80 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                        style={{ width: `${getSLAPercentage(kot.id, filterStation)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleStatusChange(kot.id)}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8"
-                    >
-                      {kotStatus[kot.id] === 'queued' ? 'Start Prep' :
-                       kotStatus[kot.id] === 'in_prep' ? 'Mark Ready' :
-                       kotStatus[kot.id] === 'ready' ? 'Served' :
-                       'Done'}
-                    </Button>
-                    {kotStatus[kot.id] !== 'served' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleBumpKOT(kot.id)}
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs h-8"
-                      >
-                        Bump
-                      </Button>
-                    )}
-                  </div>
+              <div>
+                <div className="font-semibold">Kitchen Display</div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-lime-300" />
+                  <span className="text-xs text-white/70">Live</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Center: Filter Pills */}
+            <div className="flex gap-2">
+              {["all", "grill", "fryer", "cold", "drinks", "pass"].map(station => (
+                <button
+                  key={station}
+                  onClick={() => setSelectedStation(station)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    selectedStation === station
+                      ? "bg-lime-300 text-black"
+                      : "bg-white/10 text-white hover:bg-white/20"
+                  }`}
+                >
+                  {station.charAt(0).toUpperCase() + station.slice(1)}
+                </button>
               ))}
             </div>
-            {kotsByStation[filterStation]?.length === 0 && (
-              <div className="text-center py-12 text-slate-500">
-                <p>No active KOTs in {filterStation} station</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
-      {/* Stats Footer */}
-      <div className="flex items-center gap-6 px-6 py-4 rounded-lg bg-slate-800/40 border border-slate-700/50 backdrop-blur-xl">
-        <div>
-          <p className="text-xs text-slate-400">In Queue</p>
-          <p className="text-2xl font-bold text-yellow-400">{stats.inQueue}</p>
+            {/* Right: Clock & Bump */}
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="font-light text-xl">{new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</div>
+                <div className="text-xs text-white/60">Live</div>
+              </div>
+              <button
+                onClick={handleBumpAll}
+                className="flex items-center gap-2 rounded-full bg-lime-300 px-3 py-2 text-xs font-medium text-black hover:bg-lime-400"
+              >
+                <RotateCw size={16} />
+                Bump All Ready
+              </button>
+            </div>
+          </div>
+
+          {/* Stats Row */}
+          <div className="mt-4 grid grid-cols-4 gap-3">
+            <div className="rounded-[24px] bg-white/10 p-3 text-center">
+              <div className="text-xs text-white/70">In Queue</div>
+              <div className="font-light text-2xl text-sky-300">{stats.queued}</div>
+            </div>
+            <div className="rounded-[24px] bg-white/10 p-3 text-center">
+              <div className="text-xs text-white/70">In Prep</div>
+              <div className="font-light text-2xl text-violet-300">{stats.in_prep}</div>
+            </div>
+            <div className="rounded-[24px] bg-white/10 p-3 text-center">
+              <div className="text-xs text-white/70">Ready</div>
+              <div className="font-light text-2xl text-lime-300">{stats.ready}</div>
+            </div>
+            <div className="rounded-[24px] bg-white/10 p-3 text-center">
+              <div className="text-xs text-white/70">Avg Wait</div>
+              <div className="font-light text-2xl text-white">{stats.avgWait}m</div>
+            </div>
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-slate-400">In Prep</p>
-          <p className="text-2xl font-bold text-blue-400">{stats.inPrep}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">Ready</p>
-          <p className="text-2xl font-bold text-green-400">{stats.ready}</p>
-        </div>
-        <div className="ml-auto">
-          <p className="text-xs text-slate-400">Avg Wait Time</p>
-          <p className="text-2xl font-bold text-white">{formatTime(stats.avgWaitTime)}</p>
+
+        {/* Station Columns */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {stations.map(station => {
+            const stationKots = stationGroups[station]
+            const config = stationConfig[station]
+
+            return (
+              <div key={station} className="rounded-[28px] bg-white p-4 shadow-sm">
+                {/* Station Header */}
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-semibold text-slate-900 capitalize">{station}</span>
+                    <span className="text-2xl">{config.emoji}</span>
+                  </div>
+                  <span className="rounded-full bg-lime-300 px-2.5 py-1 text-xs font-medium text-black">
+                    {stationKots.length}
+                  </span>
+                </div>
+
+                {/* KOT Cards */}
+                <div className="space-y-3">
+                  {stationKots.length === 0 ? (
+                    <div className="rounded-[24px] border-2 border-dashed border-neutral-200 p-4 text-center">
+                      <p className="text-sm text-slate-400">No orders</p>
+                    </div>
+                  ) : (
+                    stationKots.map(kot => {
+                      const elapsed = getElapsedSeconds(kot.startedAt)
+                      const slaColor = kot.status === "in_prep" ? getSLAColor(elapsed, stationConfig[kot.station].slaMinutes) : "bg-neutral-200"
+                      const isOverdue = kot.status === "in_prep" && elapsed > stationConfig[kot.station].slaMinutes * 60
+
+                      return (
+                        <div
+                          key={kot.id}
+                          className={`rounded-[24px] border-2 p-3 ${getKOTBorder(kot)}`}
+                        >
+                          {/* Header */}
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex-1">
+                              <p className="font-bold text-slate-900">#{kot.orderNum}</p>
+                              <span className="inline-block rounded-full bg-lime-300 px-2 py-0.5 text-xs font-medium text-black">
+                                {kot.tableId}
+                              </span>
+                            </div>
+                            {isOverdue && (
+                              <span className="text-xs font-medium text-rose-500">LATE</span>
+                            )}
+                            {!isOverdue && kot.status === "in_prep" && (
+                              <span className="text-xs text-slate-500">{elapsed}s</span>
+                            )}
+                          </div>
+
+                          {/* SLA Bar */}
+                          {kot.status === "in_prep" && (
+                            <div className="mb-2 h-1.5 w-full rounded-full bg-neutral-100">
+                              <div
+                                className={`h-full rounded-full transition ${slaColor}`}
+                                style={{
+                                  width: `${Math.min(100, (elapsed / (stationConfig[kot.station].slaMinutes * 60)) * 100)}%`
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Items */}
+                          <div className="mb-3 space-y-1">
+                            {kot.items.map((item, idx) => (
+                              <div key={idx} className="rounded-[20px] bg-neutral-50 p-2">
+                                <p className="text-xs font-medium text-slate-900">
+                                  {item.qty}x {item.name}
+                                </p>
+                                {item.notes && (
+                                  <p className="text-xs text-slate-500 italic">{item.notes}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Action Button */}
+                          <button
+                            onClick={() => {
+                              if (kot.status === "queued") {
+                                handleUpdateStatus(kot.id, "in_prep")
+                              } else if (kot.status === "in_prep") {
+                                handleUpdateStatus(kot.id, "ready")
+                              } else if (kot.status === "ready") {
+                                handleUpdateStatus(kot.id, "served")
+                              }
+                            }}
+                            className={`w-full rounded-full py-2 text-xs font-medium transition ${
+                              kot.status === "queued"
+                                ? "bg-sky-400/90 text-white hover:bg-sky-500"
+                                : kot.status === "in_prep"
+                                  ? "bg-violet-400/90 text-white hover:bg-violet-500"
+                                  : kot.status === "ready"
+                                    ? "bg-lime-300 text-black hover:bg-lime-400"
+                                    : "bg-neutral-200 text-slate-400 cursor-not-allowed"
+                            }`}
+                            disabled={kot.status === "served"}
+                          >
+                            {kot.status === "queued" && "Start Prep"}
+                            {kot.status === "in_prep" && "Mark Ready"}
+                            {kot.status === "ready" && "Served ✓"}
+                            {kot.status === "served" && "Done"}
+                          </button>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

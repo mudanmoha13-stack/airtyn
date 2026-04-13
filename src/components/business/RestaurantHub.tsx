@@ -1,402 +1,435 @@
-'use client'
+"use client"
 
-import { useState, useMemo, useEffect } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { TrendingUp, TrendingDown, Clock, Users, DollarSign, AlertCircle, UtensilsCrossed, ShoppingCart } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useState, useEffect } from "react"
+import { Clock, Settings, ClipboardList, Flame, Map, Calendar, ChefHat } from "lucide-react"
 
-interface KPIData {
+interface KPIStat {
   label: string
   value: string | number
-  trend: number
-  comparison: string
-  icon: React.ReactNode
+  trend?: string
+  trendUp?: boolean
 }
 
-interface TableStatus {
+interface ActivityEvent {
   id: string
-  name: string
-  status: 'available' | 'occupied' | 'reserved' | 'cleaning'
-  pax?: number
-  waiter?: string
-  timeSeated?: string
-  orderTotal?: number
-}
-
-interface KOTData {
-  id: string
-  orderNumber: string
-  table: string
-  status: 'queued' | 'in_prep' | 'ready'
-  items: string[]
-  station: string
-  elapsedSeconds: number
-}
-
-interface OrderData {
-  id: string
-  table: string
-  channel: 'dine-in' | 'delivery' | 'takeout'
-  itemCount: number
-  total: number
-  status: 'open' | 'paid' | 'voided'
+  type: "kitchen" | "service" | "delivery" | "priority" | "cleaning"
   time: string
+  title: string
+  body: string
 }
 
-interface ChartDataPoint {
-  hour: string
-  revenue: number
+interface OrderCard {
+  id: string
+  tableName: string
+  orderNum: string
+  items: string[]
+  status: string
+  priority: boolean
+  active: boolean
+}
+
+interface RevenueData {
+  hour: number
+  amount: number
 }
 
 export default function RestaurantHub() {
-  const [currentTime, setCurrentTime] = useState<string>('')
-  const [tablePopover, setTablePopover] = useState<string | null>(null)
-  const [kotElapsed, setKotElapsed] = useState<Record<string, number>>({})
+  const [currentTime, setCurrentTime] = useState<string>("")
+  const [selectedNav, setSelectedNav] = useState<string>("Hub")
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const updateTime = () => {
       const now = new Date()
-      setCurrentTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-    }, 1000)
-    return () => clearInterval(timer)
+      setCurrentTime(now.toLocaleTimeString("en-US", { hour12: true, hour: "2-digit", minute: "2-digit" }))
+    }
+    updateTime()
+    const interval = setInterval(updateTime, 1000)
+    return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setKotElapsed(prev => {
-        const updated = { ...prev }
-        kots.forEach(kot => {
-          updated[kot.id] = (updated[kot.id] || kot.elapsedSeconds) + 1
-        })
-        return updated
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const tables: TableStatus[] = [
-    { id: 'T1', name: 'T1', status: 'available' },
-    { id: 'T2', name: 'T2', status: 'occupied', pax: 4, waiter: 'James', timeSeated: '12:30', orderTotal: 4500 },
-    { id: 'T3', name: 'T3', status: 'occupied', pax: 2, waiter: 'Sarah', timeSeated: '12:15', orderTotal: 2200 },
-    { id: 'T4', name: 'T4', status: 'available' },
-    { id: 'T5', name: 'T5', status: 'reserved' },
-    { id: 'T6', name: 'T6', status: 'occupied', pax: 6, waiter: 'Mike', timeSeated: '11:45', orderTotal: 7800 },
-    { id: 'T7', name: 'T7', status: 'available' },
-    { id: 'T8', name: 'T8', status: 'occupied', pax: 3, waiter: 'Anna', timeSeated: '12:50', orderTotal: 3100 },
-    { id: 'T9', name: 'T9', status: 'cleaning' },
-    { id: 'T10', name: 'T10', status: 'available' },
-    { id: 'T11', name: 'T11', status: 'occupied', pax: 5, waiter: 'David', timeSeated: '12:00', orderTotal: 5600 },
-    { id: 'T12', name: 'T12', status: 'available' },
-    { id: 'T13', name: 'T13', status: 'reserved' },
-    { id: 'T14', name: 'T14', status: 'occupied', pax: 2, waiter: 'Emma', timeSeated: '13:05', orderTotal: 1850 },
-    { id: 'T15', name: 'T15', status: 'available' },
+  const kpiStats: KPIStat[] = [
+    { label: "Revenue Today", value: "KES 128,450", trend: "↑8%", trendUp: true },
+    { label: "Active Tables", value: "11/15" },
+    { label: "Kitchen Queue", value: "22" },
+    { label: "Covers Served", value: "128" }
   ]
 
-  const kots: KOTData[] = [
-    { id: 'K1', orderNumber: '#2401', table: 'T2', status: 'queued', items: ['Grilled Salmon', 'Caesar Salad'], station: 'Hot', elapsedSeconds: 245 },
-    { id: 'K2', orderNumber: '#2402', table: 'T3', status: 'in_prep', items: ['Burger Medium', 'Fries'], station: 'Grill', elapsedSeconds: 180 },
-    { id: 'K3', orderNumber: '#2403', table: 'T6', status: 'in_prep', items: ['Pasta Carbonara (x2)', 'Grilled Vegetables'], station: 'Hot', elapsedSeconds: 320 },
-    { id: 'K4', orderNumber: '#2404', table: 'T8', status: 'ready', items: ['Mojito', 'Espresso Martini', 'Iced Latte'], station: 'Drinks', elapsedSeconds: 145 },
-    { id: 'K5', orderNumber: '#2405', table: 'T11', status: 'in_prep', items: ['Steak Medium Rare', 'Truffle Fries'], station: 'Grill', elapsedSeconds: 290 },
-    { id: 'K6', orderNumber: '#2406', table: 'T14', status: 'queued', items: ['Fish & Chips', 'Coleslaw'], station: 'Grill', elapsedSeconds: 95 },
-    { id: 'K7', orderNumber: '#2407', table: 'T2', status: 'ready', items: ['Chocolate Mousse', 'Tiramisu'], station: 'Pass', elapsedSeconds: 120 },
-    { id: 'K8', orderNumber: '#2408', table: 'T6', status: 'queued', items: ['Lobster Bisque', 'Bread Basket'], station: 'Hot', elapsedSeconds: 60 },
+  const activities: ActivityEvent[] = [
+    {
+      id: "1",
+      type: "kitchen",
+      time: "2 min ago",
+      title: "Order #2847 Ready",
+      body: "Table 08 · Grilled salmon + fries"
+    },
+    {
+      id: "2",
+      type: "service",
+      time: "5 min ago",
+      title: "Table 12 Cleared",
+      body: "Guest departure · Revenue: KES 4,250"
+    },
+    {
+      id: "3",
+      type: "delivery",
+      time: "8 min ago",
+      title: "Delivery Order #2846",
+      body: "Order prepared · Ready for pickup"
+    },
+    {
+      id: "4",
+      type: "priority",
+      time: "12 min ago",
+      title: "VIP Guest Arrived",
+      body: "Table 02 · Reservation confirmed"
+    },
+    {
+      id: "5",
+      type: "cleaning",
+      time: "15 min ago",
+      title: "Table 06 Cleaned",
+      body: "Status: Ready for new guests"
+    }
   ]
 
-  const orders: OrderData[] = [
-    { id: 'O1', table: 'T2', channel: 'dine-in', itemCount: 4, total: 4500, status: 'open', time: '12:30' },
-    { id: 'O2', table: 'T3', channel: 'dine-in', itemCount: 2, total: 2200, status: 'open', time: '12:15' },
-    { id: 'O3', table: 'T6', channel: 'dine-in', itemCount: 5, total: 7800, status: 'open', time: '11:45' },
-    { id: 'O4', table: 'T8', channel: 'dine-in', itemCount: 3, total: 3100, status: 'paid', time: '12:50' },
-    { id: 'O5', table: 'T11', channel: 'dine-in', itemCount: 4, total: 5600, status: 'open', time: '12:00' },
-    { id: 'O6', table: 'T14', channel: 'dine-in', itemCount: 2, total: 1850, status: 'open', time: '13:05' },
-    { id: 'O7', table: 'Delivery', channel: 'delivery', itemCount: 6, total: 3200, status: 'paid', time: '12:45' },
-    { id: 'O8', table: 'Takeout', channel: 'takeout', itemCount: 3, total: 2100, status: 'open', time: '13:10' },
-    { id: 'O9', table: 'T4', channel: 'dine-in', itemCount: 2, total: 1650, status: 'voided', time: '13:00' },
-    { id: 'O10', table: 'Delivery', channel: 'delivery', itemCount: 4, total: 2850, status: 'paid', time: '13:20' },
+  const orders: OrderCard[] = [
+    {
+      id: "1",
+      tableName: "Table 08",
+      orderNum: "#2847",
+      items: ["Grilled Salmon", "Caesar Salad", "Fries"],
+      status: "In Prep",
+      priority: false,
+      active: true
+    },
+    {
+      id: "2",
+      tableName: "Table 12",
+      orderNum: "#2843",
+      items: ["Ribeye Steak", "Loaded Baked Potato"],
+      status: "In Transit",
+      priority: true,
+      active: false
+    },
+    {
+      id: "3",
+      tableName: "Table 05",
+      orderNum: "#2841",
+      items: ["Chicken Parmesan", "Garlic Bread", "House Wine"],
+      status: "Served",
+      priority: false,
+      active: false
+    },
+    {
+      id: "4",
+      tableName: "Bar",
+      orderNum: "#2840",
+      items: ["Espresso Martini x2", "Old Fashioned"],
+      status: "Ready",
+      priority: false,
+      active: false
+    }
   ]
 
-  const revenueData: ChartDataPoint[] = [
-    { hour: '7am', revenue: 0 },
-    { hour: '8am', revenue: 2100 },
-    { hour: '9am', revenue: 4200 },
-    { hour: '10am', revenue: 6800 },
-    { hour: '11am', revenue: 12500 },
-    { hour: '12pm', revenue: 28400 },
-    { hour: '1pm', revenue: 26700 },
-    { hour: '2pm', revenue: 14200 },
-    { hour: '3pm', revenue: 3200 },
-    { hour: '4pm', revenue: 1500 },
-    { hour: '5pm', revenue: 0 },
+  const revenueByHour: RevenueData[] = [
+    { hour: 7, amount: 2100 },
+    { hour: 8, amount: 3200 },
+    { hour: 9, amount: 4800 },
+    { hour: 10, amount: 6200 },
+    { hour: 11, amount: 7500 },
+    { hour: 12, amount: 9800 },
+    { hour: 13, amount: 18500 },
+    { hour: 14, amount: 15200 },
+    { hour: 15, amount: 8900 },
+    { hour: 16, amount: 4200 },
+    { hour: 17, amount: 6100 },
+    { hour: 18, amount: 14300 },
+    { hour: 19, amount: 22100 },
+    { hour: 20, amount: 24500 },
+    { hour: 21, amount: 19800 },
+    { hour: 22, amount: 12400 },
+    { hour: 23, amount: 3150 }
   ]
 
-  const occupiedTables = useMemo(() => tables.filter(t => t.status === 'occupied').length, [])
-  const totalPax = useMemo(() => tables.reduce((sum, t) => sum + (t.pax || 0), 0), [])
-  const averageTicket = useMemo(() => {
-    const openOrders = orders.filter(o => o.status === 'open' || o.status === 'paid')
-    return openOrders.length > 0 ? Math.round(openOrders.reduce((sum, o) => sum + o.total, 0) / occupiedTables) : 0
-  }, [occupiedTables])
-  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + o.total, 0), [])
-  const activeKOTs = useMemo(() => kots.filter(k => k.status !== 'ready').length, [])
-
-  const kpiCards: KPIData[] = [
-    {
-      label: 'Revenue Today',
-      value: `KES ${totalRevenue.toLocaleString()}`,
-      trend: 12,
-      comparison: '+12% vs yesterday',
-      icon: <DollarSign className="w-5 h-5" />
-    },
-    {
-      label: 'Active Tables',
-      value: `${occupiedTables}/15`,
-      trend: 5,
-      comparison: '+5% from noon',
-      icon: <Users className="w-5 h-5" />
-    },
-    {
-      label: 'Avg Ticket',
-      value: `KES ${averageTicket}`,
-      trend: 2,
-      comparison: '+2% vs yesterday',
-      icon: <ShoppingCart className="w-5 h-5" />
-    },
-    {
-      label: 'Kitchen Queue',
-      value: activeKOTs,
-      trend: -3,
-      comparison: '-3 from peak',
-      icon: <UtensilsCrossed className="w-5 h-5" />
-    },
-    {
-      label: 'Covers Served',
-      value: totalPax,
-      trend: 8,
-      comparison: '+8 vs yesterday',
-      icon: <Users className="w-5 h-5" />
-    },
-    {
-      label: 'Orders Today',
-      value: orders.length,
-      trend: 15,
-      comparison: '+15% transaction count',
-      icon: <ShoppingCart className="w-5 h-5" />
-    },
+  const tables = [
+    { id: "T01", status: "occupied" },
+    { id: "T02", status: "available" },
+    { id: "T03", status: "occupied" },
+    { id: "T04", status: "cleaning" },
+    { id: "T05", status: "occupied" },
+    { id: "T06", status: "available" },
+    { id: "T07", status: "reserved" },
+    { id: "T08", status: "occupied" },
+    { id: "T09", status: "available" },
+    { id: "T10", status: "occupied" },
+    { id: "T11", status: "priority" },
+    { id: "T12", status: "occupied" },
+    { id: "T13", status: "available" },
+    { id: "T14", status: "cleaning" },
+    { id: "T15", status: "occupied" }
   ]
 
   const getTableColor = (status: string) => {
     switch (status) {
-      case 'available':
-        return 'bg-green-500/10 border-green-500/50 hover:border-green-500'
-      case 'occupied':
-        return 'bg-amber-500/10 border-amber-500/50 hover:border-amber-500'
-      case 'reserved':
-        return 'bg-blue-500/10 border-blue-500/50 hover:border-blue-500'
-      case 'cleaning':
-        return 'bg-red-500/10 border-red-500/50 hover:border-red-500'
+      case "occupied":
+        return "bg-slate-900 text-white"
+      case "available":
+        return "bg-lime-300 text-black"
+      case "reserved":
+        return "bg-violet-200 text-slate-900"
+      case "cleaning":
+        return "bg-amber-200 text-slate-900"
+      case "priority":
+        return "bg-rose-400 text-white"
       default:
-        return 'bg-gray-500/10 border-gray-500/50'
+        return "bg-neutral-100 text-slate-900"
     }
   }
 
-  const getKOTColor = (status: string) => {
-    switch (status) {
-      case 'queued':
-        return 'border-l-4 border-l-yellow-500 bg-yellow-500/5'
-      case 'in_prep':
-        return 'border-l-4 border-l-blue-500 bg-blue-500/5'
-      case 'ready':
-        return 'border-l-4 border-l-green-500 bg-green-500/5'
+  const getActivityColor = (type: string) => {
+    switch (type) {
+      case "kitchen":
+        return "bg-sky-400"
+      case "service":
+        return "bg-violet-400"
+      case "delivery":
+        return "bg-lime-300"
+      case "priority":
+        return "bg-rose-400"
+      case "cleaning":
+        return "bg-amber-200"
       default:
-        return 'border-l-4 border-l-gray-500 bg-gray-500/5'
+        return "bg-neutral-300"
     }
   }
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
+  const maxRevenue = Math.max(...revenueByHour.map(d => d.amount))
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-white mb-1">Restaurant Operations</h1>
-          <p className="text-slate-400">Live dashboard • {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-        </div>
-        <div className="text-right">
-          <div className="text-3xl font-mono font-bold text-blue-400 mb-2">{currentTime}</div>
-          <Badge variant="outline" className="bg-green-500/20 border-green-500/50 text-green-300">Lunch Service</Badge>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {kpiCards.map((kpi, idx) => (
-          <Card key={idx} className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl hover:border-slate-600/50 transition-all duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-slate-300">{kpi.label}</CardTitle>
-                <div className="text-blue-400/60">{kpi.icon}</div>
+    <div className="min-h-screen bg-neutral-200 p-4 md:p-6">
+      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-100 p-4 shadow-2xl">
+        <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)_260px]">
+          {/* LEFT COLUMN */}
+          <div className="rounded-[28px] bg-black p-5 text-white">
+            {/* Logo */}
+            <div className="mb-6 flex items-center gap-3">
+              <div className="rounded-2xl bg-lime-300 p-2 text-black">
+                <ChefHat size={24} />
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white mb-2">{kpi.value}</div>
-              <div className="flex items-center gap-1 text-xs text-slate-400">
-                {kpi.trend >= 0 ? (
-                  <TrendingUp className="w-4 h-4 text-green-500" />
-                ) : (
-                  <TrendingDown className="w-4 h-4 text-red-500" />
-                )}
-                <span className={kpi.trend >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {kpi.trend >= 0 ? '+' : ''}{kpi.trend}%
-                </span>
-                <span className="text-slate-500">{kpi.comparison}</span>
+              <div>
+                <div className="font-semibold">Restaurant Hub</div>
+                <div className="text-xs text-white/60">Live Operations</div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Floor Overview */}
-        <div className="lg:col-span-2">
-          <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-            <CardHeader>
-              <CardTitle className="text-white">Floor Overview</CardTitle>
-              <CardDescription className="text-slate-400">5×3 table grid • Click for details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-5 gap-3">
+            {/* KPI Stats Grid */}
+            <div className="mb-6 grid grid-cols-2 gap-3">
+              {kpiStats.map((stat, idx) => (
+                <div key={idx} className="rounded-[24px] bg-white/10 p-4">
+                  <div className="text-xs text-white/70">{stat.label}</div>
+                  <div className="mt-2 font-light text-lg">{stat.value}</div>
+                  {stat.trend && (
+                    <div className={`text-xs ${stat.trendUp ? "text-lime-300" : "text-rose-400"}`}>
+                      {stat.trend}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Nav Buttons */}
+            <div className="mb-6 space-y-2">
+              {["Hub", "POS", "Floor", "Kitchen", "Reservations"].map(nav => (
+                <button
+                  key={nav}
+                  onClick={() => setSelectedNav(nav)}
+                  className={`w-full rounded-full py-2 text-sm font-medium transition ${
+                    selectedNav === nav
+                      ? "bg-lime-300 text-black"
+                      : "bg-white/10 text-white hover:bg-white/20"
+                  }`}
+                >
+                  {nav}
+                </button>
+              ))}
+            </div>
+
+            {/* Clock Display */}
+            <div className="mb-6 rounded-[24px] bg-white/10 p-4 text-center">
+              <div className="font-light text-4xl">{currentTime}</div>
+              <div className="mt-2 text-xs text-white/60">Live Time</div>
+            </div>
+
+            {/* Shift Badge */}
+            <div className="rounded-[24px] bg-white/10 px-4 py-3 text-center text-sm">
+              <div>Shift Open</div>
+              <div className="font-light text-lg">6h 23m</div>
+            </div>
+          </div>
+
+          {/* CENTER COLUMN */}
+          <div>
+            {/* Header Card */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <h1 className="font-light text-4xl text-slate-900">Restaurant Operations</h1>
+              <p className="mt-1 text-sm text-slate-500">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
+
+              {/* Action Buttons */}
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+                <button className="flex items-center gap-2 rounded-full bg-lime-300 px-4 py-2 text-black hover:bg-lime-400">
+                  <ClipboardList size={18} />
+                  <span className="text-sm font-medium">Orders</span>
+                </button>
+                <button className="flex items-center gap-2 rounded-full bg-lime-300 px-4 py-2 text-black hover:bg-lime-400">
+                  <Flame size={18} />
+                  <span className="text-sm font-medium">Kitchen</span>
+                </button>
+                <button className="flex items-center gap-2 rounded-full bg-lime-300 px-4 py-2 text-black hover:bg-lime-400">
+                  <Map size={18} />
+                  <span className="text-sm font-medium">Floor</span>
+                </button>
+                <button className="flex items-center gap-2 rounded-full bg-lime-300 px-4 py-2 text-black hover:bg-lime-400">
+                  <Calendar size={18} />
+                  <span className="text-sm font-medium">Reserve</span>
+                </button>
+                <button className="flex items-center gap-2 rounded-full bg-lime-300 px-4 py-2 text-black hover:bg-lime-400">
+                  <Settings size={18} />
+                  <span className="text-sm font-medium">Settings</span>
+                </button>
+              </div>
+
+              {/* Table Grid */}
+              <div className="mt-4 grid grid-cols-5 gap-2">
                 {tables.map(table => (
-                  <Popover key={table.id} open={tablePopover === table.id} onOpenChange={(open) => setTablePopover(open ? table.id : null)}>
-                    <PopoverTrigger asChild>
-                      <button
-                        className={`aspect-square rounded-lg border-2 font-bold text-sm transition-all duration-200 hover:scale-105 ${getTableColor(table.status)}`}
-                      >
-                        {table.name}
-                        {table.pax && <div className="text-xs mt-1">{table.pax}</div>}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 bg-slate-800 border-slate-700 p-4">
-                      <div className="space-y-2">
-                        <div className="font-semibold text-white">{table.name}</div>
-                        <div className="text-xs text-slate-400">
-                          <p>Status: <Badge variant="outline" className="ml-2 bg-blue-500/20 border-blue-500/50 text-blue-300">{table.status}</Badge></p>
-                          {table.pax && <p className="mt-2">Pax: {table.pax}</p>}
-                          {table.waiter && <p>Waiter: {table.waiter}</p>}
-                          {table.timeSeated && <p>Seated: {table.timeSeated}</p>}
-                          {table.orderTotal && <p className="font-semibold text-slate-300 mt-2">Total: KES {table.orderTotal}</p>}
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                  <button
+                    key={table.id}
+                    className={`rounded-[16px] px-2 py-3 text-xs font-medium transition hover:opacity-80 ${getTableColor(table.status)}`}
+                  >
+                    {table.id}
+                  </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* Activity Feed */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">Activity Feed</h2>
+              <div className="space-y-3">
+                {activities.map(activity => (
+                  <div key={activity.id} className="flex gap-3">
+                    <div className={`mt-1 h-3 w-3 flex-shrink-0 rounded-full ${getActivityColor(activity.type)}`} />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-slate-900">{activity.title}</p>
+                        <span className="text-xs text-slate-400">{activity.time}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{activity.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Revenue Chart */}
+            <div className="rounded-[28px] bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">Hourly Revenue</h2>
+              <div className="flex items-end gap-1" style={{ height: "180px" }}>
+                {revenueByHour.map((data, idx) => (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                    <div
+                      className={`w-full rounded-t ${data.hour === 20 ? "bg-lime-300" : "bg-neutral-200"}`}
+                      style={{ height: `${(data.amount / maxRevenue) * 160}px` }}
+                    />
+                    <span className="text-xs text-slate-400">{data.hour}h</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-right text-xs text-slate-500">KES</div>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div>
+            {/* Active Orders */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">Active Orders</h2>
+                <span className="rounded-full bg-lime-300 px-3 py-1 text-xs font-medium text-black">Live</span>
+              </div>
+              <div className="space-y-2">
+                {orders.map((order, idx) => (
+                  <div
+                    key={order.id}
+                    className={`rounded-[24px] p-3 ${
+                      order.active ? "bg-lime-300 text-black" : "bg-neutral-50 text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium opacity-70">{order.tableName}</p>
+                        <p className="font-semibold">{order.orderNum}</p>
+                      </div>
+                      {order.priority && (
+                        <span className="rounded-full bg-rose-400 px-2 py-1 text-xs font-medium text-white">
+                          Priority
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 text-xs">
+                      {order.items.map((item, i) => (
+                        <div key={i} className="opacity-70">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="opacity-70">{order.status}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Kitchen Stations */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-lg font-semibold text-slate-900">Kitchen Stations</h2>
+              <div className="space-y-2">
+                {["Grill", "Fryer", "Drinks", "Dessert"].map((station, idx) => (
+                  <div key={idx} className="flex items-center justify-between rounded-[20px] bg-neutral-50 p-3">
+                    <span className="text-sm font-medium text-slate-900">{station}</span>
+                    <span className="rounded-full bg-black px-2.5 py-1 text-xs font-medium text-white">
+                      {[5, 3, 2, 1][idx]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Current Ticket */}
+            <div className="rounded-[28px] bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-lg font-semibold text-slate-900">Current Ticket</h2>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Grilled Salmon</span>
+                  <span className="font-medium">KES 1,850</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Caesar Salad</span>
+                  <span className="font-medium">KES 650</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">French Fries</span>
+                  <span className="font-medium">KES 450</span>
+                </div>
+                <div className="my-2 border-t border-neutral-200" />
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-900">Total</span>
+                  <span className="font-light text-2xl text-slate-900">KES 2,950</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        {/* Kitchen Queue */}
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl h-fit">
-          <CardHeader>
-            <CardTitle className="text-white">Kitchen Queue</CardTitle>
-            <CardDescription className="text-slate-400">{activeKOTs} active KOTs</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {kots.map(kot => (
-                <div key={kot.id} className={`p-3 rounded-lg ${getKOTColor(kot.status)}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-white text-sm">{kot.orderNumber}</span>
-                    <span className="text-xs text-slate-400">{formatTime(kotElapsed[kot.id] || kot.elapsedSeconds)}</span>
-                  </div>
-                  <div className="text-xs text-slate-300 mb-2">{kot.items[0]}</div>
-                  <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 w-1/2"></div>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">{kot.station}</div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Bottom Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Orders */}
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-white">Today's Orders</CardTitle>
-            <CardDescription className="text-slate-400">Last 10 orders</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {orders.slice(0, 10).map(order => (
-                <div key={order.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-700/20 border border-slate-700/30 hover:border-slate-600/50 transition-colors">
-                  <div className="flex-1">
-                    <div className="font-semibold text-white text-sm">{order.table}</div>
-                    <div className="text-xs text-slate-400">{order.itemCount} items • {order.time}</div>
-                  </div>
-                  <Badge variant="outline" className="bg-blue-500/20 border-blue-500/50 text-blue-300 text-xs">
-                    {order.channel}
-                  </Badge>
-                  <div className="text-right ml-4">
-                    <div className="font-bold text-white">KES {order.total}</div>
-                    <Badge
-                      variant="outline"
-                      className={`text-xs mt-1 ${
-                        order.status === 'open' ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' :
-                        order.status === 'paid' ? 'bg-green-500/20 border-green-500/50 text-green-300' :
-                        'bg-red-500/20 border-red-500/50 text-red-300'
-                      }`}
-                    >
-                      {order.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Revenue Chart */}
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-white">Revenue by Hour</CardTitle>
-            <CardDescription className="text-slate-400">Today's performance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(71, 85, 105, 0.2)" />
-                <XAxis dataKey="hour" tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '0.5rem' }}
-                  labelStyle={{ color: '#e2e8f0' }}
-                  formatter={(value) => `KES ${value}`}
-                />
-                <Bar dataKey="revenue" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mt-8 flex gap-3">
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white">Open POS</Button>
-        <Button className="bg-slate-700 hover:bg-slate-600 text-white">View Floor</Button>
-        <Button className="bg-slate-700 hover:bg-slate-600 text-white">View Kitchen</Button>
-        <Button className="bg-slate-700 hover:bg-slate-600 text-white">Manage Reservations</Button>
       </div>
     </div>
   )

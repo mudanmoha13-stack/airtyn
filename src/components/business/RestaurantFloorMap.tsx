@@ -1,427 +1,383 @@
-'use client'
+"use client"
 
-import { useState, useMemo } from 'react'
-import { Eye, Plus, Trash2, Users, Clock, DollarSign, MapPin } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState } from "react"
+import { Clock, Users, ChefHat, RotateCcw } from "lucide-react"
 
-interface TableStatus {
+interface Table {
   id: string
-  name: string
-  zone: 'Indoor' | 'Terrace' | 'Bar'
-  shape: 'round' | 'rect'
+  tableNum: string
+  zone: "indoor" | "terrace" | "bar"
+  shape: "round" | "rect" | "stool"
   capacity: number
-  status: 'available' | 'occupied' | 'reserved' | 'cleaning'
+  status: "available" | "occupied" | "reserved" | "cleaning"
+  currentGuests?: number
   waiter?: string
-  pax?: number
-  timeSeated?: string
-  orderItems?: string[]
+  seatedTime?: number
   orderTotal?: number
 }
 
-interface Zone {
-  id: string
-  name: string
-  label: string
+interface ReservationInfo {
+  guestName: string
+  time: string
+  pax: number
+  phone: string
+  notes?: string
 }
 
 export default function RestaurantFloorMap() {
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState<string>('all')
-  const [seatDialogOpen, setSeatDialogOpen] = useState(false)
-  const [selectedPax, setSelectedPax] = useState<string>('')
-  const [selectedWaiter, setSelectedWaiter] = useState<string>('')
+  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [paxCount, setPaxCount] = useState(2)
 
-  const zones: Zone[] = [
-    { id: 'A', name: 'Zone A', label: 'Indoor' },
-    { id: 'B', name: 'Zone B', label: 'Terrace' },
-    { id: 'C', name: 'Zone C', label: 'Bar' },
-  ]
-
-  const waiters = ['James', 'Sarah', 'Mike', 'Anna', 'David', 'Emma', 'Lucas', 'Olivia']
-
-  const tables: TableStatus[] = [
-    // Zone A - Indoor (7 tables)
-    { id: 'T1', name: 'T1', zone: 'Indoor', shape: 'round', capacity: 4, status: 'available' },
-    { id: 'T2', name: 'T2', zone: 'Indoor', shape: 'round', capacity: 4, status: 'occupied', waiter: 'James', pax: 4, timeSeated: '12:30', orderItems: ['Salmon', 'Caesar Salad', 'Pasta'], orderTotal: 4500 },
-    { id: 'T3', name: 'T3', zone: 'Indoor', shape: 'rect', capacity: 6, status: 'occupied', waiter: 'Sarah', pax: 2, timeSeated: '12:15', orderItems: ['Burger', 'Fries'], orderTotal: 2200 },
-    { id: 'T4', name: 'T4', zone: 'Indoor', shape: 'round', capacity: 4, status: 'reserved' },
-    { id: 'T5', name: 'T5', zone: 'Indoor', shape: 'rect', capacity: 6, status: 'available' },
-    { id: 'T6', name: 'T6', zone: 'Indoor', shape: 'rect', capacity: 6, status: 'occupied', waiter: 'Mike', pax: 6, timeSeated: '11:45', orderItems: ['Pasta Carbonara (x2)', 'Grilled Veg', 'Lobster Bisque'], orderTotal: 7800 },
-    { id: 'T7', name: 'T7', zone: 'Indoor', shape: 'round', capacity: 4, status: 'cleaning' },
-    // Zone B - Terrace (4 tables)
-    { id: 'T8', name: 'T8', zone: 'Terrace', shape: 'round', capacity: 4, status: 'occupied', waiter: 'Anna', pax: 3, timeSeated: '12:50', orderItems: ['Mojito', 'Espresso Martini', 'Iced Latte'], orderTotal: 3100 },
-    { id: 'T9', name: 'T9', zone: 'Terrace', shape: 'rect', capacity: 6, status: 'available' },
-    { id: 'T10', name: 'T10', zone: 'Terrace', shape: 'round', capacity: 4, status: 'available' },
-    { id: 'T11', name: 'T11', zone: 'Terrace', shape: 'rect', capacity: 6, status: 'occupied', waiter: 'David', pax: 5, timeSeated: '12:00', orderItems: ['Steak Medium Rare', 'Truffle Fries', 'Vegetables'], orderTotal: 5600 },
-    // Zone C - Bar (4 tables)
-    { id: 'B1', name: 'B1', zone: 'Bar', shape: 'round', capacity: 2, status: 'available' },
-    { id: 'B2', name: 'B2', zone: 'Bar', shape: 'round', capacity: 2, status: 'occupied', waiter: 'Emma', pax: 2, timeSeated: '13:05', orderItems: ['Fish & Chips', 'Coleslaw'], orderTotal: 1850 },
-    { id: 'B3', name: 'B3', zone: 'Bar', shape: 'round', capacity: 2, status: 'available' },
-    { id: 'B4', name: 'B4', zone: 'Bar', shape: 'round', capacity: 2, status: 'available' },
+  const tables: Table[] = [
+    { id: "T01", tableNum: "01", zone: "indoor", shape: "round", capacity: 4, status: "occupied", currentGuests: 4, waiter: "Maria", seatedTime: Date.now() - 1200000, orderTotal: 8500 },
+    { id: "T02", tableNum: "02", zone: "indoor", shape: "round", capacity: 4, status: "reserved" },
+    { id: "T03", tableNum: "03", zone: "indoor", shape: "rect", capacity: 6, status: "occupied", currentGuests: 3, waiter: "James", seatedTime: Date.now() - 600000, orderTotal: 6200 },
+    { id: "T04", tableNum: "04", zone: "indoor", shape: "rect", capacity: 6, status: "cleaning" },
+    { id: "T05", tableNum: "05", zone: "indoor", shape: "round", capacity: 4, status: "available" },
+    { id: "T06", tableNum: "06", zone: "indoor", shape: "round", capacity: 4, status: "occupied", currentGuests: 2, waiter: "Alex", seatedTime: Date.now() - 1800000, orderTotal: 4250 },
+    { id: "T07", tableNum: "07", zone: "terrace", shape: "rect", capacity: 6, status: "occupied", currentGuests: 6, waiter: "Sofia", seatedTime: Date.now() - 900000, orderTotal: 12100 },
+    { id: "T08", tableNum: "08", zone: "terrace", shape: "rect", capacity: 6, status: "available" },
+    { id: "T09", tableNum: "09", zone: "terrace", shape: "round", capacity: 4, status: "occupied", currentGuests: 4, waiter: "Maria", seatedTime: Date.now() - 1500000, orderTotal: 7800 },
+    { id: "T10", tableNum: "10", zone: "terrace", shape: "round", capacity: 4, status: "available" },
+    { id: "T11", tableNum: "11", zone: "terrace", shape: "rect", capacity: 6, status: "reserved" },
+    { id: "B01", tableNum: "B01", zone: "bar", shape: "stool", capacity: 1, status: "occupied", currentGuests: 1, waiter: "Mike" },
+    { id: "B02", tableNum: "B02", zone: "bar", shape: "stool", capacity: 1, status: "occupied", currentGuests: 1, waiter: "Mike" },
+    { id: "B03", tableNum: "B03", zone: "bar", shape: "stool", capacity: 1, status: "available" },
+    { id: "B04", tableNum: "B04", zone: "bar", shape: "stool", capacity: 1, status: "available" }
   ]
 
   const currentTable = selectedTable ? tables.find(t => t.id === selectedTable) : null
 
-  const filteredTables = useMemo(() => {
-    if (filterStatus === 'all') {
-      return tables
-    }
-    return tables.filter(t => t.status === filterStatus)
-  }, [filterStatus])
-
-  const stats = useMemo(() => {
-    const available = tables.filter(t => t.status === 'available').length
-    const occupied = tables.filter(t => t.status === 'occupied').length
-    const reserved = tables.filter(t => t.status === 'reserved').length
-    const cleaning = tables.filter(t => t.status === 'cleaning').length
-    const totalPax = tables.reduce((sum, t) => sum + (t.pax || 0), 0)
-    return { available, occupied, reserved, cleaning, totalPax }
-  }, [])
-
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'available':
-        return 'bg-green-500/20 border-green-500/70 hover:border-green-400'
-      case 'occupied':
-        return 'bg-amber-500/20 border-amber-500/70 hover:border-amber-400'
-      case 'reserved':
-        return 'bg-blue-500/20 border-blue-500/70 hover:border-blue-400'
-      case 'cleaning':
-        return 'bg-red-500/20 border-red-500/70 hover:border-red-400'
+      case "available":
+        return "bg-lime-300 text-black"
+      case "occupied":
+        return "bg-slate-900 text-white"
+      case "reserved":
+        return "bg-violet-200 text-slate-900"
+      case "cleaning":
+        return "bg-amber-200 text-slate-900"
       default:
-        return 'bg-slate-500/10 border-slate-500/50'
+        return "bg-neutral-100"
     }
   }
 
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'available':
-        return 'bg-green-500/20 border-green-500/50 text-green-300'
-      case 'occupied':
-        return 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-      case 'reserved':
-        return 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-      case 'cleaning':
-        return 'bg-red-500/20 border-red-500/50 text-red-300'
-      default:
-        return 'bg-slate-500/20 border-slate-500/50 text-slate-300'
-    }
+  const zoneStats = {
+    indoor: { available: 1, occupied: 3, reserved: 1, cleaning: 1 },
+    terrace: { available: 2, occupied: 2, reserved: 1, cleaning: 0 },
+    bar: { available: 2, occupied: 2, reserved: 0, cleaning: 0 }
   }
 
-  const renderTable = (table: TableStatus) => {
-    const isSelected = selectedTable === table.id
-    const baseClasses = `
-      border-2 rounded-lg transition-all duration-200 cursor-pointer
-      font-bold text-white flex flex-col items-center justify-center
-      ${getStatusColor(table.status)}
-      ${isSelected ? 'ring-2 ring-cyan-400 shadow-lg' : 'hover:shadow-md'}
-    `
+  const indoorTables = tables.filter(t => t.zone === "indoor")
+  const terraceTablesByGroup = {
+    rects: tables.filter(t => t.zone === "terrace" && t.shape === "rect"),
+    rounds: tables.filter(t => t.zone === "terrace" && t.shape === "round")
+  }
+  const barStools = tables.filter(t => t.zone === "bar")
 
-    if (table.shape === 'round') {
-      return (
-        <button
-          key={table.id}
-          className={`w-20 h-20 rounded-full ${baseClasses}`}
-          onClick={() => setSelectedTable(table.id)}
-        >
-          <div className="text-sm">{table.name}</div>
-          {table.pax && <div className="text-xs text-slate-300">{table.pax}p</div>}
-        </button>
-      )
-    } else {
-      return (
-        <button
-          key={table.id}
-          className={`w-24 h-20 ${baseClasses}`}
-          onClick={() => setSelectedTable(table.id)}
-        >
-          <div className="text-sm">{table.name}</div>
-          {table.pax && <div className="text-xs text-slate-300">{table.pax}/{table.capacity}</div>}
-        </button>
-      )
-    }
+  const handleSelectTable = (tableId: string) => {
+    setSelectedTable(tableId)
+    setPaxCount(2)
+  }
+
+  const filteredTables = tables.filter(table => {
+    if (filterStatus === "all") return true
+    return table.status === filterStatus
+  })
+
+  const statusCounts = {
+    available: filteredTables.filter(t => t.status === "available").length,
+    occupied: filteredTables.filter(t => t.status === "occupied").length,
+    reserved: filteredTables.filter(t => t.status === "reserved").length,
+    cleaning: filteredTables.filter(t => t.status === "cleaning").length
+  }
+
+  const formatTime = (ms: number): string => {
+    const mins = Math.floor(ms / 60000)
+    const hours = Math.floor(mins / 60)
+    if (hours > 0) return `${hours}h ${mins % 60}m`
+    return `${mins}m`
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold text-white mb-1">Floor Plan</h1>
-          <p className="text-slate-400">Interactive table management</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-48 bg-slate-800 border-slate-700 text-white">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-700">
-              <SelectItem value="all">All Tables</SelectItem>
-              <SelectItem value="available">Available</SelectItem>
-              <SelectItem value="occupied">Occupied</SelectItem>
-              <SelectItem value="reserved">Reserved</SelectItem>
-              <SelectItem value="cleaning">Cleaning</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Table
-          </Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-neutral-200 p-4">
+      <div className="mx-auto max-w-7xl rounded-[32px] bg-neutral-100 p-4 shadow-2xl">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          {/* LEFT: Floor Plan */}
+          <div>
+            {/* Header Card */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-2xl font-semibold text-slate-900">Floor Plan</h2>
+                <p className="text-sm text-slate-500">{new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</p>
+              </div>
 
-      {/* Status Legend & Stats */}
-      <div className="mb-8 grid grid-cols-5 gap-4">
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-xs text-slate-400 mb-1">Available</p>
-              <p className="text-2xl font-bold text-green-400">{stats.available}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-xs text-slate-400 mb-1">Occupied</p>
-              <p className="text-2xl font-bold text-amber-400">{stats.occupied}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-xs text-slate-400 mb-1">Reserved</p>
-              <p className="text-2xl font-bold text-blue-400">{stats.reserved}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-xs text-slate-400 mb-1">Cleaning</p>
-              <p className="text-2xl font-bold text-red-400">{stats.cleaning}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-xs text-slate-400 mb-1">Total Pax Today</p>
-              <p className="text-2xl font-bold text-blue-300">{stats.totalPax}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Floor Plan */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Floor Plan */}
-        <div className="lg:col-span-2">
-          {zones.map(zone => {
-            const zoneTableIds = {
-              'A': ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
-              'B': ['T8', 'T9', 'T10', 'T11'],
-              'C': ['B1', 'B2', 'B3', 'B4'],
-            }
-            const zoneInZones = zoneTableIds[zone.id as keyof typeof zoneTableIds] || []
-            const zoneTables = tables.filter(t => zoneInZones.includes(t.id))
-
-            return (
-              <Card key={zone.id} className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl mb-8">
-                <CardHeader>
-                  <CardTitle className="text-white">{zone.label}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-4 gap-6">
-                    {zoneTables.map(table => renderTable(table))}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        {/* Side Panel */}
-        <div>
-          {currentTable ? (
-            <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl sticky top-6">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-white">{currentTable.name}</CardTitle>
-                  <Badge variant="outline" className={`${getStatusBadgeColor(currentTable.status)}`}>
-                    {currentTable.status}
-                  </Badge>
+              {/* Status Legend */}
+              <div className="mb-4 flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-lime-300" />
+                  <span className="text-xs text-slate-600">Available</span>
                 </div>
-                <CardDescription className="text-slate-400">{currentTable.zone} • {currentTable.shape}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-slate-900" />
+                  <span className="text-xs text-slate-600">Occupied</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-violet-200" />
+                  <span className="text-xs text-slate-600">Reserved</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-amber-200" />
+                  <span className="text-xs text-slate-600">Cleaning</span>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+                {["all", "available", "occupied", "reserved"].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      filterStatus === status
+                        ? "bg-lime-300 text-black"
+                        : "bg-neutral-100 text-slate-600 hover:bg-neutral-200"
+                    }`}
+                  >
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-2 text-sm">
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Capacity</p>
-                  <p className="text-lg font-bold text-white flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    {currentTable.capacity} seats
-                  </p>
+                  <p className="text-xs text-slate-500">Available</p>
+                  <p className="font-semibold text-slate-900">{statusCounts.available}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Occupied</p>
+                  <p className="font-semibold text-slate-900">{statusCounts.occupied}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Reserved</p>
+                  <p className="font-semibold text-slate-900">{statusCounts.reserved}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Cleaning</p>
+                  <p className="font-semibold text-slate-900">{statusCounts.cleaning}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Zone A - Indoor */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <h3 className="mb-4 font-semibold text-slate-900">Zone A · Indoor (8 covers)</h3>
+              <div className="grid grid-cols-4 gap-3">
+                {indoorTables.map(table => (
+                  <button
+                    key={table.id}
+                    onClick={() => handleSelectTable(table.id)}
+                    className={`rounded-[16px] px-2 py-3 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                  >
+                    <div className="font-semibold">{table.tableNum}</div>
+                    <div className="mt-1 text-xs opacity-70">{table.status}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Zone B - Terrace */}
+            <div className="mb-4 rounded-[28px] bg-white p-5 shadow-sm">
+              <h3 className="mb-4 font-semibold text-slate-900">Zone B · Terrace (12 covers)</h3>
+              <div className="space-y-3">
+                <div>
+                  <p className="mb-2 text-xs font-medium text-slate-500">Large Tables</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {terraceTablesByGroup.rects.map(table => (
+                      <button
+                        key={table.id}
+                        onClick={() => handleSelectTable(table.id)}
+                        className={`rounded-[16px] px-2 py-4 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                      >
+                        <div className="font-semibold">{table.tableNum}</div>
+                        <div className="mt-1 text-xs opacity-70">{table.status}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-xs font-medium text-slate-500">Round Tables</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {terraceTablesByGroup.rounds.map(table => (
+                      <button
+                        key={table.id}
+                        onClick={() => handleSelectTable(table.id)}
+                        className={`rounded-full h-20 w-20 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                      >
+                        <div className="flex h-full flex-col items-center justify-center">
+                          <div className="font-semibold">{table.tableNum}</div>
+                          <div className="mt-0.5 text-xs opacity-70">{table.status}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Zone C - Bar */}
+            <div className="rounded-[28px] bg-white p-5 shadow-sm">
+              <h3 className="mb-4 font-semibold text-slate-900">Zone C · Bar (4 seats)</h3>
+              <div className="flex gap-3">
+                {barStools.map(table => (
+                  <button
+                    key={table.id}
+                    onClick={() => handleSelectTable(table.id)}
+                    className={`rounded-full h-16 w-16 text-xs font-medium transition hover:shadow-md ${getStatusColor(table.status)}`}
+                  >
+                    <div className="flex h-full flex-col items-center justify-center">
+                      <div className="font-semibold text-xs">{table.tableNum}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Table Detail Panel */}
+          <div className="rounded-[28px] bg-white p-5 shadow-sm">
+            {!currentTable ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <ChefHat size={40} className="mb-3 text-neutral-300" />
+                <p className="text-sm text-slate-500">Select a table to view details</p>
+              </div>
+            ) : (
+              <>
+                {/* Table Header */}
+                <div className="mb-4 pb-4 border-b border-neutral-200">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-2xl font-semibold text-slate-900">
+                      {currentTable.id} {currentTable.zone !== "bar" && `· ${currentTable.zone.charAt(0).toUpperCase() + currentTable.zone.slice(1)}`}
+                    </h3>
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusColor(currentTable.status)}`}>
+                      {currentTable.status.charAt(0).toUpperCase() + currentTable.status.slice(1)}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-sm text-slate-600">
+                    <p>Capacity: {currentTable.capacity} {currentTable.capacity === 1 ? "person" : "people"}</p>
+                    <p>Shape: {currentTable.shape === "round" ? "Round" : currentTable.shape === "rect" ? "Rectangular" : "Bar Stool"}</p>
+                  </div>
                 </div>
 
-                {currentTable.status === 'available' && (
-                  <Dialog open={seatDialogOpen} onOpenChange={setSeatDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
-                        Seat Guests
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-slate-800 border-slate-700">
-                      <DialogHeader>
-                        <DialogTitle className="text-white">Seat Guests at {currentTable.name}</DialogTitle>
-                        <DialogDescription className="text-slate-400">
-                          Enter guest details to open POS
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-white">Number of Guests</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max={currentTable.capacity}
-                            value={selectedPax}
-                            onChange={(e) => setSelectedPax(e.target.value)}
-                            className="bg-slate-700 border-slate-600 text-white mt-1"
-                            placeholder="0"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-white">Assign Waiter</Label>
-                          <Select value={selectedWaiter} onValueChange={setSelectedWaiter}>
-                            <SelectTrigger className="bg-slate-700 border-slate-600 text-white mt-1">
-                              <SelectValue placeholder="Select waiter" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-slate-700 border-slate-600">
-                              {waiters.map(waiter => (
-                                <SelectItem key={waiter} value={waiter}>
-                                  {waiter}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                          Open POS
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-
-                {currentTable.status === 'occupied' && (
+                {/* Occupied Content */}
+                {currentTable.status === "occupied" && currentTable.currentGuests && (
                   <>
-                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-3">
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Waiter</p>
-                        <p className="text-sm font-semibold text-white">{currentTable.waiter}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Party Size</p>
-                        <p className="text-sm font-semibold text-white">{currentTable.pax} / {currentTable.capacity}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Time Seated</p>
-                        <p className="text-sm font-semibold text-white flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          {currentTable.timeSeated}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 mb-2">Order Items</p>
-                        <div className="text-sm text-slate-300 space-y-1">
-                          {currentTable.orderItems?.map((item, idx) => (
-                            <p key={idx}>• {item}</p>
-                          ))}
+                    <div className="mb-4 rounded-[24px] bg-neutral-50 p-4">
+                      <p className="mb-3 text-xs font-medium text-slate-500">CURRENT ORDER</p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Waiter</span>
+                          <span className="font-medium text-slate-900">{currentTable.waiter}</span>
                         </div>
-                      </div>
-                      <div className="pt-2 border-t border-slate-600">
-                        <p className="text-xs text-slate-400 mb-1">Order Total</p>
-                        <p className="text-lg font-bold text-white flex items-center gap-2">
-                          <DollarSign className="w-4 h-4" />
-                          KES {currentTable.orderTotal}
-                        </p>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Seated</span>
+                          <span className="font-medium text-slate-900">{currentTable.seatedTime ? formatTime(Date.now() - currentTable.seatedTime) : "—"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Guests</span>
+                          <span className="font-medium text-slate-900">{currentTable.currentGuests}</span>
+                        </div>
+                        <div className="border-t border-neutral-200 pt-2">
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">Running Total</span>
+                            <span className="font-light text-lg text-slate-900">KES {currentTable.orderTotal?.toLocaleString()}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <Button variant="outline" className="w-full border-slate-600 text-slate-300 hover:bg-slate-700">
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Order
-                    </Button>
-                    <Button variant="outline" className="w-full border-slate-600 text-slate-300 hover:bg-slate-700">
-                      Mark for Cleaning
-                    </Button>
+
+                    <div className="space-y-2">
+                      <button className="w-full rounded-full bg-black py-3 text-sm font-medium text-white hover:bg-slate-800">
+                        View Full Order
+                      </button>
+                      <button className="w-full rounded-full bg-neutral-100 py-3 text-sm font-medium text-slate-600 hover:bg-neutral-200">
+                        Move Table
+                      </button>
+                    </div>
                   </>
                 )}
 
-                {currentTable.status === 'reserved' && (
-                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 space-y-3">
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">Guest Name</p>
-                      <p className="text-sm font-semibold text-white">Johnson</p>
+                {/* Available Content */}
+                {currentTable.status === "available" && (
+                  <>
+                    <p className="mb-4 text-sm text-slate-600">Seat new guests at this table</p>
+                    <div className="mb-4 rounded-[24px] bg-neutral-50 p-4 space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-2">Party Size</label>
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={() => setPaxCount(Math.max(1, paxCount - 1))}
+                            className="rounded-full bg-lime-300 px-3 py-2 text-black hover:bg-lime-400"
+                          >
+                            −
+                          </button>
+                          <span className="text-lg font-semibold text-slate-900">{paxCount}</span>
+                          <button
+                            onClick={() => setPaxCount(Math.min(currentTable.capacity, paxCount + 1))}
+                            className="rounded-full bg-lime-300 px-3 py-2 text-black hover:bg-lime-400"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">Party Size</p>
-                      <p className="text-sm font-semibold text-white">6 guests</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">Reservation Time</p>
-                      <p className="text-sm font-semibold text-white">2:00 PM</p>
-                    </div>
-                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
-                      Seat Party
-                    </Button>
-                  </div>
+
+                    <button className="w-full rounded-full bg-black py-3 text-sm font-medium text-white hover:bg-slate-800">
+                      Open POS
+                    </button>
+                  </>
                 )}
 
-                {currentTable.status === 'cleaning' && (
-                  <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
+                {/* Reserved Content */}
+                {currentTable.status === "reserved" && (
+                  <>
+                    <div className="mb-4 rounded-[24px] bg-neutral-50 p-4 space-y-2">
+                      <div className="text-sm">
+                        <p className="text-xs text-slate-500 mb-1">GUEST NAME</p>
+                        <p className="font-semibold text-slate-900">Sarah Kowalski</p>
+                      </div>
+                      <div className="text-sm">
+                        <p className="text-xs text-slate-500 mb-1">TIME</p>
+                        <p className="font-semibold text-slate-900">7:30 PM</p>
+                      </div>
+                      <div className="text-sm">
+                        <p className="text-xs text-slate-500 mb-1">PARTY SIZE</p>
+                        <p className="font-semibold text-slate-900">4 Guests</p>
+                      </div>
+                      <div className="text-sm">
+                        <p className="text-xs text-slate-500 mb-1">PHONE</p>
+                        <p className="font-semibold text-slate-900">+254 712 345 678</p>
+                      </div>
+                    </div>
+
+                    <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:bg-lime-400">
+                      Confirm Arrival
+                    </button>
+                  </>
+                )}
+
+                {/* Cleaning Content */}
+                {currentTable.status === "cleaning" && (
+                  <button className="w-full rounded-full bg-lime-300 py-3 text-sm font-medium text-black hover:bg-lime-400">
                     Mark Available
-                  </Button>
+                  </button>
                 )}
-
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedTable(null)}
-                  className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 mt-4"
-                >
-                  Close
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="bg-slate-800/40 border-slate-700/50 backdrop-blur-xl">
-              <CardContent className="pt-6">
-                <div className="text-center text-slate-400 py-8">
-                  <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Select a table to view details</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
