@@ -11,6 +11,7 @@ import {
   Headset,
   Package2,
   ShoppingCart,
+  UtensilsCrossed,
   Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ import { buildBusinessWorkspaceHref, matchesBusinessHref } from '@/lib/business-
 
 const DOCK_MODULES = [
   { href: '/business', label: 'HQ', icon: Building2, exact: true },
+  { href: '/business/restaurant', label: 'Restaurant', icon: UtensilsCrossed, exact: true },
   { href: buildBusinessWorkspaceHref('sales'), label: 'Sales & CRM', icon: ShoppingCart },
   { href: buildBusinessWorkspaceHref('finance'), label: 'Finance', icon: CircleDollarSign },
   { href: buildBusinessWorkspaceHref('hr'), label: 'HR', icon: Wallet },
@@ -36,9 +38,12 @@ export function BusinessModuleDock() {
     <div className="hidden md:block fixed bottom-0 left-0 right-0 z-40 border-t border-white/5 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-full items-center gap-1 overflow-x-auto px-4 py-1.5 scrollbar-none">
         {DOCK_MODULES.map(({ href, label, icon: Icon, exact }) => {
-          const isActive = exact
-            ? pathname === href && !searchParams.get('module')
-            : matchesBusinessHref(pathname, searchParams, href);
+          const isRestaurantLink = href === '/business/restaurant';
+          const isActive = isRestaurantLink
+            ? pathname.startsWith('/business/restaurant')
+            : exact
+              ? pathname === href && !searchParams.get('module')
+              : matchesBusinessHref(pathname, searchParams, href);
 
           return (
             <Link

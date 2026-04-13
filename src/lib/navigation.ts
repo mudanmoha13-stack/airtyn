@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Package2,
+  UtensilsCrossed,
   Radio,
   Settings,
   Shield,
@@ -104,6 +105,7 @@ export const BUSINESS_COMMERCIAL_ITEMS: NavItemConfig[] = [
 ];
 
 export const BUSINESS_OPERATIONS_ITEMS: NavItemConfig[] = [
+  { icon: UtensilsCrossed, label: 'Restaurant', href: '/business/restaurant', group: 'Operations' },
   { icon: Package2, label: 'Inventory', href: buildBusinessWorkspaceHref('inventory'), group: 'Operations' },
   { icon: ShoppingCart, label: 'Procurement', href: buildBusinessWorkspaceHref('procurement'), group: 'Operations' },
   { icon: Wallet, label: 'HR', href: buildBusinessWorkspaceHref('hr'), group: 'Operations' },

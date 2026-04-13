@@ -326,6 +326,227 @@ const INITIAL_STATE: PersistedState = {
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const uid = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
+function buildRestaurantStarterData(ownerId: string, tenantId: string, now: string) {
+  const projectId = uid('project');
+
+  const project: Project = {
+    id: projectId,
+    tenantId,
+    name: 'Restaurant Operations Launch',
+    description: 'Odoo-style rollout for POS, kitchen, inventory, procurement, finance, HR, CRM, and analytics.',
+    status: 'active',
+    progress: 8,
+    ownerId,
+    createdAt: now,
+  };
+
+  const tasks: Task[] = [
+    {
+      id: uid('task'),
+      projectId,
+      title: 'Configure floor plan and table map',
+      description: 'Set table zones, merge/split rules, and reservation seating flow for dine-in.',
+      status: 'todo',
+      priority: 'high',
+      assigneeId: ownerId,
+      dueDate: now.slice(0, 10),
+      createdAt: now,
+      createdBy: ownerId,
+      subtasks: [],
+      comments: [],
+      tags: ['restaurant', 'tables', 'reservations'],
+      timeEntries: [],
+      attachments: [],
+    },
+    {
+      id: uid('task'),
+      projectId,
+      title: 'Launch POS sessions and shift controls',
+      description: 'Enable waiter/counter POS, split billing, payment methods, and shift open-close reconciliation.',
+      status: 'todo',
+      priority: 'urgent',
+      assigneeId: ownerId,
+      dueDate: now.slice(0, 10),
+      createdAt: now,
+      createdBy: ownerId,
+      subtasks: [],
+      comments: [],
+      tags: ['restaurant', 'pos', 'cash'],
+      timeEntries: [],
+      attachments: [],
+    },
+    {
+      id: uid('task'),
+      projectId,
+      title: 'Enable kitchen station routing',
+      description: 'Route tickets to grill/fryer/salad/drinks stations and track ready-to-serve status.',
+      status: 'todo',
+      priority: 'high',
+      assigneeId: ownerId,
+      dueDate: now.slice(0, 10),
+      createdAt: now,
+      createdBy: ownerId,
+      subtasks: [],
+      comments: [],
+      tags: ['restaurant', 'kitchen', 'kds'],
+      timeEntries: [],
+      attachments: [],
+    },
+    {
+      id: uid('task'),
+      projectId,
+      title: 'Map recipes to ingredient consumption',
+      description: 'Connect menu items to BOM-style recipes so sales automatically reduce raw stock.',
+      status: 'todo',
+      priority: 'high',
+      assigneeId: ownerId,
+      dueDate: now.slice(0, 10),
+      createdAt: now,
+      createdBy: ownerId,
+      subtasks: [],
+      comments: [],
+      tags: ['restaurant', 'recipe', 'inventory'],
+      timeEntries: [],
+      attachments: [],
+    },
+    {
+      id: uid('task'),
+      projectId,
+      title: 'Set procurement and low-stock replenishment',
+      description: 'Create vendor flow for RFQ -> PO -> receipt -> bill matching.',
+      status: 'todo',
+      priority: 'medium',
+      assigneeId: ownerId,
+      dueDate: now.slice(0, 10),
+      createdAt: now,
+      createdBy: ownerId,
+      subtasks: [],
+      comments: [],
+      tags: ['restaurant', 'procurement'],
+      timeEntries: [],
+      attachments: [],
+    },
+    {
+      id: uid('task'),
+      projectId,
+      title: 'Publish branch KPI dashboards',
+      description: 'Track daily revenue, food cost %, waste %, labor %, table turnover, and branch profitability.',
+      status: 'todo',
+      priority: 'medium',
+      assigneeId: ownerId,
+      dueDate: now.slice(0, 10),
+      createdAt: now,
+      createdBy: ownerId,
+      subtasks: [],
+      comments: [],
+      tags: ['restaurant', 'analytics', 'bi'],
+      timeEntries: [],
+      attachments: [],
+    },
+  ];
+
+  const departments: Department[] = [
+    { id: uid('dep'), name: 'Front of House', createdAt: now },
+    { id: uid('dep'), name: 'Kitchen', createdAt: now },
+    { id: uid('dep'), name: 'Store & Inventory', createdAt: now },
+    { id: uid('dep'), name: 'Delivery Ops', createdAt: now },
+    { id: uid('dep'), name: 'Finance', createdAt: now },
+    { id: uid('dep'), name: 'HR & Workforce', createdAt: now },
+  ];
+
+  const automations: WorkflowAutomation[] = [
+    {
+      id: uid('auto'),
+      name: 'Low-stock to procurement request',
+      active: true,
+      trigger: 'task.overdue',
+      conditions: ['inventory level <= reorder threshold'],
+      actions: ['Create replenishment task', 'Notify storekeeper and manager'],
+      runCount: 0,
+      createdAt: now,
+    },
+    {
+      id: uid('auto'),
+      name: 'Daily branch close checklist',
+      active: true,
+      trigger: 'milestone.completed',
+      conditions: ['shift closing milestone reached'],
+      actions: ['Prompt cash count', 'Run payment reconciliation', 'Generate daily sales summary'],
+      runCount: 0,
+      createdAt: now,
+    },
+    {
+      id: uid('auto'),
+      name: 'Reservation reminder and table prep',
+      active: true,
+      trigger: 'task.created',
+      conditions: ['reservation created for today'],
+      actions: ['Send guest reminder', 'Queue table readiness task'],
+      runCount: 0,
+      createdAt: now,
+    },
+  ];
+
+  const analyticsViews: AnalyticsView[] = [
+    {
+      id: uid('view'),
+      name: 'Restaurant Daily Revenue',
+      query: 'daily revenue, average order value, covers served, sales by hour',
+      refreshIntervalMinutes: 15,
+      createdAt: now,
+    },
+    {
+      id: uid('view'),
+      name: 'Food Cost and Waste',
+      query: 'food cost percentage, waste percentage, top wastage ingredients',
+      refreshIntervalMinutes: 30,
+      createdAt: now,
+    },
+    {
+      id: uid('view'),
+      name: 'Branch Performance Comparison',
+      query: 'branch profitability, labor cost percentage, table turnover by branch',
+      refreshIntervalMinutes: 60,
+      createdAt: now,
+    },
+  ];
+
+  const recommendations: AIInsightRecommendation[] = [
+    {
+      id: uid('rec'),
+      title: 'Activate reorder automation for perishables',
+      reason: 'Restaurant operations need tight inventory control to reduce stockouts and waste.',
+      impactScore: 88,
+      createdAt: now,
+    },
+    {
+      id: uid('rec'),
+      title: 'Track shift close variance by payment method',
+      reason: 'Cash, card, and delivery settlement gaps are common leakage points.',
+      impactScore: 82,
+      createdAt: now,
+    },
+    {
+      id: uid('rec'),
+      title: 'Link menu items to recipe ingredients',
+      reason: 'Recipe-based deduction improves food cost accuracy and purchasing decisions.',
+      impactScore: 91,
+      createdAt: now,
+    },
+  ];
+
+  return {
+    project,
+    tasks,
+    departments,
+    automations,
+    analyticsViews,
+    recommendations,
+    summary:
+      'Restaurant template activated: POS, tables, kitchen routing, inventory, procurement, finance reconciliation, workforce, loyalty, and multi-branch analytics are pre-structured for rollout.',
+  };
+}
+
 function loadInitialState(): PersistedState {
   if (typeof window === 'undefined') return INITIAL_STATE;
   try {
@@ -562,7 +783,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       avatarUrl: `https://picsum.photos/seed/${ownerId}/100/100`,
     };
 
-    const starterProject: Project = {
+    const isRestaurantTemplate = mode === 'business' && (businessType ?? '').trim().toLowerCase() === 'restaurant';
+    const restaurant = isRestaurantTemplate
+      ? buildRestaurantStarterData(ownerId, tenantId, now)
+      : null;
+
+    const starterProject: Project = restaurant?.project ?? {
       id: uid('project'),
       tenantId,
       name: 'Launch Plan',
@@ -573,26 +799,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: now,
     };
 
-    const starterTask: Task = {
-      id: uid('task'),
-      projectId: starterProject.id,
-      title: 'Define MVP scope',
-      description: 'List key modules and assign owners.',
-      status: 'todo',
-      priority: 'high',
-      assigneeId: ownerId,
-      dueDate: now.slice(0, 10),
-      createdAt: now,
-      createdBy: ownerId,
-      subtasks: [
-        { id: uid('sub'), title: 'List all target features', completed: false, createdAt: now },
-        { id: uid('sub'), title: 'Prioritize core workflows', completed: false, createdAt: now },
-      ],
-      comments: [],
-      tags: ['planning'],
-      timeEntries: [],
-      attachments: [],
-    };
+    const starterTasks: Task[] = restaurant?.tasks ?? [
+      {
+        id: uid('task'),
+        projectId: starterProject.id,
+        title: 'Define MVP scope',
+        description: 'List key modules and assign owners.',
+        status: 'todo',
+        priority: 'high',
+        assigneeId: ownerId,
+        dueDate: now.slice(0, 10),
+        createdAt: now,
+        createdBy: ownerId,
+        subtasks: [
+          { id: uid('sub'), title: 'List all target features', completed: false, createdAt: now },
+          { id: uid('sub'), title: 'Prioritize core workflows', completed: false, createdAt: now },
+        ],
+        comments: [],
+        tags: ['planning'],
+        timeEntries: [],
+        attachments: [],
+      },
+    ];
 
     setState((prev) => ({
       ...prev,
@@ -602,7 +830,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentWorkspace: workspace,
       users: [owner],
       projects: [starterProject],
-      tasks: [starterTask],
+      tasks: starterTasks,
+      departments: restaurant?.departments ?? prev.departments,
+      automations: restaurant?.automations ?? prev.automations,
+      analyticsViews: restaurant?.analyticsViews ?? prev.analyticsViews,
+      recommendations: restaurant?.recommendations ?? prev.recommendations,
+      workspaceAiSummary: restaurant?.summary ?? prev.workspaceAiSummary,
+      workspaceAiSummaryUpdatedAt: restaurant ? now : prev.workspaceAiSummaryUpdatedAt,
       activity: [
         {
           id: uid('evt'),
@@ -618,6 +852,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           message: `${owner.name} created tenant ${tenant.name}.`,
           createdAt: now,
         },
+        ...(restaurant
+          ? [{
+              id: uid('evt'),
+              type: 'template_used' as const,
+              actorName: owner.name,
+              message: `${owner.name} activated the Restaurant Odoo-style operating template.`,
+              createdAt: now,
+            }]
+          : []),
       ],
       credentials: {
         [email.toLowerCase()]: password,
@@ -629,7 +872,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cloudWrites: Array<Promise<unknown>> = [
       upsertUserToApi(owner, tenantId),
       postJson('/api/projects', starterProject),
-      postJson('/api/tasks', starterTask),
+      ...starterTasks.map((task) => postJson('/api/tasks', task)),
     ];
 
     if (mode === 'business') {

@@ -94,12 +94,15 @@ export async function POST(request: NextRequest) {
       const productLabel = payload.mode === 'business' ? 'Business Management' : 'Project Management';
       const workspaceLabel = payload.workspaceName?.trim() || `${payload.businessName} Workspace`;
       const loginLink = `${appBaseUrl}/`;
+      const templateNote = payload.businessType?.toLowerCase() === 'restaurant'
+        ? '<p><strong>Template activated:</strong> Restaurant Odoo-style operations (POS, tables, kitchen, inventory, procurement, finance, HR, CRM, analytics).</p>'
+        : '';
 
       await resend.emails.send({
         from: 'Airtyn <noreply@airtyn.com>',
         to: email,
         subject: `Welcome to Airtyn, ${payload.ownerName}`,
-        html: `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111"><h2>Welcome to Airtyn</h2><p>Your onboarding is complete for <strong>${productLabel}</strong>.</p><p><strong>Business:</strong> ${payload.businessName}<br/><strong>Workspace:</strong> ${workspaceLabel}${payload.businessType ? `<br/><strong>Primary module:</strong> ${payload.businessType}` : ''}</p><p><a href="${loginLink}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open Airtyn Login</a></p><p>If the button does not work, open this link:</p><p>${loginLink}</p></div>`,
+        html: `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111"><h2>Welcome to Airtyn</h2><p>Your onboarding is complete for <strong>${productLabel}</strong>.</p><p><strong>Business:</strong> ${payload.businessName}<br/><strong>Workspace:</strong> ${workspaceLabel}${payload.businessType ? `<br/><strong>Primary module:</strong> ${payload.businessType}` : ''}</p>${templateNote}<p><a href="${loginLink}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Open Airtyn Login</a></p><p>If the button does not work, open this link:</p><p>${loginLink}</p></div>`,
       });
     }
 

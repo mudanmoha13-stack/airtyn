@@ -21,6 +21,7 @@ type SessionResponse = {
 };
 
 const BUSINESS_TYPES = [
+  { value: 'restaurant', label: 'Restaurant (POS, Kitchen, Inventory, Procurement, Finance, HR, CRM)' },
   { value: 'crm', label: 'Sales & CRM' },
   { value: 'finance', label: 'Finance & Accounting' },
   { value: 'hr', label: 'HR & Payroll' },
