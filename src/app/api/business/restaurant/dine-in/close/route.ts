@@ -319,6 +319,166 @@ export async function POST(request: NextRequest) {
 
     await Promise.all([...lineWrites, ...paymentWrites, ticketWrites]);
 
+    // Phase 4: Calculate labor cost and post accounting entries
+    const kitchenMinutes = Math.max(
+      ...kitchenLines.map((line) => {
+        const station = line.station;
+        if (station === 'cold' || station === 'drinks') return 6;
+        if (station === 'grill') return 14;
+        if (station === 'hot') return 10;
+        return 8;
+      }),
+      0
+    );
+
+    const serviceMode = payload.reservationId ? 'reservation' : 'walk_in';
+
+    // Create labor cost record
+    const laborCostId = makeId(col.bizRestaurantLaborCost);
+    const stationCount = Array.from(new Set(kitchenLines.map((line) => line.station))).length;
+    const stationHourlyRates: Record<string, number> = {
+      cold: 12,
+      drinks: 11,
+      grill: 14,
+      hot: 13,
+      pass: 11,
+    };
+    const avgHourlyRate = stationCount > 0
+      ? Object.values(stationHourlyRates).reduce((a, b) => a + b, 0) / Object.keys(stationHourlyRates).length
+      : 12;
+    const serviceModeMultiplier = serviceMode === 'reservation' ? 1.0 : 1.15;
+    const laborCostPerOrder = Number(((kitchenMinutes / 60) * avgHourlyRate * serviceModeMultiplier).toFixed(2));
+    const laborWrites = adminFirestore.collection(col.bizRestaurantLaborCost).doc(laborCostId).set({
+      id: laborCostId,
+      tenantId,
+      orderId,
+      ticketId,
+      branchId: payload.branchId,
+      kitchenMinutes,
+      serviceMode,
+      numberOfStaff: 1,
+      stationCount,
+      laborCostPerOrder,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
+
+    // Create GL journal entries
+    const journalWrites: Promise<any>[] = [];
+
+    // COGS entry (Debit COGS, Credit Inventory)
+    const cogsJournalId = makeId(col.bizAccountingJournals);
+    journalWrites.push(
+      adminFirestore.collection(col.bizAccountingJournals).doc(cogsJournalId).set({
+        id: cogsJournalId,
+        tenantId,
+        orderId,
+        entryType: 'cogs',
+        accountDebit: '5000', // COGS
+        accountCredit: '1300', // Inventory
+        amount: costTotal,
+        description: `COGS for order ${orderNo}`,
+        branchId: payload.branchId,
+        status: 'posted',
+        createdAt: nowIso(),
+      })
+    );
+
+    // Labor Expense entry (Debit Labor Expense, Credit Payable)
+    const laborJournalId = makeId(col.bizAccountingJournals);
+    journalWrites.push(
+      adminFirestore.collection(col.bizAccountingJournals).doc(laborJournalId).set({
+        id: laborJournalId,
+        tenantId,
+        orderId,
+        entryType: 'labor_expense',
+        accountDebit: '5100', // Labor Expense
+        accountCredit: '2000', // Accounts Payable
+        amount: laborCostPerOrder,
+        description: `Labor Cost for order ${orderNo}`,
+        branchId: payload.branchId,
+        status: 'posted',
+        createdAt: nowIso(),
+      })
+    );
+
+    // Revenue entry (Debit Cash/Receivables, Credit Revenue)
+    const revenueJournalId = makeId(col.bizAccountingJournals);
+    const revenueAccount = payload.payments.some((p) => p.method === 'cash') ? '1000' : '1200'; // Cash or Receivables
+    journalWrites.push(
+      adminFirestore.collection(col.bizAccountingJournals).doc(revenueJournalId).set({
+        id: revenueJournalId,
+        tenantId,
+        orderId,
+        entryType: 'revenue',
+        accountDebit: revenueAccount,
+        accountCredit: '4000', // Revenue
+        amount: total,
+        description: `Revenue from order ${orderNo}`,
+        branchId: payload.branchId,
+        status: 'posted',
+        createdAt: nowIso(),
+      })
+    );
+
+    // Check replenishment needs
+    const replenishmentWrites: Promise<any>[] = [];
+    const componentProductIds = preparedLines
+      .filter((line) => line.recipeItems.length > 0)
+      .flatMap((line) => line.recipeItems.map((item) => String(item.componentProductId ?? '')));
+
+    if (componentProductIds.length > 0) {
+      const uniqueComponentIds = Array.from(new Set(componentProductIds));
+      for (const componentId of uniqueComponentIds) {
+        const stockSnap = await adminFirestore
+          .collection(col.bizStockItems)
+          .where('tenantId', '==', tenantId)
+          .where('productId', '==', componentId)
+          .get();
+
+        const totalStock = stockSnap.docs.reduce((sum, doc) => {
+          const data = doc.data() as Record<string, unknown>;
+          const qty = Number(data.quantity ?? 0);
+          return sum + qty;
+        }, 0);
+
+        // If stock is low (< 20 units), suggest replenishment
+        if (totalStock < 20) {
+          const existingReplenishment = await adminFirestore
+            .collection(col.bizRestaurantReplenishment)
+            .where('tenantId', '==', tenantId)
+            .where('componentProductId', '==', componentId)
+            .where('status', 'in', ['suggested', 'pending'])
+            .limit(1)
+            .get();
+
+          if (existingReplenishment.empty) {
+            const replenishmentId = makeId(col.bizRestaurantReplenishment);
+            replenishmentWrites.push(
+              adminFirestore.collection(col.bizRestaurantReplenishment).doc(replenishmentId).set({
+                id: replenishmentId,
+                tenantId,
+                componentProductId: componentId,
+                branchId: payload.branchId,
+                currentStock: totalStock,
+                suggestedQuantity: 50,
+                minStockLevel: 20,
+                consumptionDailyAvg: 0,
+                leadTimeDays: 3,
+                supplierId: null,
+                status: 'suggested',
+                notes: `Auto-suggested from order ${orderNo}`,
+                createdAt: nowIso(),
+                updatedAt: nowIso(),
+              })
+            );
+          }
+        }
+      }
+    }
+
+    await Promise.all([laborWrites, ...journalWrites, ...replenishmentWrites]);
+
     await adminFirestore.collection(col.bizRestaurantTables).doc(payload.tableId).set(
       {
         status: 'available',
