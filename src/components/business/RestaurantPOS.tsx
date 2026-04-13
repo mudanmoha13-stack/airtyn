@@ -14,22 +14,15 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react';
-import {
-  Button,
-  Input,
-  Label,
-  Badge,
-  Dialog,
-  DialogContent,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Separator,
-  ScrollArea,
-  Sheet,
-  SheetContent,
-} from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 
 // Types
 type OrderMode = 'counter' | 'dine-in' | 'takeaway' | 'delivery' | 'qr' | 'split';
