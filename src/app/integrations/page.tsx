@@ -112,7 +112,7 @@ export default function IntegrationsPage() {
                   <DialogContent className="max-w-lg">
                     <DialogHeader>
                       <DialogTitle>New Webhook</DialogTitle>
-                      <DialogDescription>Configure an endpoint to receive Pinkplan events.</DialogDescription>
+                      <DialogDescription>Configure an endpoint to receive Airtyn events.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div className="space-y-2">
@@ -248,7 +248,7 @@ export default function IntegrationsPage() {
                 </div>
                 <div>
                   <CardTitle className="text-base">Slack</CardTitle>
-                  <CardDescription>Send Pinkplan notifications to a Slack channel.</CardDescription>
+                  <CardDescription>Send Airtyn notifications to a Slack channel.</CardDescription>
                 </div>
               </div>
               <Switch

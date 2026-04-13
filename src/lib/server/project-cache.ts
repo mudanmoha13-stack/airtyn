@@ -2,30 +2,38 @@ import { tryRedisConnection } from '@/lib/server/redis';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, normalizeDate, asNumber } from '@/lib/server/firestore-data';
 
-const PROJECTS_CACHE_KEY = 'pinkplan:projects:all';
 const PROJECTS_CACHE_TTL_SECONDS = 60;
 
-export async function listProjectsCached() {
+function getProjectsCacheKey(tenantId: string) {
+  return `pinkplan:projects:${tenantId}`;
+}
+
+export async function listProjectsCached(tenantId: string) {
   const redis = await tryRedisConnection();
   if (redis) {
-    const cached = await redis.get(PROJECTS_CACHE_KEY);
+    const cacheKey = getProjectsCacheKey(tenantId);
+    const cached = await redis.get(cacheKey);
     if (cached) {
       return JSON.parse(cached) as Awaited<ReturnType<typeof fetchProjects>>;
     }
-    const projects = await fetchProjects();
-    await redis.set(PROJECTS_CACHE_KEY, JSON.stringify(projects), { EX: PROJECTS_CACHE_TTL_SECONDS });
+    const projects = await fetchProjects(tenantId);
+    await redis.set(cacheKey, JSON.stringify(projects), { EX: PROJECTS_CACHE_TTL_SECONDS });
     return projects;
   }
-  return fetchProjects();
+  return fetchProjects(tenantId);
 }
 
-export async function invalidateProjectsCache() {
+export async function invalidateProjectsCache(tenantId: string) {
   const redis = await tryRedisConnection();
-  if (redis) await redis.del(PROJECTS_CACHE_KEY);
+  if (redis) await redis.del(getProjectsCacheKey(tenantId));
 }
 
-async function fetchProjects() {
-  const snap = await adminFirestore.collection(col.coreProjects).orderBy('createdAt', 'desc').get();
+async function fetchProjects(tenantId: string) {
+  const snap = await adminFirestore
+    .collection(col.coreProjects)
+    .where('tenantId', '==', tenantId)
+    .orderBy('createdAt', 'desc')
+    .get();
   return snap.docs.map((doc) => {
     const data = doc.data();
     return {

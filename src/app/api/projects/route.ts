@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, makeId, nowIso } from '@/lib/server/firestore-data';
 import { invalidateProjectsCache, listProjectsCached } from '@/lib/server/project-cache';
+import { resolveCoreTenantId } from '@/lib/server/core-tenant';
 
 const createProjectSchema = z.object({
   id: z.string().optional(),
@@ -17,9 +18,10 @@ const createProjectSchema = z.object({
   createdAt: z.string().datetime().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const projects = await listProjectsCached();
+    const tenantId = resolveCoreTenantId(request);
+    const projects = await listProjectsCached(tenantId);
     return NextResponse.json({ ok: true, cached: true, projects });
   } catch (error) {
     return NextResponse.json(
@@ -34,7 +36,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const tenantId = resolveCoreTenantId(request);
     const payload = createProjectSchema.parse(await request.json());
+    if (payload.tenantId !== tenantId) {
+      return NextResponse.json({ ok: false, error: 'Tenant mismatch for project creation' }, { status: 403 });
+    }
     const id = payload.id ?? makeId(col.coreProjects);
     const now = nowIso();
     const ref = adminFirestore.collection(col.coreProjects).doc(id);
@@ -52,7 +58,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     });
     const project = { id, ...(await ref.get()).data() };
-    await invalidateProjectsCache();
+    await invalidateProjectsCache(tenantId);
 
     return NextResponse.json({ ok: true, project }, { status: 201 });
   } catch (error) {

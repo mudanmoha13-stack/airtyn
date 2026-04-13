@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, makeId, nowIso } from '@/lib/server/firestore-data';
 import { invalidateUsersCache, listUsersCached } from '@/lib/server/user-cache';
+import { resolveCoreTenantId } from '@/lib/server/core-tenant';
+import { hashPassword } from '@/lib/server/password';
 
 const createUserSchema = z.object({
   id: z.string().optional(),
@@ -12,12 +14,14 @@ const createUserSchema = z.object({
   email: z.string().email(),
   avatarUrl: z.string().optional(),
   role: z.enum(['owner', 'admin', 'member']),
+  password: z.string().min(8).optional(),
   createdAt: z.string().datetime().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const users = await listUsersCached();
+    const tenantId = resolveCoreTenantId(request);
+    const users = await listUsersCached(tenantId);
     return NextResponse.json({ ok: true, cached: true, users });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Failed to list users' }, { status: 500 });
@@ -26,11 +30,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const tenantId = resolveCoreTenantId(request);
     const payload = createUserSchema.parse(await request.json());
+    if (payload.tenantId !== tenantId) {
+      return NextResponse.json({ ok: false, error: 'Tenant mismatch for user creation' }, { status: 403 });
+    }
     const email = payload.email.toLowerCase();
     const existingByEmail = await adminFirestore
       .collection(col.coreUsers)
       .where('email', '==', email)
+      .where('tenantId', '==', tenantId)
       .limit(1)
       .get();
 
@@ -46,6 +55,7 @@ export async function POST(request: NextRequest) {
         email,
         avatarUrl: payload.avatarUrl ?? null,
         role: payload.role,
+        ...(payload.password ? { passwordHash: hashPassword(payload.password) } : {}),
         createdAt: payload.createdAt ?? now,
         updatedAt: now,
       },
@@ -54,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const snap = await ref.get();
     const user = { id: snap.id, ...snap.data() };
-    await invalidateUsersCache();
+    await invalidateUsersCache(tenantId);
     return NextResponse.json({ ok: true, user }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

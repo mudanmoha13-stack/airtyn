@@ -2,40 +2,46 @@ import { tryRedisConnection } from '@/lib/server/redis';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, asArray, normalizeDate, toIsoDateOnly } from '@/lib/server/firestore-data';
 
-const TASKS_CACHE_KEY = 'pinkplan:tasks:all';
 const TASKS_CACHE_TTL_SECONDS = 60;
 
-export async function listTasksCached() {
+function getTasksCacheKey(tenantId: string) {
+  return `pinkplan:tasks:${tenantId}`;
+}
+
+export async function listTasksCached(tenantId: string) {
   const redis = await tryRedisConnection();
   if (redis) {
-    const cached = await redis.get(TASKS_CACHE_KEY);
+    const cacheKey = getTasksCacheKey(tenantId);
+    const cached = await redis.get(cacheKey);
     if (cached) {
       return JSON.parse(cached) as Awaited<ReturnType<typeof fetchTasks>>;
     }
-    const tasks = await fetchTasks();
-    await redis.set(TASKS_CACHE_KEY, JSON.stringify(tasks), { EX: TASKS_CACHE_TTL_SECONDS });
+    const tasks = await fetchTasks(tenantId);
+    await redis.set(cacheKey, JSON.stringify(tasks), { EX: TASKS_CACHE_TTL_SECONDS });
     return tasks;
   }
-  return fetchTasks();
+  return fetchTasks(tenantId);
 }
 
-export async function invalidateTasksCache() {
+export async function invalidateTasksCache(tenantId: string) {
   const redis = await tryRedisConnection();
-  if (redis) await redis.del(TASKS_CACHE_KEY);
+  if (redis) await redis.del(getTasksCacheKey(tenantId));
 }
 
-async function fetchTasks() {
+async function fetchTasks(tenantId: string) {
   const [tasksSnap, commentsSnap, subtasksSnap] = await Promise.all([
-    adminFirestore.collection(col.coreTasks).orderBy('createdAt', 'desc').get(),
+    adminFirestore.collection(col.coreTasks).where('tenantId', '==', tenantId).orderBy('createdAt', 'desc').get(),
     adminFirestore.collection(col.coreTaskComments).orderBy('createdAt', 'asc').get(),
     adminFirestore.collection(col.coreSubtasks).orderBy('createdAt', 'asc').get(),
   ]);
+
+  const taskIds = new Set(tasksSnap.docs.map((doc) => doc.id));
 
   const commentsByTask = new Map<string, Array<Record<string, unknown>>>();
   for (const doc of commentsSnap.docs) {
     const data = doc.data();
     const taskId = String(data.taskId ?? '');
-    if (!taskId) continue;
+    if (!taskId || !taskIds.has(taskId)) continue;
     const arr = commentsByTask.get(taskId) ?? [];
     arr.push({ id: doc.id, ...data });
     commentsByTask.set(taskId, arr);
@@ -45,7 +51,7 @@ async function fetchTasks() {
   for (const doc of subtasksSnap.docs) {
     const data = doc.data();
     const taskId = String(data.taskId ?? '');
-    if (!taskId) continue;
+    if (!taskId || !taskIds.has(taskId)) continue;
     const arr = subtasksByTask.get(taskId) ?? [];
     arr.push({ id: doc.id, ...data });
     subtasksByTask.set(taskId, arr);

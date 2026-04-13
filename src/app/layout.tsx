@@ -3,8 +3,13 @@ import './globals.css';
 import { AppProviders } from '@/components/AppProviders';
 
 export const metadata: Metadata = {
-  title: 'Pinkplan | Advanced Project Management',
-  description: 'A modern, high-end collaborative project management SaaS platform.',
+  title: 'Airtyn | Advanced Project Management',
+  description: 'A modern, high-end collaborative operating platform for projects and business operations.',
+  icons: {
+    icon: '/icon.png',
+    apple: '/icon.png',
+    shortcut: '/icon.png',
+  },
 };
 
 export const viewport: Viewport = {

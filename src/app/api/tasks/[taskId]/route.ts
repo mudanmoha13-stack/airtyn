@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, nowIso } from '@/lib/server/firestore-data';
 import { invalidateTasksCache } from '@/lib/server/task-cache';
+import { resolveCoreTenantId } from '@/lib/server/core-tenant';
 
 const updateTaskSchema = z.object({
   status: z.enum(['todo', 'in_progress', 'review', 'done']).optional(),
@@ -15,9 +16,17 @@ const updateTaskSchema = z.object({
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ taskId: string }> }) {
   try {
+    const tenantId = resolveCoreTenantId(request);
     const { taskId } = await context.params;
     const payload = updateTaskSchema.parse(await request.json());
     const ref = adminFirestore.collection(col.coreTasks).doc(taskId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return NextResponse.json({ ok: false, error: 'Task not found' }, { status: 404 });
+    }
+    if (String(snap.data()?.tenantId ?? '') !== tenantId) {
+      return NextResponse.json({ ok: false, error: 'Task not found for tenant' }, { status: 404 });
+    }
     await ref.set(
       {
         ...payload,
@@ -26,12 +35,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ t
       },
       { merge: true }
     );
-    const snap = await ref.get();
-    if (!snap.exists) {
-      return NextResponse.json({ ok: false, error: 'Task not found' }, { status: 404 });
-    }
-    const task = { id: snap.id, ...snap.data() };
-    await invalidateTasksCache();
+    const updatedSnap = await ref.get();
+    const task = { id: updatedSnap.id, ...updatedSnap.data() };
+    await invalidateTasksCache(tenantId);
     return NextResponse.json({ ok: true, task });
   } catch (error) {
     if (error instanceof z.ZodError) {

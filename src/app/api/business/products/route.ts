@@ -20,12 +20,16 @@ const createSchema = z.object({
 });
 
 const patchSchema = z.object({
+  name: z.string().optional(),
+  sku: z.string().optional(),
+  category: z.string().optional(),
+  productType: z.enum(['physical', 'digital', 'service', 'bundle']).optional(),
   lifecycle: z.enum(['draft', 'active', 'discontinued', 'seasonal', 'archived']).optional(),
   description: z.string().optional(),
-  basePrice: z.number().nonnegative().optional(),
-  costPrice: z.number().nonnegative().optional(),
-  categoryId: z.string().optional(),
-  baseUomId: z.string().optional(),
+  basePrice: z.number().nonnegative().nullable().optional(),
+  costPrice: z.number().nonnegative().nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+  baseUomId: z.string().nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -179,7 +183,58 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Product not found for tenant' }, { status: 404 });
     }
 
-    await ref.set({ ...body, updatedAt: nowIso() }, { merge: true });
+    const updates: Record<string, unknown> = { updatedAt: nowIso() };
+
+    if (body.name !== undefined) {
+      const normalizedName = body.name.trim();
+      if (!normalizedName) {
+        return NextResponse.json({ ok: false, error: 'Product name is required' }, { status: 400 });
+      }
+      const duplicateName = await adminFirestore
+        .collection(col.bizProducts)
+        .where('tenantId', '==', tenantId)
+        .where('nameLower', '==', normalizedName.toLowerCase())
+        .limit(1)
+        .get();
+
+      if (!duplicateName.empty && duplicateName.docs[0].id !== id) {
+        return NextResponse.json({ ok: false, error: `Product '${normalizedName}' already exists`, duplicateField: 'name' }, { status: 409 });
+      }
+
+      updates.name = normalizedName;
+      updates.nameLower = normalizedName.toLowerCase();
+    }
+
+    if (body.sku !== undefined) {
+      const normalizedSku = body.sku.trim().toUpperCase();
+      if (!normalizedSku) {
+        return NextResponse.json({ ok: false, error: 'SKU cannot be empty' }, { status: 400 });
+      }
+
+      const duplicateSku = await adminFirestore
+        .collection(col.bizProducts)
+        .where('tenantId', '==', tenantId)
+        .where('sku', '==', normalizedSku)
+        .limit(1)
+        .get();
+
+      if (!duplicateSku.empty && duplicateSku.docs[0].id !== id) {
+        return NextResponse.json({ ok: false, error: `SKU '${normalizedSku}' is already in use`, duplicateField: 'sku' }, { status: 409 });
+      }
+
+      updates.sku = normalizedSku;
+    }
+
+    if (body.category !== undefined) updates.category = body.category.trim() || null;
+    if (body.productType !== undefined) updates.productType = body.productType;
+    if (body.lifecycle !== undefined) updates.lifecycle = body.lifecycle;
+    if (body.description !== undefined) updates.description = body.description.trim() || null;
+    if (body.basePrice !== undefined) updates.basePrice = body.basePrice;
+    if (body.costPrice !== undefined) updates.costPrice = body.costPrice;
+    if (body.categoryId !== undefined) updates.categoryId = body.categoryId || null;
+    if (body.baseUomId !== undefined) updates.baseUomId = body.baseUomId || null;
+
+    await ref.set(updates, { merge: true });
     const product = { id, ...(await ref.get()).data() };
 
     return NextResponse.json({ ok: true, product });

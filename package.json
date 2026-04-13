@@ -61,12 +61,14 @@
     "resend": "^6.10.0",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
+    "@types/xlsx": "^0.0.35",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.3",
     "genkit-cli": "^1.28.0",

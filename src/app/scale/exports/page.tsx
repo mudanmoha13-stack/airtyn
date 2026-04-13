@@ -14,7 +14,7 @@ export default function ExportsScalePage() {
   const { warehouseExports, addWarehouseExport, runWarehouseExport } = useAppState();
   const [destination, setDestination] = useState<'bigquery' | 'snowflake' | 'redshift' | 'azure_synapse'>('bigquery');
   const [frequency, setFrequency] = useState<'hourly' | 'daily' | 'weekly'>('daily');
-  const [dataset, setDataset] = useState('pinkplan_prod.workspace_metrics');
+  const [dataset, setDataset] = useState('airtyn_prod.workspace_metrics');
 
   return (
     <Shell>

@@ -16,7 +16,7 @@ export async function POST() {
       from: 'Airtyn <noreply@airtyn.com>',
       to: to ?? 'wirenext8@gmail.com',
       subject: 'Airtyn – Test Email from CRM',
-      html: '<p>This is a test email sent from the <strong>Pinkplan CRM / Sales module</strong>. If you received this, your Resend integration is working correctly.</p>',
+      html: '<p>This is a test email sent from the <strong>Airtyn CRM / Sales module</strong>. If you received this, your Resend integration is working correctly.</p>',
     });
 
     if (error) {

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CsvSheetImporter } from '@/components/business/CsvSheetImporter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -161,6 +162,19 @@ const CatalogTab = () => {
   const [tagsInput, setTagsInput]     = useState('');
   const [saving, setSaving]           = useState(false);
   const [feedback, setFeedback]       = useState<string | null>(null);
+  const [editingId, setEditingId]     = useState<string | null>(null);
+  const [editSaving, setEditSaving]   = useState(false);
+  const [editFeedback, setEditFeedback] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{
+    name: string;
+    sku: string;
+    description: string;
+    category: string;
+    productType: ProductType;
+    lifecycle: ProductLifecycle;
+    basePrice: string;
+    costPrice: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -287,6 +301,67 @@ const CatalogTab = () => {
       });
     } catch {
       // optimistic update already applied
+    }
+  };
+
+  const startEdit = (product: Product) => {
+    setEditingId(product.id);
+    setEditFeedback(null);
+    setEditDraft({
+      name: product.name ?? '',
+      sku: product.sku ?? '',
+      description: product.description ?? '',
+      category: product.productCategory?.name ?? product.category ?? '',
+      productType: product.productType,
+      lifecycle: product.lifecycle,
+      basePrice: product.basePrice != null ? String(product.basePrice) : '',
+      costPrice: product.costPrice != null ? String(product.costPrice) : '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft(null);
+    setEditFeedback(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editDraft) return;
+    if (!editDraft.name.trim()) {
+      setEditFeedback('Product name is required.');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditFeedback(null);
+    try {
+      const res = await fetch(`/api/business/products?id=${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editDraft.name.trim(),
+          sku: editDraft.sku.trim(),
+          description: editDraft.description,
+          category: editDraft.category,
+          productType: editDraft.productType,
+          lifecycle: editDraft.lifecycle,
+          basePrice: editDraft.basePrice.trim() === '' ? null : parseFloat(editDraft.basePrice),
+          costPrice: editDraft.costPrice.trim() === '' ? null : parseFloat(editDraft.costPrice),
+        }),
+      });
+
+      if (!res.ok) {
+        setEditFeedback(await readApiError(res, 'Unable to update product.'));
+        return;
+      }
+
+      await load();
+      cancelEdit();
+      setFeedback('Product updated successfully.');
+    } catch {
+      setEditFeedback('Unable to update product right now.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -518,38 +593,119 @@ const CatalogTab = () => {
               <th className="px-4 py-3 font-medium">Sales Value</th>
               <th className="px-4 py-3 font-medium">Variants</th>
               <th className="px-4 py-3 font-medium">Action</th>
+              <th className="px-4 py-3 font-medium">Edit</th>
             </tr>
           </thead>
           <tbody>
             {filteredProducts.length === 0 ? (
-              <tr><td colSpan={11} className="px-4 py-6 text-center text-muted-foreground">No products match the active filter.</td></tr>
+              <tr><td colSpan={12} className="px-4 py-6 text-center text-muted-foreground">No products match the active filter.</td></tr>
             ) : filteredProducts.map((p) => (
-              <tr key={p.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                <td className="px-4 py-3">
-                  <p className="font-medium text-foreground">{p.name}</p>
-                  {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
-                  {Array.isArray(p.tags) && p.tags.length > 0 && (
-                    <div className="mt-1 flex gap-1">
-                      {p.tags.map((t) => <span key={t} className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{t}</span>)}
-                    </div>
-                  )}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-primary">{p.sku ?? '—'}</td>
-                <td className="px-4 py-3"><Badge variant="outline" className={TYPE_COLORS[p.productType]}>{p.productType}</Badge></td>
-                <td className="px-4 py-3"><Badge variant="outline" className={LIFECYCLE_COLORS[p.lifecycle]}>{p.lifecycle}</Badge></td>
-                <td className="px-4 py-3 text-muted-foreground">{p.productCategory?.name ?? p.category ?? '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground">{p.baseUom ? `${p.baseUom.name} (${p.baseUom.symbol})` : '—'}</td>
-                <td className="px-4 py-3 text-primary">{p.basePrice ? `$${Number(p.basePrice).toFixed(2)}` : '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground">{p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '—'}</td>
-                <td className="px-4 py-3 text-foreground">{p.basePrice != null ? `$${(Number(p.basePrice) - Number(p.costPrice ?? 0)).toFixed(2)}` : '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground">{p.variants?.length ?? 0}</td>
-                <td className="px-4 py-3">
-                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40 text-xs"
-                    onClick={() => void setProductLifecycle(p.id, advanceLifecycle(p.lifecycle))}>
-                    Advance
-                  </Button>
-                </td>
-              </tr>
+              <React.Fragment key={p.id}>
+                <tr className="border-t border-white/5 hover:bg-white/[0.02]">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-foreground">{p.name}</p>
+                    {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
+                    {Array.isArray(p.tags) && p.tags.length > 0 && (
+                      <div className="mt-1 flex gap-1">
+                        {p.tags.map((t) => <span key={t} className="rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted-foreground">{t}</span>)}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-primary">{p.sku ?? '—'}</td>
+                  <td className="px-4 py-3"><Badge variant="outline" className={TYPE_COLORS[p.productType]}>{p.productType}</Badge></td>
+                  <td className="px-4 py-3"><Badge variant="outline" className={LIFECYCLE_COLORS[p.lifecycle]}>{p.lifecycle}</Badge></td>
+                  <td className="px-4 py-3 text-muted-foreground">{p.productCategory?.name ?? p.category ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{p.baseUom ? `${p.baseUom.name} (${p.baseUom.symbol})` : '—'}</td>
+                  <td className="px-4 py-3 text-primary">{p.basePrice ? `$${Number(p.basePrice).toFixed(2)}` : '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{p.costPrice ? `$${Number(p.costPrice).toFixed(2)}` : '—'}</td>
+                  <td className="px-4 py-3 text-foreground">{p.basePrice != null ? `$${(Number(p.basePrice) - Number(p.costPrice ?? 0)).toFixed(2)}` : '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{p.variants?.length ?? 0}</td>
+                  <td className="px-4 py-3">
+                    <Button size="sm" variant="outline" className="border-white/10 bg-card/40 text-xs"
+                      onClick={() => void setProductLifecycle(p.id, advanceLifecycle(p.lifecycle))}>
+                      Advance
+                    </Button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Button
+                      size="sm"
+                      variant={editingId === p.id ? 'default' : 'outline'}
+                      className={editingId === p.id ? 'gradient-amber text-black font-semibold text-xs' : 'border-white/10 bg-card/40 text-xs'}
+                      onClick={() => editingId === p.id ? cancelEdit() : startEdit(p)}
+                    >
+                      {editingId === p.id ? 'Close' : 'Edit'}
+                    </Button>
+                  </td>
+                </tr>
+                {editingId === p.id && editDraft ? (
+                  <tr className="border-t border-white/5 bg-card/20">
+                    <td colSpan={12} className="px-4 py-4">
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Name *</Label>
+                          <Input value={editDraft.name} onChange={(e) => setEditDraft((prev) => prev ? { ...prev, name: e.target.value } : prev)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">SKU</Label>
+                          <Input value={editDraft.sku} onChange={(e) => setEditDraft((prev) => prev ? { ...prev, sku: e.target.value } : prev)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Category</Label>
+                          <Input value={editDraft.category} onChange={(e) => setEditDraft((prev) => prev ? { ...prev, category: e.target.value } : prev)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Type</Label>
+                          <select
+                            value={editDraft.productType}
+                            onChange={(e) => setEditDraft((prev) => prev ? { ...prev, productType: e.target.value as ProductType } : prev)}
+                            className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground"
+                          >
+                            <option value="physical">Physical</option>
+                            <option value="digital">Digital</option>
+                            <option value="service">Service</option>
+                            <option value="bundle">Bundle</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Lifecycle</Label>
+                          <select
+                            value={editDraft.lifecycle}
+                            onChange={(e) => setEditDraft((prev) => prev ? { ...prev, lifecycle: e.target.value as ProductLifecycle } : prev)}
+                            className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground"
+                          >
+                            <option value="draft">Draft</option>
+                            <option value="active">Active</option>
+                            <option value="seasonal">Seasonal</option>
+                            <option value="discontinued">Discontinued</option>
+                            <option value="archived">Archived</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Sales Price</Label>
+                          <Input value={editDraft.basePrice} onChange={(e) => setEditDraft((prev) => prev ? { ...prev, basePrice: e.target.value } : prev)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Cost/Item</Label>
+                          <Input value={editDraft.costPrice} onChange={(e) => setEditDraft((prev) => prev ? { ...prev, costPrice: e.target.value } : prev)} />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2 lg:col-span-4">
+                          <Label className="text-xs text-muted-foreground">Description</Label>
+                          <Input value={editDraft.description} onChange={(e) => setEditDraft((prev) => prev ? { ...prev, description: e.target.value } : prev)} />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Button size="sm" className="gradient-amber text-black font-semibold" onClick={saveEdit} disabled={editSaving}>
+                          {editSaving ? 'Saving…' : 'Save Changes'}
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={cancelEdit} disabled={editSaving}>
+                          Cancel
+                        </Button>
+                        {editFeedback ? <p className="text-sm text-muted-foreground">{editFeedback}</p> : null}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -1365,6 +1521,8 @@ export function ProductManagementContent() {
           Unified product catalog, variants, categories, units of measure, bundles, and SKU generation rules.
         </p>
       </div>
+
+      <CsvSheetImporter mode="products" onImported={() => window.location.reload()} />
 
       <Tabs defaultValue="catalog" className="w-full">
         <TabsList className="mb-4 flex h-auto flex-wrap gap-1 bg-card/40 p-1">

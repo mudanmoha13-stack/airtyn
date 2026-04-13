@@ -14,6 +14,8 @@ import type { BusinessModuleSpec, BusinessRecord } from '@/lib/business-os';
 import { ProductManagementContent } from '@/components/business/ProductManagementContent';
 import { SalesModuleContent } from '@/components/business/SalesModuleContent';
 import { HrOperationsContent } from '@/components/business/HrOperationsContent';
+import { CsvSheetImporter } from '@/components/business/CsvSheetImporter';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const MODULE_UI_LABELS: Record<BusinessModuleKey, {
   objectLabel: string;
@@ -174,6 +176,13 @@ const MODULE_TABS: Record<BusinessModuleKey, ModuleTab[]> = {
 function getDefaultTab(moduleKey: BusinessModuleKey): string {
   const tabs = MODULE_TABS[moduleKey] ?? [];
   return (tabs.find((tab) => tab.default) ?? tabs[0])?.id ?? '';
+}
+
+function sectionLabelFromId(id: string): string {
+  return id
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 const BulletList = ({ title, items, id }: { title: string; items: string[]; id?: string }) => (
@@ -813,6 +822,8 @@ const InventoryModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
         </Card>
       </div>
 
+      <CsvSheetImporter mode="inventory" onImported={() => window.location.reload()} />
+
       <ProductManagementContent />
 
       <div className="grid gap-4 xl:grid-cols-12">
@@ -967,7 +978,7 @@ const HrModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
             name: 'Nina Joseph',
             title: 'Senior Ops Manager',
             department: 'Operations',
-            email: 'nina@pinkplan.local',
+            email: 'nina@airtyn.local',
             status: 'Active',
           },
         ]);
@@ -1300,14 +1311,34 @@ export function BusinessModulePage({
   const Icon = module.icon;
   const labels = MODULE_UI_LABELS[moduleKey];
   const tabs = MODULE_TABS[moduleKey] ?? [];
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<string>(() => getDefaultTab(moduleKey));
+  const [activeMobileSection, setActiveMobileSection] = useState<string>('');
+
+  useEffect(() => {
+    setActiveTab(getDefaultTab(moduleKey));
+  }, [moduleKey]);
+
+  const activeTabDef = useMemo(() => tabs.find((tab) => tab.id === activeTab) ?? tabs[0], [tabs, activeTab]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setActiveMobileSection('');
+      return;
+    }
+    const tabSections = activeTabDef?.sectionIds ?? [];
+    const fallback = tabSections[0] ?? '';
+    setActiveMobileSection((prev) => (prev && tabSections.includes(prev) ? prev : fallback));
+  }, [isMobile, activeTabDef]);
 
   const hiddenSectionIds = useMemo(() => {
-    const activeTabDef = tabs.find((tab) => tab.id === activeTab);
-    const visibleSet = new Set(activeTabDef?.sectionIds ?? []);
+    const visibleSectionIds = isMobile
+      ? (activeMobileSection ? [activeMobileSection] : (activeTabDef?.sectionIds.slice(0, 1) ?? []))
+      : (activeTabDef?.sectionIds ?? []);
+    const visibleSet = new Set(visibleSectionIds);
     const allSectionIds = tabs.flatMap((tab) => tab.sectionIds);
     return allSectionIds.filter((id) => !visibleSet.has(id));
-  }, [tabs, activeTab]);
+  }, [tabs, activeTabDef, isMobile, activeMobileSection]);
 
   const content = (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
@@ -1325,31 +1356,43 @@ export function BusinessModulePage({
                 <Icon className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="bg-gradient-to-r from-white to-white/70 bg-clip-text text-4xl font-bold text-transparent">
+                <h1 className="bg-gradient-to-r from-white to-white/70 bg-clip-text text-2xl font-bold text-transparent md:text-4xl">
                   {module.title}
                 </h1>
-                <p className="mt-2 max-w-3xl text-muted-foreground">
+                <p className="mt-2 max-w-3xl text-sm text-muted-foreground md:text-base">
                   {module.summary}
                 </p>
               </div>
             </div>
           </div>
           {actionHref ? (
-            <Button asChild className="gradient-amber h-11 rounded-xl px-4 text-black font-semibold shadow-lg shadow-amber-500/20">
+            <Button asChild className="gradient-amber h-11 w-full rounded-xl px-4 text-black font-semibold shadow-lg shadow-amber-500/20 sm:w-auto">
               <Link href={actionHref}>
                 {actionLabel}
                 <ArrowUpRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           ) : (
-            <Button className="gradient-amber h-11 rounded-xl px-4 text-black font-semibold shadow-lg shadow-amber-500/20">
+            <Button className="gradient-amber h-11 w-full rounded-xl px-4 text-black font-semibold shadow-lg shadow-amber-500/20 sm:w-auto">
               {actionLabel}
               <ArrowUpRight className="ml-2 h-4 w-4" />
             </Button>
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:hidden">
+          {module.stats.slice(0, 2).map((stat) => (
+            <Card key={stat.label} className="glass-card border-white/5">
+              <CardContent className="pt-5">
+                <div className="text-xs text-muted-foreground">{stat.label}</div>
+                <div className="mt-2 text-2xl font-bold">{stat.value}</div>
+                <div className="mt-1 text-xs text-primary">{stat.delta}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-4">
           {module.stats.map((stat) => (
             <Card key={stat.label} className="glass-card border-white/5">
               <CardContent className="pt-6">
@@ -1361,7 +1404,56 @@ export function BusinessModulePage({
           ))}
         </div>
 
-        {tabs.length > 1 ? (
+        {tabs.length > 1 && isMobile ? (
+          <Card className="glass-card border-white/5 md:hidden">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Mobile Navigation</CardTitle>
+              <CardDescription>Choose a main module tab and one sub-module section to keep the screen focused.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Main Module</p>
+                <select
+                  value={activeTab}
+                  onChange={(event) => setActiveTab(event.target.value)}
+                  className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground"
+                >
+                  {tabs.map((tab) => (
+                    <option key={tab.id} value={tab.id}>{tab.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Sub Module</p>
+                <select
+                  value={activeMobileSection}
+                  onChange={(event) => setActiveMobileSection(event.target.value)}
+                  className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground"
+                >
+                  {(activeTabDef?.sectionIds ?? []).map((sectionId) => (
+                    <option key={sectionId} value={sectionId}>{sectionLabelFromId(sectionId)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {(activeTabDef?.sectionIds ?? []).map((sectionId) => (
+                  <a
+                    key={sectionId}
+                    href={`#${sectionId}`}
+                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${activeMobileSection === sectionId ? 'border-primary/40 bg-primary/10 text-primary' : 'border-white/10 bg-card/30 text-muted-foreground'}`}
+                    onClick={() => setActiveMobileSection(sectionId)}
+                  >
+                    {sectionLabelFromId(sectionId)}
+                  </a>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {tabs.length > 1 && !isMobile ? (
           <div className="flex gap-1 overflow-x-auto rounded-xl border border-white/5 bg-card/40 p-1 scrollbar-none">
             {tabs.map((tab) => (
               <button

@@ -864,7 +864,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     const receiptPaid = lastReceipt ? lastReceipt.paid : paidTotal;
 
     const body = [
-      'Pinkplan POS Receipt',
+      'Airtyn POS Receipt',
       `Order: ${receiptOrderNo}`,
       `Sales Rep: ${receiptEmployee}`,
       `Customer: ${receiptCustomerName}`,
@@ -920,7 +920,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
         status: 'draft',
         customer: {
           name: 'Quotation Customer',
-          email: 'quotation@pinkplan.local',
+          email: 'quotation@airtyn.local',
           phone: 'N/A',
         },
         lines: [{ productId: quoteProductId, quantity: qty, unitPrice: price }],

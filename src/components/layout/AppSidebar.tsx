@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import { ClipboardList, ListChecks, LogOut, Plus, ShieldCheck, Workflow } from 'lucide-react';
 import {
   Sidebar,
@@ -293,11 +294,8 @@ export const AppSidebar = () => {
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader className="flex h-16 items-center px-4">
         <div className="flex items-center gap-3">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-lg font-bold ${product === 'business' ? 'gradient-amber text-black' : 'gradient-pink-blue text-white'}`}>
-            P
-          </div>
           <div className="group-data-[collapsible=icon]:hidden">
-            <span className="font-headline text-xl font-bold">Airtyn</span>
+            <Image src="/airtyn-logo.png" alt="Airtyn" width={110} height={34} className="h-7 w-auto" priority />
             <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {product === 'business' ? 'Business OS' : 'Project OS'}
             </p>

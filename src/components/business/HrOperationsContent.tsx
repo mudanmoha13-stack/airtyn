@@ -175,7 +175,7 @@ export function HrOperationsContent({ module }: { module: BusinessModuleSpec }) 
         name: record.title,
         title: record.subtitle,
         department: 'General',
-        email: `employee${index + 1}@pinkplan.local`,
+        email: `employee${index + 1}@airtyn.local`,
         status: 'active',
       })));
     }

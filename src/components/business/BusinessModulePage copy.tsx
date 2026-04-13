@@ -957,7 +957,7 @@ const HrModuleContent = ({ module }: { module: BusinessModuleSpec }) => {
             name: 'Nina Joseph',
             title: 'Senior Ops Manager',
             department: 'Operations',
-            email: 'nina@pinkplan.local',
+            email: 'nina@airtyn.local',
             status: 'Active',
           },
         ]);

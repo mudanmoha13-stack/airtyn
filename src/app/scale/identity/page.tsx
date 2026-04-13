@@ -16,11 +16,11 @@ export default function IdentityScalePage() {
   const [enabled, setEnabled] = useState<boolean>(ssoConfig?.enabled ?? false);
   const [domain, setDomain] = useState(ssoConfig?.domain ?? 'acme.com');
   const [signInUrl, setSignInUrl] = useState(ssoConfig?.signInUrl ?? 'https://idp.acme.com/sso');
-  const [issuer, setIssuer] = useState(ssoConfig?.issuer ?? 'pinkplan-sp');
+  const [issuer, setIssuer] = useState(ssoConfig?.issuer ?? 'airtyn-sp');
   const [fingerprint, setFingerprint] = useState(ssoConfig?.certificateFingerprint ?? 'SHA256:ABCD1234');
 
   const [scimEnabled, setScimEnabled] = useState<boolean>(scimConfig?.enabled ?? false);
-  const [scimEndpoint, setScimEndpoint] = useState(scimConfig?.endpoint ?? 'https://api.pinkplan.app/scim/v2');
+  const [scimEndpoint, setScimEndpoint] = useState(scimConfig?.endpoint ?? 'https://api.airtyn.com/scim/v2');
   const [tokenPreview, setTokenPreview] = useState(scimConfig?.tokenPreview ?? 'sk_live_xxx...');
 
   const provisionSummary = useMemo(() => {

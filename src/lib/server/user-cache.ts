@@ -2,30 +2,34 @@ import { tryRedisConnection } from '@/lib/server/redis';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, normalizeDate } from '@/lib/server/firestore-data';
 
-const USERS_CACHE_KEY = 'pinkplan:users:all';
 const USERS_CACHE_TTL_SECONDS = 60;
 
-export async function listUsersCached() {
+function getUsersCacheKey(tenantId: string) {
+  return `pinkplan:users:${tenantId}`;
+}
+
+export async function listUsersCached(tenantId: string) {
   const redis = await tryRedisConnection();
   if (redis) {
-    const cached = await redis.get(USERS_CACHE_KEY);
+    const cacheKey = getUsersCacheKey(tenantId);
+    const cached = await redis.get(cacheKey);
     if (cached) {
       return JSON.parse(cached) as Awaited<ReturnType<typeof fetchUsers>>;
     }
-    const users = await fetchUsers();
-    await redis.set(USERS_CACHE_KEY, JSON.stringify(users), { EX: USERS_CACHE_TTL_SECONDS });
+    const users = await fetchUsers(tenantId);
+    await redis.set(cacheKey, JSON.stringify(users), { EX: USERS_CACHE_TTL_SECONDS });
     return users;
   }
-  return fetchUsers();
+  return fetchUsers(tenantId);
 }
 
-export async function invalidateUsersCache() {
+export async function invalidateUsersCache(tenantId: string) {
   const redis = await tryRedisConnection();
-  if (redis) await redis.del(USERS_CACHE_KEY);
+  if (redis) await redis.del(getUsersCacheKey(tenantId));
 }
 
-async function fetchUsers() {
-  const snap = await adminFirestore.collection(col.coreUsers).orderBy('createdAt', 'asc').get();
+async function fetchUsers(tenantId: string) {
+  const snap = await adminFirestore.collection(col.coreUsers).where('tenantId', '==', tenantId).orderBy('createdAt', 'asc').get();
   return snap.docs.map((doc) => {
     const data = doc.data();
     return {

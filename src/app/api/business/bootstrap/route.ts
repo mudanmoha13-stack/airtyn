@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { hashPassword } from '@/lib/server/password';
 
 const bootstrapSchema = z.object({
   tenant: z.object({
     id: z.string().min(1),
     name: z.string().min(1),
     slug: z.string().min(1),
+    subdomain: z.string().optional(),
     plan: z.string().default('free'),
   }),
   workspace: z.object({
@@ -21,6 +23,7 @@ const bootstrapSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
     avatarUrl: z.string().optional(),
+    password: z.string().min(10).optional(),
   }),
   businessType: z.string().optional(),
 });
@@ -30,6 +33,18 @@ export async function POST(request: NextRequest) {
     const payload = bootstrapSchema.parse(await request.json());
     const ownerEmail = payload.owner.email.toLowerCase();
     const tenantId = payload.tenant.id;
+    const subdomain = payload.tenant.subdomain?.trim().toLowerCase() ?? null;
+
+    if (subdomain) {
+      const duplicate = await adminFirestore
+        .collection(col.coreTenants)
+        .where('subdomainLower', '==', subdomain)
+        .limit(1)
+        .get();
+      if (!duplicate.empty && duplicate.docs[0].id !== tenantId) {
+        return NextResponse.json({ ok: false, error: 'Subdomain is already taken' }, { status: 409 });
+      }
+    }
 
     await ensureBusinessTenantDoc(tenantId, ownerEmail);
 
@@ -37,6 +52,8 @@ export async function POST(request: NextRequest) {
       adminFirestore.collection(col.coreTenants).doc(tenantId).set(
         {
           ...payload.tenant,
+          subdomain,
+          subdomainLower: subdomain,
           ownerEmail,
           businessType: payload.businessType ?? null,
           status: 'active',
@@ -61,6 +78,7 @@ export async function POST(request: NextRequest) {
           lastName: payload.owner.name.split(' ').slice(1).join(' ') || null,
           status: 'active',
           avatarUrl: payload.owner.avatarUrl ?? null,
+          ...(payload.owner.password ? { passwordHash: hashPassword(payload.owner.password) } : {}),
           createdAt: nowIso(),
           updatedAt: nowIso(),
         },
@@ -80,6 +98,7 @@ export async function POST(request: NextRequest) {
         ownerEmail,
         ownerName: payload.owner.name,
         businessType: payload.businessType ?? 'unspecified',
+        subdomain,
       },
       createdAt: nowIso(),
     });

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
@@ -46,9 +47,9 @@ const ProjectOSCard = () => {
   const [setupMessage, setSetupMessage] = useState('');
   const [setupError, setSetupError] = useState('');
 
-  const onSignIn = (e: React.FormEvent) => {
+  const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = signIn(signinEmail, signinPassword);
+    const result = await signIn(signinEmail, signinPassword);
     if (!result.ok) {
       setSigninError(result.message ?? 'Unable to sign in.');
       return;
@@ -98,7 +99,7 @@ const ProjectOSCard = () => {
             Project management that ships work, not noise.
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Pinkplan helps teams onboard fast, organize projects, run Kanban workflows, and stay aligned from day one.
+            Airtyn helps teams onboard fast, organize projects, run Kanban workflows, and stay aligned from day one.
           </p>
         </div>
 
@@ -174,9 +175,9 @@ const BusinessOSCard = () => {
   const [setupMessage, setSetupMessage] = useState('');
   const [setupError, setSetupError] = useState('');
 
-  const onSignIn = (e: React.FormEvent) => {
+  const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = signIn(signinEmail, signinPassword);
+    const result = await signIn(signinEmail, signinPassword);
     if (!result.ok) {
       setSigninError(result.message ?? 'Unable to sign in.');
       return;
@@ -298,7 +299,7 @@ const PublicLandingGate = () => {
       {/* Brand header */}
       <header className="mb-6 flex flex-wrap items-center gap-2.5 sm:mb-8">
         <Layers className="w-5 h-5 text-primary" />
-        <span className="text-lg font-bold tracking-tight">Airtyn</span>
+        <Image src="/airtyn-logo.png" alt="Airtyn" width={120} height={40} className="h-8 w-auto sm:h-9" priority />
         <span className="ml-2 text-xs text-muted-foreground">Choose your workspace to get started</span>
       </header>
 

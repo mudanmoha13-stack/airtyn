@@ -55,7 +55,7 @@ export type BusinessModuleSpec = {
 export const BUSINESS_EXECUTIVE_SUMMARY = {
   title: 'Unified Business Operating System',
   description:
-    'A modular, multi-tenant operating layer for CRM, Sales, Finance, HR, Inventory, Projects, Procurement, Support, and Analytics. Built to reuse the same tenant, auth, caching, navigation, and workflow infrastructure already running inside Pinkplan.',
+    'A modular, multi-tenant operating layer for CRM, Sales, Finance, HR, Inventory, Projects, Procurement, Support, and Analytics. Built to reuse the same tenant, auth, caching, navigation, and workflow infrastructure already running inside Airtyn.',
   stats: [
     { label: 'Core domains', value: '9', delta: 'CRM to analytics on one stack' },
     { label: 'Shared platform', value: '100%', delta: 'Auth, tenants, caching, nav reused' },
