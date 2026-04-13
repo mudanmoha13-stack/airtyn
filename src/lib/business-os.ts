@@ -8,6 +8,7 @@ import {
   Package2,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   TrendingUp,
   Users,
   Wallet,
@@ -22,7 +23,8 @@ export type BusinessModuleKey =
   | 'projects'
   | 'procurement'
   | 'support'
-  | 'analytics';
+  | 'analytics'
+  | 'cosmetics';
 
 export type BusinessStat = {
   label: string;
@@ -521,6 +523,49 @@ export const BUSINESS_MODULE_SPECS: BusinessModuleSpec[] = [
       { title: 'Finance Pulse', subtitle: 'Cash, burn, collections, and payables dashboard', meta: 'Refreshed 11m ago', status: 'Live' },
       { title: 'Ops Scorecard', subtitle: 'Warehouse, procurement, and SLA health', meta: '12 widgets', status: 'Live' },
       { title: 'Quarterly Board Pack', subtitle: 'Scheduled executive report bundle', meta: 'Next send Friday', status: 'Scheduled' },
+    ],
+  },
+  {
+    key: 'cosmetics',
+    title: 'Cosmetics & Beauty',
+    eyebrow: 'Beauty retail OS',
+    route: '/business/cosmetics',
+    icon: Sparkles,
+    summary:
+      'Run a full cosmetics retail operation — POS with shade swatches, appointment scheduling, loyalty tiers, skin-profile CRM, inventory with expiry tracking, staff commissions, and promotions — all from one beauty workspace.',
+    coreObjects: ['Products', 'Variants', 'Customers', 'Skin Profiles', 'Appointments', 'Services', 'Loyalty Tiers', 'Promotions', 'Staff', 'Returns'],
+    features: [
+      'POS with shade/color swatch display and skin-type filtering',
+      'Loyalty tiers (Bronze, Silver, Gold, Platinum) with points ledger',
+      'Customer skin profiles and consultation history',
+      'Appointment booking with service staff assignment',
+      'Inventory tracking with expiry date and batch lot management',
+      'Gift-with-purchase and BOGO promotions',
+      'Staff consultant commissions and performance reporting',
+      'Returns and RMA with condition grading',
+    ],
+    workflows: [
+      'POS checkout with loyalty points earn/redeem',
+      'Appointment confirmation and consultation result capture',
+      'Expiry alert and reorder suggestion for beauty inventory',
+      'Commission calculation on staff-linked sales',
+      'Promotion scope validation and GWP auto-apply at checkout',
+    ],
+    governance: [
+      'Batch/lot traceability for regulated beauty products',
+      'Role-based access for pricing, commission, and return approvals',
+      'Audit trail on loyalty adjustments and promotion redemptions',
+    ],
+    stats: [
+      { label: 'Products tracked', value: '486', delta: '94 variants with shade mapping' },
+      { label: 'Appointments today', value: '28', delta: '3 consultations pending' },
+      { label: 'Loyalty members', value: '1,842', delta: '34 tier upgrades this month' },
+      { label: 'Low-stock alerts', value: '12', delta: 'Expiry alerts: 5 within 30 days' },
+    ],
+    records: [
+      { title: 'Foundation Shade Match', subtitle: 'Consultation + sale linked to skin profile', meta: '$148.00', status: 'Completed' },
+      { title: 'APT-0441 – Facial Glow', subtitle: 'Booked for tomorrow 2pm, staff: Mia', meta: '60 min', status: 'Confirmed' },
+      { title: 'RTN-0089 – Serum return', subtitle: 'Adverse reaction, condition: unopened', meta: 'Refund $74', status: 'Pending approval' },
     ],
   },
 ];

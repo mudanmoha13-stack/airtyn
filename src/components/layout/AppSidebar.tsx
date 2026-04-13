@@ -182,6 +182,7 @@ export const AppSidebar = () => {
     if (currentBusinessModule === 'support') return 'Support Actions';
     if (currentBusinessModule === 'analytics') return 'Analytics Actions';
     if (currentBusinessModule === 'projects') return 'Project Delivery Actions';
+    if (currentBusinessModule === 'cosmetics') return 'Cosmetics Actions';
     return 'Module Actions';
   }, [currentBusinessModule, product]);
 

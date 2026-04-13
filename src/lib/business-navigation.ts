@@ -9,6 +9,7 @@ const BUSINESS_WORKSPACE_PATH = '/business';
 const LEGACY_BUSINESS_ROUTE_MAP: Record<string, BusinessModuleKey> = {
   accounting: 'finance',
   analytics: 'analytics',
+  cosmetics: 'cosmetics',
   crm: 'sales',
   finance: 'finance',
   hr: 'hr',
@@ -32,6 +33,7 @@ const BUSINESS_MODULE_KEYS = new Set<BusinessModuleKey>([
   'procurement',
   'support',
   'analytics',
+  'cosmetics',
 ]);
 
 export function normalizeBusinessModuleKey(value: string | null | undefined): BusinessModuleKey | null {

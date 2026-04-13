@@ -94,6 +94,14 @@ const MODULE_UI_LABELS: Record<BusinessModuleKey, {
     snapshotTitle: 'BI Snapshot',
     snapshotDescription: 'Representative dashboards, reports, and scheduled insights.',
   },
+  cosmetics: {
+    objectLabel: 'Beauty Retail Objects',
+    featureLabel: 'Cosmetics Capabilities',
+    workflowLabel: 'Beauty Workflows',
+    governanceLabel: 'Retail Controls',
+    snapshotTitle: 'Beauty Retail Snapshot',
+    snapshotDescription: 'Representative POS transactions, appointments, loyalty activity, and stock alerts.',
+  },
 };
 
 type ModuleTab = {
@@ -156,6 +164,11 @@ const MODULE_TABS: Record<BusinessModuleKey, ModuleTab[]> = {
   analytics: [
     { id: 'dashboards', label: 'Dashboards', sectionIds: ['operations'], default: true },
     { id: 'reports', label: 'Scheduled Reports', sectionIds: ['workflows', 'governance'] },
+    { id: 'reference', label: 'Reference', sectionIds: ['core-objects', 'features'] },
+  ],
+  cosmetics: [
+    { id: 'overview', label: 'Overview', sectionIds: ['operations'], default: true },
+    { id: 'workflows', label: 'Workflows', sectionIds: ['workflows', 'governance'] },
     { id: 'reference', label: 'Reference', sectionIds: ['core-objects', 'features'] },
   ],
 };
@@ -1085,6 +1098,7 @@ const GENERIC_FORM_TITLES: Record<BusinessModuleKey, string> = {
   procurement: 'Create RFQ / Purchase Order',
   support: 'Create Support Ticket',
   analytics: 'Create Report / Dashboard',
+  cosmetics: 'Create Beauty Record',
 };
 
 const GenericModuleContent = ({
