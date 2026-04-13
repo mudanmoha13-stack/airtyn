@@ -29,9 +29,16 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+        <script defer src="https://shown.io/metrics/Nq92Yvg18W" type="text/javascript"></script>
       </head>
-      <body suppressHydrationWarning className="font-body antialiased selection:bg-primary/30 selection:text-white min-h-screen overflow-x-hidden">
+      <body
+        suppressHydrationWarning
+        className="font-body antialiased selection:bg-primary/30 selection:text-white min-h-screen overflow-x-hidden"
+      >
         <AppProviders>
           {/* Shell lives here — mounts once and persists across all navigations.
               Each page file renders only its own content (no <Shell> wrapper needed). */}
