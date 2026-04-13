@@ -41,14 +41,6 @@ function validatePassword(password: string): string[] {
   return errors;
 }
 
-function normalizeSubdomain(input: string): string {
-  return input.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-}
-
-function isValidSubdomain(value: string): boolean {
-  return /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(value);
-}
-
 export default function ConfirmOnboardingPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -70,45 +62,10 @@ export default function ConfirmOnboardingPage() {
   const [businessName, setBusinessName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [businessType, setBusinessType] = useState('');
-  const [subdomain, setSubdomain] = useState('');
-  const [subdomainStatus, setSubdomainStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
-  const [subdomainMessage, setSubdomainMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const passwordIssues = useMemo(() => validatePassword(password), [password]);
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || 'airtyn.com';
-
-  const checkSubdomainAvailability = async (candidateRaw: string): Promise<boolean> => {
-    const candidate = normalizeSubdomain(candidateRaw);
-    if (!isValidSubdomain(candidate)) {
-      setSubdomainStatus('invalid');
-      setSubdomainMessage('Use 3-32 characters, letters/numbers, and hyphens in the middle only.');
-      return false;
-    }
-
-    setSubdomainStatus('checking');
-    setSubdomainMessage('Checking availability...');
-
-    const response = await fetch(`/api/onboarding/subdomain/availability?subdomain=${encodeURIComponent(candidate)}`);
-    const data = (await response.json()) as { ok: boolean; available?: boolean; error?: string };
-
-    if (!response.ok || !data.ok) {
-      setSubdomainStatus('invalid');
-      setSubdomainMessage(data.error ?? 'Failed to verify subdomain.');
-      return false;
-    }
-
-    if (!data.available) {
-      setSubdomainStatus('taken');
-      setSubdomainMessage('That subdomain is already taken.');
-      return false;
-    }
-
-    setSubdomainStatus('available');
-    setSubdomainMessage('Subdomain is available.');
-    return true;
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -143,22 +100,6 @@ export default function ConfirmOnboardingPage() {
     };
   }, [token]);
 
-  useEffect(() => {
-    if (mode !== 'business' || step !== 'details') return;
-    const candidate = normalizeSubdomain(subdomain);
-    if (!candidate) {
-      setSubdomainStatus('idle');
-      setSubdomainMessage('');
-      return;
-    }
-
-    const handle = window.setTimeout(() => {
-      void checkSubdomainAvailability(candidate);
-    }, 350);
-
-    return () => window.clearTimeout(handle);
-  }, [mode, step, subdomain]);
-
   const onPasswordContinue = (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordIssues.length > 0) {
@@ -187,14 +128,15 @@ export default function ConfirmOnboardingPage() {
         throw new Error('Workspace name is required.');
       }
 
-      const normalizedSubdomain = mode === 'business' ? normalizeSubdomain(subdomain) : '';
-
-      if (mode === 'business') {
-        const available = await checkSubdomainAvailability(normalizedSubdomain);
-        if (!available) {
-          throw new Error('Pick an available subdomain to continue.');
-        }
-      }
+      completeOnboarding({
+        tenantName: businessName,
+        workspaceName: finalWorkspaceName,
+        name: ownerName,
+        email,
+        password,
+        mode,
+        businessType: mode === 'business' ? businessType : undefined,
+      });
 
       const response = await fetch('/api/onboarding/complete', {
         method: 'POST',
@@ -206,7 +148,6 @@ export default function ConfirmOnboardingPage() {
           businessName,
           workspaceName: finalWorkspaceName,
           businessType: mode === 'business' ? businessType : undefined,
-          subdomain: mode === 'business' ? normalizedSubdomain : undefined,
           password,
         }),
       });
@@ -216,32 +157,7 @@ export default function ConfirmOnboardingPage() {
         throw new Error(data.error ?? 'Failed to complete onboarding');
       }
 
-      completeOnboarding({
-        tenantName: businessName,
-        workspaceName: finalWorkspaceName,
-        name: ownerName,
-        email,
-        password,
-        mode,
-        businessType: mode === 'business' ? businessType : undefined,
-        subdomain: mode === 'business' ? normalizedSubdomain : undefined,
-      });
-
-      if (mode === 'business' && normalizedSubdomain) {
-        const hostname = window.location.hostname.toLowerCase();
-        const canResolveSubdomainHost =
-          hostname === rootDomain || hostname.endsWith(`.${rootDomain}`);
-
-        if (canResolveSubdomainHost) {
-          window.location.href = `https://${normalizedSubdomain}.${rootDomain}`;
-          return;
-        }
-
-        router.push(`/?tenant=${encodeURIComponent(normalizedSubdomain)}&signin=business`);
-        return;
-      }
-
-      router.push('/');
+      router.push(mode === 'business' ? '/business' : '/');
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to complete onboarding');
     } finally {
@@ -315,39 +231,19 @@ export default function ConfirmOnboardingPage() {
                   <Input id="workspace-name" value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} required />
                 </div>
               ) : (
-                <>
-                  <div className="col-span-2 space-y-1.5">
-                    <Label htmlFor="business-subdomain">Business Subdomain</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="business-subdomain"
-                        value={subdomain}
-                        onChange={(e) => setSubdomain(normalizeSubdomain(e.target.value))}
-                        placeholder="your-company"
-                        required
-                      />
-                      <span className="text-sm text-muted-foreground whitespace-nowrap">.{rootDomain}</span>
-                    </div>
-                    {subdomainMessage && (
-                      <p className={`text-xs ${subdomainStatus === 'available' ? 'text-emerald-500' : subdomainStatus === 'checking' ? 'text-muted-foreground' : 'text-destructive'}`}>
-                        {subdomainMessage}
-                      </p>
-                    )}
-                  </div>
-                  <div className="col-span-2 space-y-1.5">
-                    <Label htmlFor="business-type">Primary Business Focus</Label>
-                    <Select value={businessType} onValueChange={setBusinessType}>
-                      <SelectTrigger id="business-type">
-                        <SelectValue placeholder="Select your primary focus..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BUSINESS_TYPES.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="business-type">Primary Business Focus</Label>
+                  <Select value={businessType} onValueChange={setBusinessType}>
+                    <SelectTrigger id="business-type">
+                      <SelectValue placeholder="Select your primary focus..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUSINESS_TYPES.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
 
               {submitError && <p className="col-span-2 text-sm text-destructive">{submitError}</p>}

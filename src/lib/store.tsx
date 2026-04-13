@@ -153,7 +153,7 @@ interface AppState {
   invitations: Invitation[];
   emailNotifications: EmailNotification[];
   activity: ActivityEvent[];
-  signIn: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  signIn: (email: string, password: string) => { ok: boolean; message?: string };
   signOut: () => void;
   completeOnboarding: (payload: {
     tenantName: string;
@@ -163,7 +163,6 @@ interface AppState {
     password: string;
     mode?: 'projects' | 'business';
     businessType?: string;
-    subdomain?: string;
   }) => void;
   inviteUser: (email: string, role: UserRole) => void;
   acceptInvitation: (invitationId: string, payload: { name: string; password: string }) => { ok: boolean; message?: string };
@@ -326,28 +325,6 @@ const INITIAL_STATE: PersistedState = {
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const uid = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'airtyn.com').toLowerCase();
-
-function extractSubdomainFromHostname(hostname: string): string | null {
-  const lower = hostname.trim().toLowerCase();
-  if (!lower || lower === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return null;
-  if (lower === ROOT_DOMAIN || lower === `www.${ROOT_DOMAIN}`) return null;
-  if (!lower.endsWith(`.${ROOT_DOMAIN}`)) return null;
-
-  const candidate = lower.slice(0, -(ROOT_DOMAIN.length + 1));
-  if (!candidate || candidate.includes('.')) return null;
-  if (!/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(candidate)) return null;
-  return candidate;
-}
-
-function extractSubdomainFromSearch(search: string): string | null {
-  const params = new URLSearchParams(search);
-  const raw = params.get('tenant') ?? params.get('subdomain') ?? '';
-  const candidate = raw.trim().toLowerCase();
-  if (!candidate) return null;
-  if (!/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(candidate)) return null;
-  return candidate;
-}
 
 function loadInitialState(): PersistedState {
   if (typeof window === 'undefined') return INITIAL_STATE;
@@ -397,15 +374,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [state, setState] = useState<PersistedState>(INITIAL_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  const getTenantHeaders = (tenantId?: string) => {
-    const effectiveTenantId = tenantId ?? state.currentTenant?.id;
-    return effectiveTenantId ? { 'x-tenant-id': effectiveTenantId } : {};
-  };
-
-  const postJson = async (url: string, body: unknown, method: 'POST' | 'PATCH' = 'POST', tenantId?: string) => {
+  const postJson = async (url: string, body: unknown, method: 'POST' | 'PATCH' = 'POST') => {
     const response = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', ...getTenantHeaders(tenantId) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -414,7 +386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.json();
   };
 
-  const upsertUserToApi = async (user: User, tenantId: string, password?: string) => {
+  const upsertUserToApi = async (user: User, tenantId: string) => {
     await postJson('/api/users', {
       id: user.id,
       tenantId,
@@ -423,8 +395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: user.email,
       avatarUrl: user.avatarUrl,
       role: user.role,
-      password,
-    }, 'POST', tenantId);
+    });
   };
 
   const seedDatabaseFromSnapshot = async (snapshot: PersistedState) => {
@@ -435,15 +406,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projects: snapshot.projects,
       milestones: snapshot.milestones,
       tasks: snapshot.tasks,
-    }, 'POST', snapshot.currentTenant?.id);
+    });
   };
 
   const syncProjectsTasksUsersFromApi = async () => {
-    const headers = getTenantHeaders();
     const [projectsResponse, tasksResponse, usersResponse] = await Promise.all([
-      fetch('/api/projects', { headers }),
-      fetch('/api/tasks', { headers }),
-      fetch('/api/users', { headers }),
+      fetch('/api/projects'),
+      fetch('/api/tasks'),
+      fetch('/api/users'),
     ]);
 
     if (!projectsResponse.ok || !tasksResponse.ok || !usersResponse.ok) {
@@ -468,52 +438,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(loadInitialState());
     setIsHydrated(true);
   }, []);
-
-  useEffect(() => {
-    if (!isHydrated || typeof window === 'undefined') return;
-
-    const subdomain =
-      extractSubdomainFromHostname(window.location.hostname) ??
-      extractSubdomainFromSearch(window.location.search);
-    if (!subdomain) return;
-
-    let cancelled = false;
-
-    const resolveTenant = async () => {
-      try {
-        const response = await fetch(`/api/tenants/resolve?subdomain=${encodeURIComponent(subdomain)}`);
-        const data = (await response.json()) as {
-          ok: boolean;
-          tenant?: Tenant;
-          workspace?: Workspace | null;
-        };
-        if (!response.ok || !data.ok || !data.tenant || cancelled) return;
-
-        setState((prev) => {
-          const sameTenant = prev.currentTenant?.id === data.tenant!.id;
-          const nextWorkspace = data.workspace ?? prev.currentWorkspace;
-          if (sameTenant && prev.currentWorkspace?.id === nextWorkspace?.id) {
-            return prev;
-          }
-          return {
-            ...prev,
-            currentTenant: data.tenant!,
-            currentWorkspace: nextWorkspace,
-            isAuthenticated: false,
-            currentUser: null,
-          };
-        });
-      } catch {
-        // Keep the existing tenant context when resolution fails.
-      }
-    };
-
-    void resolveTenant();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isHydrated]);
 
   useEffect(() => {
     if (!isHydrated || typeof window === 'undefined') return;
@@ -588,92 +512,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const signIn = async (email: string, password: string) => {
-    const normalizedEmail = email.toLowerCase().trim();
-    let tenantId = state.currentTenant?.id;
-
-    if (!tenantId && typeof window !== 'undefined') {
-      const subdomain =
-        extractSubdomainFromHostname(window.location.hostname) ??
-        extractSubdomainFromSearch(window.location.search);
-      if (subdomain) {
-        try {
-          const tenantResponse = await fetch(`/api/tenants/resolve?subdomain=${encodeURIComponent(subdomain)}`);
-          const tenantPayload = (await tenantResponse.json()) as {
-            ok: boolean;
-            tenant?: Tenant;
-            workspace?: Workspace | null;
-          };
-          if (tenantResponse.ok && tenantPayload.ok && tenantPayload.tenant) {
-            tenantId = tenantPayload.tenant.id;
-            setState((prev) => ({
-              ...prev,
-              currentTenant: tenantPayload.tenant!,
-              currentWorkspace: tenantPayload.workspace ?? prev.currentWorkspace,
-            }));
-          }
-        } catch {
-          // Continue with fallback behavior below.
-        }
-      }
+  const signIn = (email: string, password: string) => {
+    const savedPassword = state.credentials[email.toLowerCase()];
+    const user = state.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (!savedPassword || !user) {
+      return { ok: false, message: 'Account not found. Complete onboarding or accept an invite first.' };
     }
-
-    if (!tenantId) {
-      return {
-        ok: false,
-        message: 'Tenant context is required. Open your workspace subdomain to sign in.',
-      };
+    if (savedPassword !== password) {
+      return { ok: false, message: 'Invalid password.' };
     }
-
-    try {
-      const response = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getTenantHeaders(tenantId),
-        },
-        body: JSON.stringify({ email: normalizedEmail, password }),
-      });
-
-      const data = (await response.json()) as {
-        ok: boolean;
-        error?: string;
-        user?: User;
-        workspace?: Workspace | null;
-      };
-
-      if (response.ok && data.ok && data.user) {
-        setState((prev) => {
-          const mergedUsers = prev.users.some((u) => u.id === data.user!.id)
-            ? prev.users.map((u) => (u.id === data.user!.id ? { ...u, ...data.user! } : u))
-            : [...prev.users, data.user!];
-
-          return {
-            ...prev,
-            isAuthenticated: true,
-            currentUser: data.user!,
-            currentWorkspace: data.workspace ?? prev.currentWorkspace,
-            users: mergedUsers,
-          };
-        });
-        logActivity(data.user.name, 'tenant_created', `${data.user.name} signed in.`);
-        return { ok: true };
-      }
-
-      return { ok: false, message: data.error ?? 'Invalid sign-in details.' };
-    } catch {
-      return {
-        ok: false,
-        message: 'Sign-in service is unavailable right now. Please try again.',
-      };
-    }
+    setState((prev) => ({ ...prev, isAuthenticated: true, currentUser: user }));
+    logActivity(user.name, 'tenant_created', `${user.name} signed in.`);
+    return { ok: true };
   };
 
   const signOut = () => {
     setState((prev) => ({ ...prev, isAuthenticated: false, currentUser: null }));
   };
 
-  const completeOnboarding = ({ tenantName, workspaceName, name, email, password, mode, businessType, subdomain }: {
+  const completeOnboarding = ({ tenantName, workspaceName, name, email, password, mode, businessType }: {
     tenantName: string;
     workspaceName: string;
     name: string;
@@ -681,7 +538,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string;
     mode?: 'projects' | 'business';
     businessType?: string;
-    subdomain?: string;
   }) => {
     const now = new Date().toISOString();
     const tenantId = uid('tenant');
@@ -696,7 +552,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: tenantId,
       name: tenantName,
       slug: slugify(tenantName),
-      subdomain,
       plan: 'free',
     };
     const owner: User = {
@@ -772,9 +627,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     const cloudWrites: Array<Promise<unknown>> = [
-      upsertUserToApi(owner, tenantId, password),
-      postJson('/api/projects', starterProject, 'POST', tenantId),
-      postJson('/api/tasks', starterTask, 'POST', tenantId),
+      upsertUserToApi(owner, tenantId),
+      postJson('/api/projects', starterProject),
+      postJson('/api/tasks', starterTask),
     ];
 
     if (mode === 'business') {
@@ -782,12 +637,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         postJson('/api/business/bootstrap', {
           tenant,
           workspace,
-          owner: {
-            ...owner,
-            password,
-          },
+          owner,
           businessType: businessType ?? null,
-          }, 'POST', tenantId)
+        })
       );
     }
 
@@ -807,7 +659,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       invitedAt: new Date().toISOString(),
     };
     setState((prev) => ({ ...prev, invitations: [invite, ...prev.invitations] }));
-    enqueueEmail(email, 'You are invited to Airtyn', `You were invited as ${role}.`);
+    enqueueEmail(email, 'You are invited to Pinkplan', `You were invited as ${role}.`);
     logActivity(state.currentUser.name, 'invitation_sent', `${state.currentUser.name} invited ${email} as ${role}.`);
   };
 
@@ -844,7 +696,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ],
     }));
 
-    void upsertUserToApi(user, state.currentTenant.id, payload.password).catch(() => {
+    void upsertUserToApi(user, state.currentTenant.id).catch(() => {
       // Keep local invite acceptance functional even without the backend.
     });
     return { ok: true };
@@ -877,7 +729,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setState((prev) => ({ ...prev, projects: [...prev.projects, newProject] }));
     logActivity(state.currentUser.name, 'project_created', `${state.currentUser.name} created project ${newProject.name}.`);
-    void postJson('/api/projects', newProject, 'POST', state.currentTenant.id).catch(() => {
+    void postJson('/api/projects', newProject).catch(() => {
       // Local optimistic state already applied.
     });
   };
@@ -889,7 +741,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       projects: prev.projects.map((p) => (p.id === projectId ? { ...p, ...updates } : p)),
     }));
     logActivity(state.currentUser.name, 'project_updated', `${state.currentUser.name} updated project settings.`);
-    void postJson(`/api/projects/${projectId}`, updates, 'PATCH', state.currentTenant?.id).catch(() => {
+    void postJson(`/api/projects/${projectId}`, updates, 'PATCH').catch(() => {
       // Local optimistic state already applied.
     });
   };
@@ -901,7 +753,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)),
     }));
     logActivity(state.currentUser.name, 'task_status_changed', `${state.currentUser.name} moved a task to ${status}.`);
-    void postJson(`/api/tasks/${taskId}`, { status }, 'PATCH', state.currentTenant?.id).catch(() => {
+    void postJson(`/api/tasks/${taskId}`, { status }, 'PATCH').catch(() => {
       // Local optimistic state already applied.
     });
   };
@@ -921,7 +773,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setState((prev) => ({ ...prev, tasks: [...prev.tasks, newTask] }));
     logActivity(state.currentUser.name, 'task_created', `${state.currentUser.name} created task ${newTask.title}.`);
-    void postJson('/api/tasks', newTask, 'POST', state.currentTenant?.id).catch(() => {
+    void postJson('/api/tasks', newTask).catch(() => {
       // Local optimistic state already applied.
     });
   };
@@ -937,7 +789,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       enqueueEmail(assignee.email, 'Task assigned to you', `A task has been assigned to ${assignee.name}.`);
       logActivity(state.currentUser.name, 'task_assigned', `${state.currentUser.name} assigned a task to ${assignee.name}.`);
     }
-    void postJson(`/api/tasks/${taskId}`, { assigneeId }, 'PATCH', state.currentTenant?.id).catch(() => {
+    void postJson(`/api/tasks/${taskId}`, { assigneeId }, 'PATCH').catch(() => {
       // Local optimistic state already applied.
     });
   };
@@ -949,7 +801,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, dueDate } : t)),
     }));
     logActivity(state.currentUser.name, 'task_due_date_set', `${state.currentUser.name} updated a task due date.`);
-    void postJson(`/api/tasks/${taskId}`, { dueDate: dueDate ?? null }, 'PATCH', state.currentTenant?.id).catch(() => {
+    void postJson(`/api/tasks/${taskId}`, { dueDate: dueDate ?? null }, 'PATCH').catch(() => {
       // Local optimistic state already applied.
     });
   };

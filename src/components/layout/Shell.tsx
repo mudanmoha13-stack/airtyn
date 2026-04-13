@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import Image from 'next/image';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import React, { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { MobileBottomNav } from './MobileBottomNav';
@@ -47,9 +46,9 @@ const ProjectOSCard = () => {
   const [setupMessage, setSetupMessage] = useState('');
   const [setupError, setSetupError] = useState('');
 
-  const onSignIn = async (e: React.FormEvent) => {
+  const onSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await signIn(signinEmail, signinPassword);
+    const result = signIn(signinEmail, signinPassword);
     if (!result.ok) {
       setSigninError(result.message ?? 'Unable to sign in.');
       return;
@@ -99,7 +98,7 @@ const ProjectOSCard = () => {
             Project management that ships work, not noise.
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Airtyn helps teams onboard fast, organize projects, run Kanban workflows, and stay aligned from day one.
+            Pinkplan helps teams onboard fast, organize projects, run Kanban workflows, and stay aligned from day one.
           </p>
         </div>
 
@@ -164,7 +163,6 @@ type BusinessMode = 'idle' | 'signin' | 'setup';
 const BusinessOSCard = () => {
   const { signIn } = useAppState();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [mode, setMode] = useState<BusinessMode>('idle');
 
   const [signinEmail, setSigninEmail]       = useState('');
@@ -176,17 +174,9 @@ const BusinessOSCard = () => {
   const [setupMessage, setSetupMessage] = useState('');
   const [setupError, setSetupError] = useState('');
 
-  useEffect(() => {
-    const signinHint = (searchParams.get('signin') ?? '').toLowerCase();
-    const tenantHint = (searchParams.get('tenant') ?? searchParams.get('subdomain') ?? '').trim();
-    if (signinHint === 'business' || tenantHint) {
-      setMode('signin');
-    }
-  }, [searchParams]);
-
-  const onSignIn = async (e: React.FormEvent) => {
+  const onSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await signIn(signinEmail, signinPassword);
+    const result = signIn(signinEmail, signinPassword);
     if (!result.ok) {
       setSigninError(result.message ?? 'Unable to sign in.');
       return;
@@ -308,7 +298,7 @@ const PublicLandingGate = () => {
       {/* Brand header */}
       <header className="mb-6 flex flex-wrap items-center gap-2.5 sm:mb-8">
         <Layers className="w-5 h-5 text-primary" />
-        <Image src="/airtyn-logo.png" alt="Airtyn" width={120} height={40} className="h-8 w-auto sm:h-9" priority />
+        <span className="text-lg font-bold tracking-tight">Airtyn</span>
         <span className="ml-2 text-xs text-muted-foreground">Choose your workspace to get started</span>
       </header>
 

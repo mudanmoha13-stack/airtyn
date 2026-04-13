@@ -12,16 +12,8 @@ const completeSchema = z.object({
   businessName: z.string().min(2),
   workspaceName: z.string().optional(),
   businessType: z.string().optional(),
-  subdomain: z.string().optional(),
   password: z.string().min(10),
 });
-
-function normalizeSubdomain(input: string): string | null {
-  const normalized = input.trim().toLowerCase();
-  if (!normalized) return null;
-  if (!/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(normalized)) return null;
-  return normalized;
-}
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -46,25 +38,6 @@ function getBaseUrl(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   try {
     const payload = completeSchema.parse(await request.json());
-        const requestedSubdomain = payload.mode === 'business'
-          ? normalizeSubdomain(payload.subdomain ?? '')
-          : null;
-
-        if (payload.mode === 'business' && !requestedSubdomain) {
-          return NextResponse.json({ ok: false, error: 'Valid subdomain is required for business onboarding' }, { status: 400 });
-        }
-
-        if (requestedSubdomain) {
-          const duplicate = await adminFirestore
-            .collection(col.coreTenants)
-            .where('subdomainLower', '==', requestedSubdomain)
-            .limit(1)
-            .get();
-          if (!duplicate.empty) {
-            return NextResponse.json({ ok: false, error: 'Subdomain is already taken' }, { status: 409 });
-          }
-        }
-
     if (!isStrongPassword(payload.password)) {
       return NextResponse.json({ ok: false, error: 'Password does not meet strength requirements' }, { status: 400 });
     }
@@ -109,7 +82,6 @@ export async function POST(request: NextRequest) {
           businessName: payload.businessName,
           workspaceName: payload.workspaceName ?? null,
           businessType: payload.businessType ?? null,
-          subdomain: requestedSubdomain,
         },
       },
       { merge: true }
@@ -121,10 +93,7 @@ export async function POST(request: NextRequest) {
       const appBaseUrl = getBaseUrl(request);
       const productLabel = payload.mode === 'business' ? 'Business Management' : 'Project Management';
       const workspaceLabel = payload.workspaceName?.trim() || `${payload.businessName} Workspace`;
-      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || 'airtyn.com';
-      const loginLink = requestedSubdomain
-        ? `https://${requestedSubdomain}.${rootDomain}`
-        : `${appBaseUrl}/`;
+      const loginLink = `${appBaseUrl}/`;
 
       await resend.emails.send({
         from: 'Airtyn <noreply@airtyn.com>',
@@ -138,7 +107,6 @@ export async function POST(request: NextRequest) {
       ok: true,
       email,
       mode: tokenData.mode ?? payload.mode,
-      subdomain: requestedSubdomain,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to complete onboarding';
