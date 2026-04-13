@@ -340,6 +340,15 @@ function extractSubdomainFromHostname(hostname: string): string | null {
   return candidate;
 }
 
+function extractSubdomainFromSearch(search: string): string | null {
+  const params = new URLSearchParams(search);
+  const raw = params.get('tenant') ?? params.get('subdomain') ?? '';
+  const candidate = raw.trim().toLowerCase();
+  if (!candidate) return null;
+  if (!/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(candidate)) return null;
+  return candidate;
+}
+
 function loadInitialState(): PersistedState {
   if (typeof window === 'undefined') return INITIAL_STATE;
   try {
@@ -463,7 +472,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isHydrated || typeof window === 'undefined') return;
 
-    const subdomain = extractSubdomainFromHostname(window.location.hostname);
+    const subdomain =
+      extractSubdomainFromHostname(window.location.hostname) ??
+      extractSubdomainFromSearch(window.location.search);
     if (!subdomain) return;
 
     let cancelled = false;
@@ -582,7 +593,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let tenantId = state.currentTenant?.id;
 
     if (!tenantId && typeof window !== 'undefined') {
-      const subdomain = extractSubdomainFromHostname(window.location.hostname);
+      const subdomain =
+        extractSubdomainFromHostname(window.location.hostname) ??
+        extractSubdomainFromSearch(window.location.search);
       if (subdomain) {
         try {
           const tenantResponse = await fetch(`/api/tenants/resolve?subdomain=${encodeURIComponent(subdomain)}`);

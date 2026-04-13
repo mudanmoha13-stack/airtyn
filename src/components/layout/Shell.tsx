@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { MobileBottomNav } from './MobileBottomNav';
@@ -164,6 +164,7 @@ type BusinessMode = 'idle' | 'signin' | 'setup';
 const BusinessOSCard = () => {
   const { signIn } = useAppState();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<BusinessMode>('idle');
 
   const [signinEmail, setSigninEmail]       = useState('');
@@ -174,6 +175,14 @@ const BusinessOSCard = () => {
   const [setupSending, setSetupSending] = useState(false);
   const [setupMessage, setSetupMessage] = useState('');
   const [setupError, setSetupError] = useState('');
+
+  useEffect(() => {
+    const signinHint = (searchParams.get('signin') ?? '').toLowerCase();
+    const tenantHint = (searchParams.get('tenant') ?? searchParams.get('subdomain') ?? '').trim();
+    if (signinHint === 'business' || tenantHint) {
+      setMode('signin');
+    }
+  }, [searchParams]);
 
   const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

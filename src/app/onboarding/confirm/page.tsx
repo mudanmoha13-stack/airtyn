@@ -228,7 +228,16 @@ export default function ConfirmOnboardingPage() {
       });
 
       if (mode === 'business' && normalizedSubdomain) {
-        window.location.href = `https://${normalizedSubdomain}.${rootDomain}`;
+        const hostname = window.location.hostname.toLowerCase();
+        const canResolveSubdomainHost =
+          hostname === rootDomain || hostname.endsWith(`.${rootDomain}`);
+
+        if (canResolveSubdomainHost) {
+          window.location.href = `https://${normalizedSubdomain}.${rootDomain}`;
+          return;
+        }
+
+        router.push(`/?tenant=${encodeURIComponent(normalizedSubdomain)}&signin=business`);
         return;
       }
 
