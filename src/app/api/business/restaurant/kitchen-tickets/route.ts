@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
     const branchId = request.nextUrl.searchParams.get('branchId')?.trim();
     const status = request.nextUrl.searchParams.get('status')?.trim();
     const station = request.nextUrl.searchParams.get('station')?.trim().toLowerCase();
+    const serviceMode = request.nextUrl.searchParams.get('serviceMode')?.trim().toLowerCase();
 
     let query = adminFirestore.collection(col.bizRestaurantKitchenTickets).where('tenantId', '==', tenantId);
     if (branchId) {
@@ -52,6 +53,9 @@ export async function GET(request: NextRequest) {
     }
     if (status && kitchenStatus.safeParse(status).success) {
       query = query.where('status', '==', status);
+    }
+    if (serviceMode) {
+      query = query.where('serviceMode', '==', serviceMode);
     }
 
     const snap = await query.get();
@@ -65,6 +69,7 @@ export async function GET(request: NextRequest) {
             id: string;
             lines?: unknown;
             createdAt?: unknown;
+            nextFireAt?: unknown;
           })
       )
       .filter((ticket) => {
@@ -72,7 +77,7 @@ export async function GET(request: NextRequest) {
         const lines = Array.isArray(ticket.lines) ? ticket.lines : [];
         return lines.some((line: unknown) => String((line as Record<string, unknown>).station ?? '').toLowerCase() === station);
       })
-      .sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
+      .sort((a, b) => String(a.nextFireAt ?? a.createdAt ?? '').localeCompare(String(b.nextFireAt ?? b.createdAt ?? '')));
 
     return NextResponse.json({ ok: true, tickets });
   } catch (error) {
@@ -142,6 +147,9 @@ export async function PATCH(request: NextRequest) {
       status: payload.action === 'bump' ? 'bumped' : derivedStatus,
       lines,
       lifecycle,
+      nextFireAt: lines
+        .filter((line) => String(line.status ?? '') === 'queued' || String(line.status ?? '') === 'in_prep')
+        .sort((a, b) => String(a.fireAt ?? '').localeCompare(String(b.fireAt ?? '')))[0]?.fireAt ?? null,
       updatedAt: nowIso(),
     };
 

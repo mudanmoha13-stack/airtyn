@@ -35,6 +35,7 @@ export const col = {
   bizRestaurantReservations: 'biz_restaurant_reservations',
   bizRestaurantPosSessions: 'biz_restaurant_pos_sessions',
   bizRestaurantKitchenTickets: 'biz_restaurant_kitchen_tickets',
+  bizRestaurantDeliveries: 'biz_restaurant_deliveries',
   bizContracts: 'biz_contracts',
   bizAttendance: 'biz_attendance',
   bizLeaves: 'biz_leaves',

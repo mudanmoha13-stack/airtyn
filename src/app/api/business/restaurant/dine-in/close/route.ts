@@ -22,6 +22,20 @@ function inferStationSlaMinutes(station: string): number {
   return 10;
 }
 
+function stationSequence(station: string): number {
+  if (station === 'cold' || station === 'drinks') return 1;
+  if (station === 'grill') return 2;
+  if (station === 'hot') return 3;
+  return 4;
+}
+
+function fireOffsetMinutes(station: string): number {
+  if (station === 'cold' || station === 'drinks') return 0;
+  if (station === 'grill') return 4;
+  if (station === 'hot') return 7;
+  return 9;
+}
+
 const closeDineInSchema = z.object({
   sessionId: z.string().min(1),
   branchId: z.string().min(1),
@@ -78,71 +92,120 @@ export async function POST(request: NextRequest) {
     const productName = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, String(snap.data()?.name ?? '')]));
     const productCategory = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, String(snap.data()?.category ?? '')]));
 
+    const recipeBundleSnaps = await Promise.all(
+      productIds.map(async (productId) => {
+        const snap = await adminFirestore
+          .collection(col.bizProductBundles)
+          .where('tenantId', '==', tenantId)
+          .where('productId', '==', productId)
+          .limit(1)
+          .get();
+        return { productId, bundle: snap.empty ? null : snap.docs[0] };
+      })
+    );
+
+    const recipeBundleMap = new Map(recipeBundleSnaps.map((item) => [item.productId, item.bundle]));
+    const recipeBundleIds = recipeBundleSnaps.map((item) => item.bundle?.id).filter((value): value is string => Boolean(value));
+    const recipeItemSnaps = recipeBundleIds.length > 0
+      ? await Promise.all(
+          recipeBundleIds.map((bundleId) =>
+            adminFirestore.collection(col.bizBundleItems).where('tenantId', '==', tenantId).where('bundleId', '==', bundleId).get()
+          )
+        )
+      : [];
+
+    const recipeItemsByBundle = new Map<string, Array<Record<string, unknown>>>();
+    recipeItemSnaps.forEach((snap) => {
+      snap.docs.forEach((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        const key = String(data.bundleId ?? '');
+        const existing = recipeItemsByBundle.get(key) ?? [];
+        existing.push({ id: doc.id, ...data });
+        recipeItemsByBundle.set(key, existing);
+      });
+    });
+
     const preparedLines = payload.lines.map((line) => {
       const unitPrice = line.unitPrice ?? productPrice.get(line.productId) ?? 0;
       const unitCost = productCost.get(line.productId) ?? 0;
+      const recipeBundle = recipeBundleMap.get(line.productId);
+      const recipeItems = recipeBundle ? recipeItemsByBundle.get(recipeBundle.id) ?? [] : [];
       return {
         ...line,
         unitPrice,
         unitCost,
         lineTotal: unitPrice * line.quantity,
         lineCostTotal: unitCost * line.quantity,
+        recipeBundleId: recipeBundle?.id ?? null,
+        recipeItems,
       };
     });
 
     for (const line of preparedLines) {
-      const stockSnap = await adminFirestore
-        .collection(col.bizStockItems)
-        .where('tenantId', '==', tenantId)
-        .where('productId', '==', line.productId)
-        .get();
+      const consumptionItems = line.recipeItems.length > 0
+        ? line.recipeItems.map((item) => ({
+            productId: String(item.componentProductId ?? ''),
+            quantity: Number(item.quantity ?? 0) * line.quantity,
+            sourceProductId: line.productId,
+            sourceType: 'recipe_component' as const,
+          }))
+        : [{ productId: line.productId, quantity: line.quantity, sourceProductId: line.productId, sourceType: 'direct_product' as const }];
 
-      const stockDocs: Array<{ id: string; stockState: string; quantity: number }> = stockSnap.docs
-        .map((doc) => {
-          const data = doc.data() as Record<string, unknown>;
-          return {
-            id: doc.id,
-            stockState: String(data.stockState ?? ''),
-            quantity: Number(data.quantity ?? 0),
-          };
-        })
-        .filter((item) => item.stockState === 'available' || item.stockState === 'on_hand')
-        .sort((a, b) => String(a.stockState).localeCompare(String(b.stockState)));
+      for (const consumptionItem of consumptionItems) {
+        const stockSnap = await adminFirestore
+          .collection(col.bizStockItems)
+          .where('tenantId', '==', tenantId)
+          .where('productId', '==', consumptionItem.productId)
+          .get();
 
-      const availableQty = stockDocs.reduce((sum, item) => sum + item.quantity, 0);
-      if (availableQty < line.quantity) {
-        return NextResponse.json(
-          { ok: false, error: `Insufficient stock for product ${line.productId}. Available ${availableQty}, requested ${line.quantity}.` },
-          { status: 400 }
-        );
+        const stockDocs: Array<{ id: string; stockState: string; quantity: number }> = stockSnap.docs
+          .map((doc) => {
+            const data = doc.data() as Record<string, unknown>;
+            return {
+              id: doc.id,
+              stockState: String(data.stockState ?? ''),
+              quantity: Number(data.quantity ?? 0),
+            };
+          })
+          .filter((item) => item.stockState === 'available' || item.stockState === 'on_hand')
+          .sort((a, b) => String(a.stockState).localeCompare(String(b.stockState)));
+
+        const availableQty = stockDocs.reduce((sum, item) => sum + item.quantity, 0);
+        if (availableQty < consumptionItem.quantity) {
+          return NextResponse.json(
+            { ok: false, error: `Insufficient stock for product ${consumptionItem.productId}. Available ${availableQty}, requested ${consumptionItem.quantity}.` },
+            { status: 400 }
+          );
+        }
+
+        let remaining = consumptionItem.quantity;
+        for (const stockItem of stockDocs) {
+          if (remaining <= 0) break;
+          const currentQty = Number(stockItem.quantity ?? 0);
+          if (currentQty <= 0) continue;
+          const deduct = Math.min(currentQty, remaining);
+          await adminFirestore.collection(col.bizStockItems).doc(String(stockItem.id)).set(
+            {
+              quantity: FieldValue.increment(-deduct),
+              updatedAt: nowIso(),
+            },
+            { merge: true }
+          );
+          remaining -= deduct;
+        }
+
+        const moveId = makeId(col.bizStockMoves);
+        await adminFirestore.collection(col.bizStockMoves).doc(moveId).set({
+          id: moveId,
+          tenantId,
+          productId: consumptionItem.productId,
+          quantity: consumptionItem.quantity,
+          moveType: 'out',
+          source: consumptionItem.sourceType === 'recipe_component' ? 'recipe_consumption' : 'dine_in_sale',
+          sourceProductId: consumptionItem.sourceProductId,
+          createdAt: nowIso(),
+        });
       }
-
-      let remaining = line.quantity;
-      for (const stockItem of stockDocs) {
-        if (remaining <= 0) break;
-        const currentQty = Number(stockItem.quantity ?? 0);
-        if (currentQty <= 0) continue;
-        const deduct = Math.min(currentQty, remaining);
-        await adminFirestore.collection(col.bizStockItems).doc(String(stockItem.id)).set(
-          {
-            quantity: FieldValue.increment(-deduct),
-            updatedAt: nowIso(),
-          },
-          { merge: true }
-        );
-        remaining -= deduct;
-      }
-
-      const moveId = makeId(col.bizStockMoves);
-      await adminFirestore.collection(col.bizStockMoves).doc(moveId).set({
-        id: moveId,
-        tenantId,
-        productId: line.productId,
-        quantity: line.quantity,
-        moveType: 'out',
-        source: 'dine_in_sale',
-        createdAt: nowIso(),
-      });
     }
 
     const total = preparedLines.reduce((sum, line) => sum + line.lineTotal, 0);
@@ -190,6 +253,7 @@ export async function POST(request: NextRequest) {
         unitCost: line.unitCost,
         notes: line.notes?.trim() ?? null,
         lineTotal: line.lineTotal,
+        recipeBundleId: line.recipeBundleId,
       });
     });
 
@@ -209,8 +273,10 @@ export async function POST(request: NextRequest) {
       });
 
     const ticketId = makeId(col.bizRestaurantKitchenTickets);
+    const createdAt = nowIso();
     const kitchenLines = preparedLines.map((line) => {
       const station = inferKitchenStation(productName.get(line.productId) ?? '', productCategory.get(line.productId) ?? '');
+      const fireInMinutes = fireOffsetMinutes(station);
       return {
         id: makeId(col.bizRestaurantKitchenTickets),
         productId: line.productId,
@@ -218,9 +284,12 @@ export async function POST(request: NextRequest) {
         qty: line.quantity,
         status: 'queued',
         station,
+        stationSequence: stationSequence(station),
+        fireAt: new Date(Date.now() + fireInMinutes * 60_000).toISOString(),
+        fireInMinutes,
         slaMinutes: inferStationSlaMinutes(station),
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
+        createdAt,
+        updatedAt: createdAt,
       };
     });
     const ticketWrites = adminFirestore.collection(col.bizRestaurantKitchenTickets).doc(ticketId).set({
@@ -231,19 +300,21 @@ export async function POST(request: NextRequest) {
       orderId,
       status: 'queued',
       stationSummary: Array.from(new Set(kitchenLines.map((line) => line.station))),
+      serviceMode: payload.reservationId ? 'reservation' : 'walk_in',
       lines: kitchenLines,
       slaTargetMinutes: Math.max(...kitchenLines.map((line) => line.slaMinutes), 0),
+      nextFireAt: kitchenLines.slice().sort((a, b) => String(a.fireAt).localeCompare(String(b.fireAt)))[0]?.fireAt ?? createdAt,
       lifecycle: [
         {
           action: 'queued',
           status: 'queued',
           station: null,
           notes: payload.notes?.trim() ?? null,
-          at: nowIso(),
+          at: createdAt,
         },
       ],
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
+      createdAt,
+      updatedAt: createdAt,
     });
 
     await Promise.all([...lineWrites, ...paymentWrites, ticketWrites]);
