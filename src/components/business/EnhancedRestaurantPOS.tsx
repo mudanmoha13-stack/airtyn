@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAppState } from '@/lib/store';
 
 type Product = { id: string; name?: string; basePrice?: number; category?: string };
+type Branch = { id: string; name?: string; code?: string };
 type TableRecord = { id: string; code?: string; name?: string; floor?: string; status?: string; capacity?: number; currentOrderId?: string };
 type OrderLine = { productId: string; productName: string; quantity: number; unitPrice: number; lineTotal: number };
 type POSMode = 'counter' | 'waiter' | 'table' | 'qr-order' | 'takeaway' | 'delivery' | 'split-bill' | 'merge-tables' | 'refunds' | 'receipt' | 'cash-drawer' | 'shift';
@@ -38,8 +39,10 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
   const [message, setMessage] = useState<string | null>(null);
 
   // Data
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [tables, setTables] = useState<TableRecord[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [effectiveBranchId, setEffectiveBranchId] = useState(branchId);
   const [shiftOpen, setShiftOpen] = useState(true);
   const [cashDrawer, setCashDrawer] = useState({ initial: 0, expected: 0, actual: 0 });
 
@@ -79,10 +82,22 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
 
   // Load data
   const loadData = useCallback(async () => {
-    if (!branchId) return;
+    if (!currentTenant?.id) return;
     setLoading(true);
     try {
-      const [tableRes, productRes] = await Promise.all([apiFetch<{ tables: TableRecord[] }>(`/api/business/restaurant/tables?branchId=${encodeURIComponent(branchId)}`), apiFetch<{ products: Product[] }>('/api/business/products')]);
+      const [branchRes, productRes] = await Promise.all([
+        apiFetch<{ branches: Branch[] }>('/api/business/restaurant/branches'),
+        apiFetch<{ products: Product[] }>('/api/business/products'),
+      ]);
+      const availableBranches = branchRes.branches ?? [];
+      setBranches(availableBranches);
+      const resolvedBranchId = availableBranches.some((item) => item.id === branchId)
+        ? branchId
+        : availableBranches[0]?.id ?? branchId;
+      setEffectiveBranchId(resolvedBranchId);
+      const tableRes = resolvedBranchId
+        ? await apiFetch<{ tables: TableRecord[] }>(`/api/business/restaurant/tables?branchId=${encodeURIComponent(resolvedBranchId)}`)
+        : { tables: [] };
       setTables(tableRes.tables ?? []);
       setProducts(productRes.products ?? []);
     } catch (e) {
@@ -90,11 +105,38 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [branchId, apiFetch]);
+  }, [apiFetch, branchId, currentTenant?.id]);
+
+  const loadTablesForBranch = useCallback(async (nextBranchId: string) => {
+    if (!nextBranchId) {
+      setTables([]);
+      return;
+    }
+    try {
+      const tableRes = await apiFetch<{ tables: TableRecord[] }>(`/api/business/restaurant/tables?branchId=${encodeURIComponent(nextBranchId)}`);
+      setTables(tableRes.tables ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load branch tables');
+    }
+  }, [apiFetch]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!effectiveBranchId) return;
+    void loadTablesForBranch(effectiveBranchId);
+  }, [effectiveBranchId, loadTablesForBranch]);
+
+  useEffect(() => {
+    if (activeMode !== 'waiter') return;
+    if (selectedTableId) return;
+    const firstAvailableTable = tables.find((table) => table.status === 'available') ?? tables[0];
+    if (firstAvailableTable?.id) {
+      setSelectedTableId(firstAvailableTable.id);
+    }
+  }, [activeMode, selectedTableId, tables]);
 
   // Helper functions
   const onAddProduct = (product: Product) => {
@@ -121,11 +163,18 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
   const orderTotal = useMemo(() => orderLines.reduce((sum, line) => sum + line.lineTotal, 0), [orderLines]);
   const paidTotal = useMemo(() => payments.cash + payments.card + payments.wallet + payments.bank, [payments]);
   const change = Math.max(0, paidTotal - orderTotal);
-  const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))), [products]);
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => p.category).filter((value): value is string => Boolean(value)))),
+    [products]
+  );
   const filteredProducts = useMemo(() => (categoryFilter === 'all' ? products : products.filter((p) => p.category === categoryFilter)), [products, categoryFilter]);
 
   // Mode handlers
   const handleCounterOrder = async () => {
+    if (!effectiveBranchId) {
+      setError('Select or create a branch before sending orders.');
+      return;
+    }
     if (orderLines.length === 0 || paidTotal < orderTotal) {
       setError('Invalid order or insufficient payment');
       return;
@@ -136,9 +185,11 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
         method: 'POST',
         body: JSON.stringify({
           sessionId: `counter-${Date.now()}`,
-          branchId,
+          branchId: effectiveBranchId,
           tableId: 'counter',
           servedByEmployeeId: currentUser?.id,
+          waiterId: currentUser?.id,
+          waiterName: waiterName.trim() || currentUser?.name || 'Counter POS',
           customer: { name: 'Counter Order' },
           lines: orderLines.map((line) => ({ productId: line.productId, quantity: line.quantity, unitPrice: line.unitPrice })),
           payments: [
@@ -154,6 +205,53 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
       setPayments({ cash: 0, card: 0, wallet: 0, bank: 0 });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to complete order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWaiterSendToKitchen = async () => {
+    if (!effectiveBranchId) {
+      setError('Select or create a branch before sending orders.');
+      return;
+    }
+    if (!selectedTableId) {
+      setError('Select a table before sending to kitchen.');
+      return;
+    }
+    if (orderLines.length === 0) {
+      setError('Add at least one item before sending to kitchen.');
+      return;
+    }
+    if (!currentUser?.id) {
+      setError('Waiter account is required to send order.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      await apiFetch('/api/business/restaurant/dine-in/close', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId: `waiter-${Date.now()}`,
+          branchId: effectiveBranchId,
+          tableId: selectedTableId,
+          servedByEmployeeId: currentUser.id,
+          waiterId: currentUser.id,
+          waiterName: waiterName.trim() || currentUser.name || 'Waiter',
+          customer: { name: customerName.trim() || 'Table Guest' },
+          lines: orderLines.map((line) => ({ productId: line.productId, quantity: line.quantity, unitPrice: line.unitPrice })),
+          payments: [{ method: 'cash', amount: orderTotal }],
+          notes: `Waiter send-to-kitchen by ${waiterName.trim() || currentUser.name || currentUser.id}`,
+        }),
+      });
+      setMessage('Order sent to kitchen successfully.');
+      setOrderLines([]);
+      setCustomerName('');
+      setPayments({ cash: 0, card: 0, wallet: 0, bank: 0 });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send order to kitchen');
     } finally {
       setLoading(false);
     }
@@ -356,6 +454,18 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
               <Input placeholder="Customer name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Branch</p>
+              <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={effectiveBranchId} onChange={(e) => {
+                setEffectiveBranchId(e.target.value);
+                setSelectedTableId('');
+              }}>
+                <option value="">Select branch</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>{`${branch.name ?? 'Unnamed'} (${branch.code ?? '-'})`}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Select Table</p>
               <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
                 {tables.map((table) => (
@@ -372,7 +482,7 @@ export function EnhancedRestaurantPOS({ branchId }: { branchId: string }) {
               </div>
             </div>
             <OrderBuilder />
-            <Button onClick={handleCounterOrder} disabled={loading || !selectedTableId || orderLines.length === 0} className="w-full bg-purple-600">
+            <Button onClick={handleWaiterSendToKitchen} disabled={loading || !selectedTableId || orderLines.length === 0 || !effectiveBranchId} className="w-full bg-purple-600">
               Send to Kitchen
             </Button>
           </CardContent>

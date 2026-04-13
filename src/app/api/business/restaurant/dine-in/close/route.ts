@@ -37,10 +37,12 @@ function fireOffsetMinutes(station: string): number {
 }
 
 const closeDineInSchema = z.object({
-  sessionId: z.string().min(1),
+  sessionId: z.string().min(1).optional(),
   branchId: z.string().min(1),
   tableId: z.string().min(1),
   servedByEmployeeId: z.string().min(1),
+  waiterId: z.string().optional(),
+  waiterName: z.string().optional(),
   reservationId: z.string().optional(),
   customer: z.object({
     name: z.string().min(1),
@@ -61,22 +63,77 @@ const closeDineInSchema = z.object({
   notes: z.string().optional(),
 });
 
+async function resolveActiveSessionId({
+  tenantId,
+  branchId,
+  requestedSessionId,
+  servedByEmployeeId,
+}: {
+  tenantId: string;
+  branchId: string;
+  requestedSessionId?: string;
+  servedByEmployeeId: string;
+}) {
+  if (requestedSessionId) {
+    const requestedSnap = await adminFirestore.collection(col.bizRestaurantPosSessions).doc(requestedSessionId).get();
+    if (
+      requestedSnap.exists
+      && String(requestedSnap.data()?.tenantId ?? '') === tenantId
+      && String(requestedSnap.data()?.status ?? '') === 'open'
+    ) {
+      return requestedSessionId;
+    }
+  }
+
+  const existingOpenSnap = await adminFirestore
+    .collection(col.bizRestaurantPosSessions)
+    .where('tenantId', '==', tenantId)
+    .where('branchId', '==', branchId)
+    .where('status', '==', 'open')
+    .limit(1)
+    .get();
+
+  if (!existingOpenSnap.empty) {
+    return existingOpenSnap.docs[0].id;
+  }
+
+  const autoSessionId = makeId(col.bizRestaurantPosSessions);
+  await adminFirestore.collection(col.bizRestaurantPosSessions).doc(autoSessionId).set({
+    id: autoSessionId,
+    tenantId,
+    branchId,
+    terminalName: 'Built-in POS',
+    status: 'open',
+    openedByUserId: servedByEmployeeId,
+    openingCash: 0,
+    autoManaged: true,
+    openedAt: nowIso(),
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  });
+
+  return autoSessionId;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const tenantId = resolveBusinessTenantId(request);
     await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const payload = closeDineInSchema.parse(await request.json());
 
-    const [sessionSnap, tableSnap] = await Promise.all([
-      adminFirestore.collection(col.bizRestaurantPosSessions).doc(payload.sessionId).get(),
-      adminFirestore.collection(col.bizRestaurantTables).doc(payload.tableId).get(),
-    ]);
+    const resolvedSessionId = await resolveActiveSessionId({
+      tenantId,
+      branchId: payload.branchId,
+      requestedSessionId: payload.sessionId,
+      servedByEmployeeId: payload.servedByEmployeeId,
+    });
 
-    if (!sessionSnap.exists || String(sessionSnap.data()?.tenantId ?? '') !== tenantId || String(sessionSnap.data()?.status ?? '') !== 'open') {
-      return NextResponse.json({ ok: false, error: 'Active POS session not found for tenant' }, { status: 404 });
-    }
+    const usesPhysicalTable = payload.tableId !== 'counter';
+    const tableSnap = usesPhysicalTable
+      ? await adminFirestore.collection(col.bizRestaurantTables).doc(payload.tableId).get()
+      : null;
 
-    if (!tableSnap.exists || String(tableSnap.data()?.tenantId ?? '') !== tenantId || String(tableSnap.data()?.branchId ?? '') !== payload.branchId) {
+    if (usesPhysicalTable && (!tableSnap?.exists || String(tableSnap.data()?.tenantId ?? '') !== tenantId || String(tableSnap.data()?.branchId ?? '') !== payload.branchId)) {
       return NextResponse.json({ ok: false, error: 'Table not found for branch/tenant' }, { status: 404 });
     }
 
@@ -225,11 +282,13 @@ export async function POST(request: NextRequest) {
       orderNo,
       currency: 'KES',
       channel: 'pos',
-      orderType: 'dine_in',
+      orderType: usesPhysicalTable ? 'dine_in' : 'counter',
       branchId: payload.branchId,
-      sessionId: payload.sessionId,
-      tableId: payload.tableId,
+      sessionId: resolvedSessionId,
+      tableId: usesPhysicalTable ? payload.tableId : null,
       reservationId: payload.reservationId ?? null,
+      waiterId: payload.waiterId ?? payload.servedByEmployeeId,
+      waiterName: payload.waiterName?.trim() ?? null,
       status: 'settled',
       customerName: payload.customer.name,
       customerEmail: payload.customer.email ?? null,
@@ -296,11 +355,13 @@ export async function POST(request: NextRequest) {
       id: ticketId,
       tenantId,
       branchId: payload.branchId,
-      tableId: payload.tableId,
+      tableId: usesPhysicalTable ? payload.tableId : null,
       orderId,
+      waiterId: payload.waiterId ?? payload.servedByEmployeeId,
+      waiterName: payload.waiterName?.trim() ?? null,
       status: 'queued',
       stationSummary: Array.from(new Set(kitchenLines.map((line) => line.station))),
-      serviceMode: payload.reservationId ? 'reservation' : 'walk_in',
+      serviceMode: payload.reservationId ? 'reservation' : usesPhysicalTable ? 'walk_in' : 'counter',
       lines: kitchenLines,
       slaTargetMinutes: Math.max(...kitchenLines.map((line) => line.slaMinutes), 0),
       nextFireAt: kitchenLines.slice().sort((a, b) => String(a.fireAt).localeCompare(String(b.fireAt)))[0]?.fireAt ?? createdAt,
@@ -479,15 +540,17 @@ export async function POST(request: NextRequest) {
 
     await Promise.all([laborWrites, ...journalWrites, ...replenishmentWrites]);
 
-    await adminFirestore.collection(col.bizRestaurantTables).doc(payload.tableId).set(
-      {
-        status: 'available',
-        currentOrderId: null,
-        currentReservationId: null,
-        updatedAt: nowIso(),
-      },
-      { merge: true }
-    );
+    if (usesPhysicalTable) {
+      await adminFirestore.collection(col.bizRestaurantTables).doc(payload.tableId).set(
+        {
+          status: 'available',
+          currentOrderId: null,
+          currentReservationId: null,
+          updatedAt: nowIso(),
+        },
+        { merge: true }
+      );
+    }
 
     if (payload.reservationId) {
       await adminFirestore.collection(col.bizRestaurantReservations).doc(payload.reservationId).set(

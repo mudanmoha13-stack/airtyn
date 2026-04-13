@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -441,7 +440,6 @@ export function RestaurantControlTower({ mode = 'control' }: { mode?: 'control' 
   );
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -468,6 +466,5 @@ export function RestaurantControlTower({ mode = 'control' }: { mode?: 'control' 
 
         {renderKitchenBoard()}
       </div>
-    </Shell>
   );
 }

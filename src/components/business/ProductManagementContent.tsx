@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, ChevronDown, ChevronRight, Layers, Package, Ruler, Tag, Wrench } from 'lucide-react';
+import { AlertTriangle, Boxes, ChefHat, ChevronDown, ChevronRight, ClipboardList, Layers, Package, Ruler, Tag, UtensilsCrossed, Warehouse, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -136,6 +136,34 @@ function advanceLifecycle(current: ProductLifecycle): ProductLifecycle {
   const idx = LIFECYCLE_CYCLE.indexOf(current);
   return LIFECYCLE_CYCLE[(idx + 1) % LIFECYCLE_CYCLE.length];
 }
+
+function money(value: number | string | null | undefined) {
+  if (value == null || value === '') return '—';
+  return `$${Number(value).toFixed(2)}`;
+}
+
+const TinyStat = ({
+  label,
+  value,
+  hint,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  hint: string;
+  icon: React.ComponentType<{ className?: string }>;
+}) => (
+  <Card className="glass-card border-white/5">
+    <CardContent className="flex items-start justify-between p-4">
+      <div>
+        <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
+        <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      </div>
+      <Icon className="h-5 w-5 text-primary" />
+    </CardContent>
+  </Card>
+);
 
 // ─── Catalog Tab ──────────────────────────────────────────────────────────────
 
@@ -1512,46 +1540,389 @@ const SkuRulesTab = () => {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
+type RestaurantOpsProduct = {
+  id: string;
+  name: string;
+  sku?: string | null;
+  restaurantType?: string | null;
+  basePrice?: string | number | null;
+  productCategory?: { id: string; name: string } | null;
+};
+
+type RestaurantOpsPayload = {
+  menus?: Array<{ id: string; name: string; serviceWindow?: string | null; status?: string; items?: Array<{ id: string; product?: { id: string; name: string } | null; priceOverride?: number | null }> }>;
+  modifiers?: Array<{ id: string; name: string; required?: boolean; maxSelection?: number; options?: Array<{ id: string; name: string; priceDelta?: number | null }> }>;
+  recipes?: Array<{ id: string; product?: { id: string; name: string } | null; prepMode?: string; components?: Array<{ id: string; ingredient?: { id: string; name: string } | null; quantity: number; station?: string | null }> }>;
+  pricingRules?: Array<{ id: string; productId: string; branchId?: string | null; channel?: string | null; price: number }>;
+  availabilityRules?: Array<{ id: string; productId: string; daypart?: string | null; startsAt?: string | null; endsAt?: string | null }>;
+  wasteLogs?: Array<{ id: string; productId: string; quantity: number; reason: string; costImpact?: number | null; station?: string | null }>;
+  replenishment?: Array<{ id: string; componentProductId: string; suggestedQty?: number | null; branchId?: string | null; status?: string }>;
+  stockMoves?: Array<{ id: string; productId: string; quantity: number; moveType: string; branchId?: string | null }>;
+};
+
+const RestaurantOpsPanel = () => {
+  const [products, setProducts] = useState<RestaurantOpsProduct[]>([]);
+  const [ops, setOps] = useState<RestaurantOpsPayload>({});
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [menuForm, setMenuForm] = useState({ name: '', serviceWindow: '', productId: '', priceOverride: '' });
+  const [modifierForm, setModifierForm] = useState({ name: '', required: false, maxSelection: '1', optionName: '', optionPriceDelta: '' });
+  const [recipeForm, setRecipeForm] = useState({ productId: '', prepMode: 'cook_to_order', ingredientId: '', quantity: '', station: '' });
+  const [pricingForm, setPricingForm] = useState({ productId: '', branchId: '', channel: 'all', price: '' });
+  const [availabilityForm, setAvailabilityForm] = useState({ productId: '', daypart: '', startsAt: '', endsAt: '' });
+  const [wasteForm, setWasteForm] = useState({ productId: '', branchId: '', quantity: '', reason: '', costImpact: '', station: '' });
+  const [replenishmentForm, setReplenishmentForm] = useState({ componentProductId: '', branchId: '', suggestedQty: '' });
+
+  const load = useCallback(async () => {
+    try {
+      const [productsRes, opsRes] = await Promise.all([
+        fetch('/api/business/products', { cache: 'no-store' }),
+        fetch('/api/business/restaurant/product-ops', { cache: 'no-store' }),
+      ]);
+      const [productsData, opsData] = await Promise.all([
+        productsRes.json() as Promise<{ ok: boolean; products?: RestaurantOpsProduct[] }>,
+        opsRes.json() as Promise<{ ok: boolean } & RestaurantOpsPayload>,
+      ]);
+      if (productsData.ok && productsData.products) setProducts(productsData.products);
+      if (opsData.ok) setOps(opsData);
+    } catch {
+      setFeedback('Unable to refresh restaurant product operations right now.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const finishedProducts = useMemo(
+    () => products.filter((product) => ['finished', 'combo', 'service'].includes(String(product.restaurantType ?? ''))),
+    [products]
+  );
+  const ingredientProducts = useMemo(
+    () => products.filter((product) => ['raw', 'semi_prepared'].includes(String(product.restaurantType ?? ''))),
+    [products]
+  );
+
+  const saveRecord = useCallback(async (key: string, body: Record<string, unknown>, successMessage: string) => {
+    setSaving(key);
+    setFeedback(null);
+    try {
+      const response = await fetch('/api/business/restaurant/product-ops', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(await readApiError(response, 'Unable to save record.'));
+      setFeedback(successMessage);
+      await load();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Unable to save record.');
+    } finally {
+      setSaving(null);
+    }
+  }, [load]);
+
+  const menus = ops.menus ?? [];
+  const modifiers = ops.modifiers ?? [];
+  const recipes = ops.recipes ?? [];
+  const pricingRules = ops.pricingRules ?? [];
+  const availabilityRules = ops.availabilityRules ?? [];
+  const wasteLogs = ops.wasteLogs ?? [];
+  const replenishment = ops.replenishment ?? [];
+  const wasteCost = wasteLogs.reduce((sum, row) => sum + Number(row.costImpact ?? 0), 0);
+
+  return (
+    <Tabs defaultValue="overview" className="space-y-4">
+      <TabsList className="flex h-auto flex-wrap gap-1 bg-card/40 p-1">
+        <TabsTrigger value="overview" className="data-[state=active]:gradient-amber data-[state=active]:text-black">Overview</TabsTrigger>
+        <TabsTrigger value="menu" className="data-[state=active]:gradient-amber data-[state=active]:text-black">Menu</TabsTrigger>
+        <TabsTrigger value="modifiers" className="data-[state=active]:gradient-amber data-[state=active]:text-black">Modifiers</TabsTrigger>
+        <TabsTrigger value="recipes" className="data-[state=active]:gradient-amber data-[state=active]:text-black">Recipes</TabsTrigger>
+        <TabsTrigger value="pricing" className="data-[state=active]:gradient-amber data-[state=active]:text-black">Pricing</TabsTrigger>
+        <TabsTrigger value="waste" className="data-[state=active]:gradient-amber data-[state=active]:text-black">Waste</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="overview" className="mt-0 space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <TinyStat label="Menu Items" value={menus.reduce((sum, menu) => sum + (menu.items?.length ?? 0), 0)} hint="Published to menus" icon={UtensilsCrossed} />
+          <TinyStat label="Modifiers" value={modifiers.length} hint="Customization groups" icon={ClipboardList} />
+          <TinyStat label="Recipes" value={recipes.length} hint="Ingredient-linked products" icon={ChefHat} />
+          <TinyStat label="Price Rules" value={pricingRules.length} hint="Branch and channel pricing" icon={Package} />
+          <TinyStat label="Availability" value={availabilityRules.length} hint="Daypart visibility rules" icon={Warehouse} />
+          <TinyStat label="Waste Cost" value={`$${wasteCost.toFixed(2)}`} hint="Logged variance impact" icon={AlertTriangle} />
+        </div>
+        <div className="grid gap-4 xl:grid-cols-3">
+          {[
+            ['Product Master', 'Use the product tabs below for finished items, raw ingredients, prep items, combos, categories, UoM, and SKU rules.'],
+            ['Restaurant Ops', 'These top tabs now cover menu publishing, modifiers, recipes, pricing, availability, replenishment, and waste.'],
+            ['Inventory Flow', 'Products, menu, kitchen, stock movements, and procurement suggestions are aligned around restaurant operations.'],
+          ].map(([title, description]) => (
+            <Card key={title} className="glass-card border-white/5">
+              <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+              <CardContent className="text-sm text-muted-foreground">{description}</CardContent>
+            </Card>
+          ))}
+        </div>
+      </TabsContent>
+
+      <TabsContent value="menu" className="mt-0 grid gap-4 xl:grid-cols-2">
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Menu publishing</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <Input placeholder="Breakfast Menu" value={menuForm.name} onChange={(e) => setMenuForm((prev) => ({ ...prev, name: e.target.value }))} />
+            <Input placeholder="6AM–11AM" value={menuForm.serviceWindow} onChange={(e) => setMenuForm((prev) => ({ ...prev, serviceWindow: e.target.value }))} />
+            <select value={menuForm.productId} onChange={(e) => setMenuForm((prev) => ({ ...prev, productId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="">Select feature product</option>
+              {finishedProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <Input type="number" placeholder="Optional menu price override" value={menuForm.priceOverride} onChange={(e) => setMenuForm((prev) => ({ ...prev, priceOverride: e.target.value }))} />
+            <Button className="gradient-amber text-black font-semibold" disabled={saving === 'menu'} onClick={async () => {
+              const response = await fetch('/api/business/restaurant/product-ops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityType: 'menu', name: menuForm.name, serviceWindow: menuForm.serviceWindow || undefined, status: 'active' }) });
+              if (!response.ok) return setFeedback(await readApiError(response, 'Unable to create menu.'));
+              const data = (await response.json()) as { id: string };
+              if (menuForm.productId) {
+                await saveRecord('menu-item', { entityType: 'menu_item', menuId: data.id, productId: menuForm.productId, priceOverride: menuForm.priceOverride ? Number(menuForm.priceOverride) : undefined, featured: true }, 'Menu item added.');
+              } else {
+                await load();
+                setFeedback('Menu created.');
+              }
+              setMenuForm({ name: '', serviceWindow: '', productId: '', priceOverride: '' });
+            }}>{saving === 'menu' ? 'Saving…' : 'Create Menu'}</Button>
+          </CardContent>
+        </Card>
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Published menus</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {menus.length === 0 ? <p className="text-sm text-muted-foreground">No menus yet.</p> : menus.map((menu) => (
+              <div key={menu.id} className="rounded-xl border border-white/10 bg-card/30 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-foreground">{menu.name}</p>
+                    <p className="text-xs text-muted-foreground">{menu.serviceWindow || 'Always available'}</p>
+                  </div>
+                  <Badge variant="outline">{menu.status ?? 'draft'}</Badge>
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">{(menu.items ?? []).slice(0, 4).map((item) => <div key={item.id}>{item.product?.name ?? 'Unlinked product'} · {item.priceOverride != null ? money(item.priceOverride) : 'base price'}</div>)}</div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="modifiers" className="mt-0 grid gap-4 xl:grid-cols-2">
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Modifier groups</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <Input placeholder="Milk Choice" value={modifierForm.name} onChange={(e) => setModifierForm((prev) => ({ ...prev, name: e.target.value }))} />
+            <Input type="number" placeholder="Max selection" value={modifierForm.maxSelection} onChange={(e) => setModifierForm((prev) => ({ ...prev, maxSelection: e.target.value }))} />
+            <Input placeholder="First option, e.g. Oat Milk" value={modifierForm.optionName} onChange={(e) => setModifierForm((prev) => ({ ...prev, optionName: e.target.value }))} />
+            <Input type="number" placeholder="Option price delta" value={modifierForm.optionPriceDelta} onChange={(e) => setModifierForm((prev) => ({ ...prev, optionPriceDelta: e.target.value }))} />
+            <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={modifierForm.required} onChange={(e) => setModifierForm((prev) => ({ ...prev, required: e.target.checked }))} /> Required selection</label>
+            <Button className="gradient-amber text-black font-semibold" disabled={saving === 'modifier'} onClick={async () => {
+              const response = await fetch('/api/business/restaurant/product-ops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityType: 'modifier', name: modifierForm.name, required: modifierForm.required, maxSelection: Number(modifierForm.maxSelection || '1') }) });
+              if (!response.ok) return setFeedback(await readApiError(response, 'Unable to create modifier.'));
+              const data = (await response.json()) as { id: string };
+              if (modifierForm.optionName) await saveRecord('modifier-option', { entityType: 'modifier_option', modifierId: data.id, name: modifierForm.optionName, priceDelta: modifierForm.optionPriceDelta ? Number(modifierForm.optionPriceDelta) : 0 }, 'Modifier option added.');
+              else await load();
+              setModifierForm({ name: '', required: false, maxSelection: '1', optionName: '', optionPriceDelta: '' });
+            }}>{saving === 'modifier' ? 'Saving…' : 'Create Modifier'}</Button>
+          </CardContent>
+        </Card>
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Active modifiers</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {modifiers.length === 0 ? <p className="text-sm text-muted-foreground">No modifiers yet.</p> : modifiers.map((modifier) => (
+              <div key={modifier.id} className="rounded-xl border border-white/10 bg-card/30 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium text-foreground">{modifier.name}</p>
+                  <Badge variant="outline">{modifier.required ? 'Required' : `Max ${modifier.maxSelection ?? 1}`}</Badge>
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">{(modifier.options ?? []).map((option) => <div key={option.id}>{option.name} · {money(option.priceDelta ?? 0)}</div>)}</div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="recipes" className="mt-0 grid gap-4 xl:grid-cols-2">
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Recipe / BOM builder</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <select value={recipeForm.productId} onChange={(e) => setRecipeForm((prev) => ({ ...prev, productId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="">Select sellable product</option>
+              {finishedProducts.filter((product) => String(product.restaurantType ?? '') !== 'service').map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <select value={recipeForm.prepMode} onChange={(e) => setRecipeForm((prev) => ({ ...prev, prepMode: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="cook_to_order">Cook to order</option>
+              <option value="prep_batch">Prep batch</option>
+              <option value="sub_recipe">Sub recipe</option>
+            </select>
+            <select value={recipeForm.ingredientId} onChange={(e) => setRecipeForm((prev) => ({ ...prev, ingredientId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="">Select ingredient</option>
+              {ingredientProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <Input type="number" placeholder="Quantity" value={recipeForm.quantity} onChange={(e) => setRecipeForm((prev) => ({ ...prev, quantity: e.target.value }))} />
+            <Input placeholder="Kitchen station" value={recipeForm.station} onChange={(e) => setRecipeForm((prev) => ({ ...prev, station: e.target.value }))} />
+            <Button className="gradient-amber text-black font-semibold" disabled={saving === 'recipe'} onClick={async () => {
+              const recipeResponse = await fetch('/api/business/restaurant/product-ops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityType: 'recipe', productId: recipeForm.productId, prepMode: recipeForm.prepMode }) });
+              if (!recipeResponse.ok) return setFeedback(await readApiError(recipeResponse, 'Unable to create recipe.'));
+              const data = (await recipeResponse.json()) as { id: string };
+              await saveRecord('recipe-component', { entityType: 'recipe_component', recipeId: data.id, ingredientId: recipeForm.ingredientId, quantity: Number(recipeForm.quantity), station: recipeForm.station || undefined }, 'Recipe linked.');
+              setRecipeForm({ productId: '', prepMode: 'cook_to_order', ingredientId: '', quantity: '', station: '' });
+            }}>{saving === 'recipe' ? 'Saving…' : 'Link Recipe'}</Button>
+          </CardContent>
+        </Card>
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Recipe coverage</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {recipes.length === 0 ? <p className="text-sm text-muted-foreground">No recipes linked yet.</p> : recipes.map((recipe) => (
+              <div key={recipe.id} className="rounded-xl border border-white/10 bg-card/30 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium text-foreground">{recipe.product?.name ?? 'Unlinked recipe'}</p>
+                  <Badge variant="outline">{recipe.prepMode ?? 'cook_to_order'}</Badge>
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">{(recipe.components ?? []).map((component) => <div key={component.id}>{component.ingredient?.name ?? 'Ingredient'} · {component.quantity}{component.station ? ` · ${component.station}` : ''}</div>)}</div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="pricing" className="mt-0 grid gap-4 xl:grid-cols-2">
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Pricing & availability</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <select value={pricingForm.productId} onChange={(e) => setPricingForm((prev) => ({ ...prev, productId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="">Select product</option>
+              {finishedProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <Input placeholder="Optional branch id" value={pricingForm.branchId} onChange={(e) => setPricingForm((prev) => ({ ...prev, branchId: e.target.value }))} />
+            <select value={pricingForm.channel} onChange={(e) => setPricingForm((prev) => ({ ...prev, channel: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="all">All channels</option>
+              <option value="dine_in">Dine-in</option>
+              <option value="takeaway">Takeaway</option>
+              <option value="delivery">Delivery</option>
+            </select>
+            <Input type="number" placeholder="Branch/channel price" value={pricingForm.price} onChange={(e) => setPricingForm((prev) => ({ ...prev, price: e.target.value }))} />
+            <Button className="gradient-amber text-black font-semibold" disabled={saving === 'pricing'} onClick={() => void saveRecord('pricing', { entityType: 'pricing_rule', productId: pricingForm.productId, branchId: pricingForm.branchId || undefined, channel: pricingForm.channel, price: Number(pricingForm.price), status: 'active' }, 'Pricing rule saved.')}>{saving === 'pricing' ? 'Saving…' : 'Save Pricing Rule'}</Button>
+            <div className="grid gap-2 pt-2 md:grid-cols-2">
+              <Input placeholder="Daypart" value={availabilityForm.daypart} onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, daypart: e.target.value }))} />
+              <select value={availabilityForm.productId} onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, productId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+                <option value="">Select product for availability</option>
+                {finishedProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+              </select>
+              <Input type="time" value={availabilityForm.startsAt} onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, startsAt: e.target.value }))} />
+              <Input type="time" value={availabilityForm.endsAt} onChange={(e) => setAvailabilityForm((prev) => ({ ...prev, endsAt: e.target.value }))} />
+            </div>
+            <Button variant="outline" className="border-white/10 bg-card/40" disabled={saving === 'availability'} onClick={() => void saveRecord('availability', { entityType: 'availability_rule', productId: availabilityForm.productId, daypart: availabilityForm.daypart || undefined, startsAt: availabilityForm.startsAt || undefined, endsAt: availabilityForm.endsAt || undefined, stockBasedDisable: true }, 'Availability rule saved.')}>{saving === 'availability' ? 'Saving…' : 'Save Availability Rule'}</Button>
+          </CardContent>
+        </Card>
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Active pricing and visibility rules</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {pricingRules.map((rule) => <div key={rule.id} className="rounded-xl border border-white/10 bg-card/30 p-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">{products.find((product) => product.id === rule.productId)?.name ?? rule.productId}</span><div>{rule.channel ?? 'all'} {rule.branchId ? `· ${rule.branchId}` : ''} · {money(rule.price)}</div></div>)}
+            {availabilityRules.map((rule) => <div key={rule.id} className="rounded-xl border border-white/10 bg-card/30 p-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">{products.find((product) => product.id === rule.productId)?.name ?? rule.productId}</span><div>{rule.daypart || 'Always'} · {rule.startsAt || '--'} to {rule.endsAt || '--'}</div></div>)}
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="waste" className="mt-0 grid gap-4 xl:grid-cols-2">
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Waste & replenishment</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <select value={wasteForm.productId} onChange={(e) => setWasteForm((prev) => ({ ...prev, productId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+              <option value="">Select ingredient</option>
+              {ingredientProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+            <Input type="number" placeholder="Waste quantity" value={wasteForm.quantity} onChange={(e) => setWasteForm((prev) => ({ ...prev, quantity: e.target.value }))} />
+            <Input placeholder="Reason" value={wasteForm.reason} onChange={(e) => setWasteForm((prev) => ({ ...prev, reason: e.target.value }))} />
+            <Input type="number" placeholder="Cost impact" value={wasteForm.costImpact} onChange={(e) => setWasteForm((prev) => ({ ...prev, costImpact: e.target.value }))} />
+            <Input placeholder="Station" value={wasteForm.station} onChange={(e) => setWasteForm((prev) => ({ ...prev, station: e.target.value }))} />
+            <Button className="gradient-amber text-black font-semibold" disabled={saving === 'waste'} onClick={() => void saveRecord('waste', { entityType: 'waste_log', productId: wasteForm.productId, branchId: wasteForm.branchId || undefined, quantity: Number(wasteForm.quantity), reason: wasteForm.reason, costImpact: wasteForm.costImpact ? Number(wasteForm.costImpact) : undefined, station: wasteForm.station || undefined }, 'Waste logged and stock move recorded.')}>{saving === 'waste' ? 'Saving…' : 'Log Waste'}</Button>
+            <div className="grid gap-2 pt-2 md:grid-cols-2">
+              <select value={replenishmentForm.componentProductId} onChange={(e) => setReplenishmentForm((prev) => ({ ...prev, componentProductId: e.target.value }))} className="w-full rounded-md border border-white/10 bg-card/40 px-3 py-2 text-sm text-foreground">
+                <option value="">Select ingredient for replenishment</option>
+                {ingredientProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+              </select>
+              <Input placeholder="Suggested quantity" value={replenishmentForm.suggestedQty} onChange={(e) => setReplenishmentForm((prev) => ({ ...prev, suggestedQty: e.target.value }))} />
+            </div>
+            <Button variant="outline" className="border-white/10 bg-card/40" disabled={saving === 'replenishment'} onClick={() => void saveRecord('replenishment', { entityType: 'replenishment', componentProductId: replenishmentForm.componentProductId, branchId: replenishmentForm.branchId || undefined, suggestedQty: replenishmentForm.suggestedQty ? Number(replenishmentForm.suggestedQty) : undefined, status: 'pending' }, 'Replenishment suggestion created.')}>{saving === 'replenishment' ? 'Saving…' : 'Create Replenishment'}</Button>
+            {feedback ? <p className="text-sm text-muted-foreground">{feedback}</p> : null}
+          </CardContent>
+        </Card>
+        <Card className="glass-card border-white/5">
+          <CardHeader><CardTitle className="text-base">Waste, replenishment, and move snapshots</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {wasteLogs.map((row) => <div key={row.id} className="rounded-xl border border-white/10 bg-card/30 p-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">{products.find((product) => product.id === row.productId)?.name ?? row.productId}</span><div>{row.reason}{row.station ? ` · ${row.station}` : ''} · {money(row.costImpact ?? 0)}</div></div>)}
+            {replenishment.map((item) => <div key={item.id} className="rounded-xl border border-white/10 bg-card/30 p-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">{products.find((product) => product.id === item.componentProductId)?.name ?? item.componentProductId}</span><div>{item.status ?? 'pending'} · suggested {item.suggestedQty ?? '—'}{item.branchId ? ` · ${item.branchId}` : ''}</div></div>)}
+            {(ops.stockMoves ?? []).slice(0, 6).map((move) => <div key={move.id} className="rounded-xl border border-white/10 bg-card/30 p-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">{products.find((product) => product.id === move.productId)?.name ?? move.productId}</span><div>{move.moveType} · {move.quantity}{move.branchId ? ` · ${move.branchId}` : ''}</div></div>)}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  );
+};
+
 export function ProductManagementContent() {
   return (
     <div id="product-management" className="scroll-mt-24 space-y-4">
       <div>
-        <h2 className="text-xl font-semibold text-foreground">Product Management</h2>
+        <h2 className="text-xl font-semibold text-foreground">Product & Inventory Management</h2>
         <p className="text-sm text-muted-foreground">
-          Unified product catalog, variants, categories, units of measure, bundles, and SKU generation rules.
+          Restaurant-first product, menu, recipe, pricing, and stock control with the legacy catalog tools still available underneath.
         </p>
       </div>
 
       <CsvSheetImporter mode="products" onImported={() => window.location.reload()} />
 
-      <Tabs defaultValue="catalog" className="w-full">
+      <Tabs defaultValue="restaurant" className="w-full">
         <TabsList className="mb-4 flex h-auto flex-wrap gap-1 bg-card/40 p-1">
-          <TabsTrigger value="catalog" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
-            <Package className="mr-1.5 h-3.5 w-3.5" /> Catalog
+          <TabsTrigger value="restaurant" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+            <ChefHat className="mr-1.5 h-3.5 w-3.5" /> Restaurant OS
           </TabsTrigger>
-          <TabsTrigger value="variants" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
-            <Layers className="mr-1.5 h-3.5 w-3.5" /> Variants
+          <TabsTrigger value="master" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+            <Package className="mr-1.5 h-3.5 w-3.5" /> Product Master
           </TabsTrigger>
-          <TabsTrigger value="categories" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
-            <Tag className="mr-1.5 h-3.5 w-3.5" /> Categories
-          </TabsTrigger>
-          <TabsTrigger value="uom" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
-            <Ruler className="mr-1.5 h-3.5 w-3.5" /> Units of Measure
-          </TabsTrigger>
-          <TabsTrigger value="bundles" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
-            <Boxes className="mr-1.5 h-3.5 w-3.5" /> Bundles &amp; Kits
-          </TabsTrigger>
-          <TabsTrigger value="sku" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
-            <Wrench className="mr-1.5 h-3.5 w-3.5" /> SKU Rules
+          <TabsTrigger value="reference" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+            <ClipboardList className="mr-1.5 h-3.5 w-3.5" /> Reference Tools
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="catalog"  className="mt-0"><CatalogTab /></TabsContent>
-        <TabsContent value="variants" className="mt-0"><VariantsTab /></TabsContent>
-        <TabsContent value="categories" className="mt-0"><CategoriesTab /></TabsContent>
-        <TabsContent value="uom"      className="mt-0"><UoMTab /></TabsContent>
-        <TabsContent value="bundles"  className="mt-0"><BundlesTab /></TabsContent>
-        <TabsContent value="sku"      className="mt-0"><SkuRulesTab /></TabsContent>
+        <TabsContent value="restaurant" className="mt-0">
+          <RestaurantOpsPanel />
+        </TabsContent>
+
+        <TabsContent value="master" className="mt-0">
+          <CatalogTab />
+        </TabsContent>
+
+        <TabsContent value="reference" className="mt-0">
+          <Tabs defaultValue="variants" className="w-full">
+            <TabsList className="mb-4 flex h-auto flex-wrap gap-1 bg-card/40 p-1">
+              <TabsTrigger value="variants" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+                <Layers className="mr-1.5 h-3.5 w-3.5" /> Variants
+              </TabsTrigger>
+              <TabsTrigger value="categories" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+                <Tag className="mr-1.5 h-3.5 w-3.5" /> Categories
+              </TabsTrigger>
+              <TabsTrigger value="uom" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+                <Ruler className="mr-1.5 h-3.5 w-3.5" /> Units of Measure
+              </TabsTrigger>
+              <TabsTrigger value="bundles" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+                <Boxes className="mr-1.5 h-3.5 w-3.5" /> Bundles &amp; Kits
+              </TabsTrigger>
+              <TabsTrigger value="sku" className="data-[state=active]:gradient-amber data-[state=active]:text-black">
+                <Wrench className="mr-1.5 h-3.5 w-3.5" /> SKU Rules
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="variants" className="mt-0"><VariantsTab /></TabsContent>
+            <TabsContent value="categories" className="mt-0"><CategoriesTab /></TabsContent>
+            <TabsContent value="uom" className="mt-0"><UoMTab /></TabsContent>
+            <TabsContent value="bundles" className="mt-0"><BundlesTab /></TabsContent>
+            <TabsContent value="sku" className="mt-0"><SkuRulesTab /></TabsContent>
+          </Tabs>
+        </TabsContent>
       </Tabs>
     </div>
   );

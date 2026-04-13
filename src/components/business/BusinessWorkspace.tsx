@@ -3,13 +3,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Shell } from '@/components/layout/Shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BUSINESS_MODULE_SUMMARIES } from '@/lib/business-os';
 import type { BusinessModuleKey } from '@/lib/business-os';
 import { buildBusinessWorkspaceHref, normalizeBusinessModuleKey } from '@/lib/business-navigation';
 import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { useAppState } from '@/lib/store';
+import { RestaurantOperatingSystemOverview } from '@/components/business/RestaurantOperatingSystemOverview';
 
 const HOME_MODULES = BUSINESS_MODULE_SUMMARIES
   .filter((module) => module.key !== 'crm')
@@ -25,8 +26,11 @@ const HOME_MODULES = BUSINESS_MODULE_SUMMARIES
 
 export function BusinessWorkspace() {
   const searchParams = useSearchParams();
+  const { currentTenant } = useAppState();
   const activeModule = normalizeBusinessModuleKey(searchParams.get('module'));
   const [visitedModules, setVisitedModules] = useState<BusinessModuleKey[]>([]);
+  const normalizedBusinessType = (currentTenant?.businessType ?? '').trim().toLowerCase();
+  const isRestaurantWorkspace = normalizedBusinessType === 'restaurant' || normalizedBusinessType === 'coffee';
 
   useEffect(() => {
     if (!activeModule) return;
@@ -39,15 +43,19 @@ export function BusinessWorkspace() {
   );
 
   return (
-    <Shell>
+    <>
       {!activeModule ? (
         <div className="space-y-6">
           <div>
             <h1 className="bg-gradient-to-r from-white to-white/70 bg-clip-text text-3xl font-bold text-transparent">
-              Business
+              {isRestaurantWorkspace ? 'Restaurant Workspace' : 'Business'}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">Select a module to get started.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isRestaurantWorkspace ? 'Restaurant and coffee operations hub with tailored modules, workflows, and rollout guidance.' : 'Select a module to get started.'}
+            </p>
           </div>
+
+          {isRestaurantWorkspace ? <RestaurantOperatingSystemOverview businessType={currentTenant?.businessType} /> : null}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {HOME_MODULES.map((module) => (
@@ -77,6 +85,6 @@ export function BusinessWorkspace() {
           <BusinessModulePage moduleKey={moduleKey} embedded />
         </div>
       ))}
-    </Shell>
+    </>
   );
 }

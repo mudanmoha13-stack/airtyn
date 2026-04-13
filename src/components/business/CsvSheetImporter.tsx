@@ -94,7 +94,7 @@ export const CsvSheetImporter: React.FC<Props> = ({ mode, onImported }) => {
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' }) as string[][];
+      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as string[][];
 
       // Skip empty leading rows, find the header row (first row with >2 non-empty cells)
       let headerRowIdx = 0;

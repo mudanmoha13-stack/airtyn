@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, CheckCircle2 } from 'lucide-react';
-import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1298,7 +1297,6 @@ export function BusinessModulePage({
   }, [tabs, activeTab]);
 
   return (
-    <Shell>
       <div className="space-y-8">
         {hiddenSectionIds.length > 0 ? (
           <style>{hiddenSectionIds.map((id) => `#${id}{display:none !important;}`).join('\n')}</style>
@@ -1381,6 +1379,5 @@ export function BusinessModulePage({
           <GenericModuleContent module={module} moduleKey={moduleKey} labels={labels} />
         )}
       </div>
-    </Shell>
   );
 }

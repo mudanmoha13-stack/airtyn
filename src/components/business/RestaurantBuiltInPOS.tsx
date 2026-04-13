@@ -132,7 +132,10 @@ export function RestaurantBuiltInPOS({ branchId, onOrderComplete }: { branchId: 
     return products.filter((p) => p.category === categoryFilter);
   }, [products, categoryFilter]);
 
-  const categories = useMemo(() => Array.from(new Set(products.map((p) => p.category).filter(Boolean))), [products]);
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => p.category).filter((value): value is string => Boolean(value)))),
+    [products]
+  );
 
   // Complete order
   const onCompleteOrder = async () => {

@@ -9,27 +9,43 @@ const createSchema = z.object({
   description: z.string().optional(),
   sku: z.string().optional(),
   skuPrefix: z.string().optional(),
+  barcode: z.string().optional(),
   category: z.string().optional(),
   categoryId: z.string().optional(),
   baseUomId: z.string().optional(),
   lifecycle: z.enum(['draft', 'active', 'discontinued', 'seasonal', 'archived']).default('active'),
   productType: z.enum(['physical', 'digital', 'service', 'bundle']).default('physical'),
+  restaurantType: z.enum(['finished', 'raw', 'semi_prepared', 'combo', 'service']).optional(),
   basePrice: z.number().nonnegative().optional(),
   costPrice: z.number().nonnegative().optional(),
   tags: z.array(z.string()).optional(),
+  allergens: z.array(z.string()).optional(),
+  nutritionInfo: z.string().optional(),
+  isActive: z.boolean().optional(),
+  isSellable: z.boolean().optional(),
+  isPurchasable: z.boolean().optional(),
+  isStockTracked: z.boolean().optional(),
 });
 
 const patchSchema = z.object({
   name: z.string().optional(),
   sku: z.string().optional(),
+  barcode: z.string().optional(),
   category: z.string().optional(),
   productType: z.enum(['physical', 'digital', 'service', 'bundle']).optional(),
+  restaurantType: z.enum(['finished', 'raw', 'semi_prepared', 'combo', 'service']).optional(),
   lifecycle: z.enum(['draft', 'active', 'discontinued', 'seasonal', 'archived']).optional(),
   description: z.string().optional(),
   basePrice: z.number().nonnegative().nullable().optional(),
   costPrice: z.number().nonnegative().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   baseUomId: z.string().nullable().optional(),
+  allergens: z.array(z.string()).optional(),
+  nutritionInfo: z.string().nullable().optional(),
+  isActive: z.boolean().optional(),
+  isSellable: z.boolean().optional(),
+  isPurchasable: z.boolean().optional(),
+  isStockTracked: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -146,14 +162,22 @@ export async function POST(req: NextRequest) {
       description: body.description ?? null,
       sku,
       skuPrefix: body.skuPrefix ?? null,
+      barcode: body.barcode ?? null,
       category: body.category ?? null,
       categoryId: body.categoryId ?? null,
       baseUomId: body.baseUomId ?? null,
       lifecycle: body.lifecycle,
       productType: body.productType,
+      restaurantType: body.restaurantType ?? null,
       basePrice: body.basePrice ?? null,
       costPrice: body.costPrice ?? null,
       tags: body.tags ?? [],
+      allergens: body.allergens ?? [],
+      nutritionInfo: body.nutritionInfo ?? null,
+      isActive: body.isActive ?? body.lifecycle === 'active',
+      isSellable: body.isSellable ?? body.productType !== 'digital',
+      isPurchasable: body.isPurchasable ?? true,
+      isStockTracked: body.isStockTracked ?? body.productType !== 'service',
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -225,14 +249,22 @@ export async function PATCH(req: NextRequest) {
       updates.sku = normalizedSku;
     }
 
+    if (body.barcode !== undefined) updates.barcode = body.barcode.trim() || null;
     if (body.category !== undefined) updates.category = body.category.trim() || null;
     if (body.productType !== undefined) updates.productType = body.productType;
+    if (body.restaurantType !== undefined) updates.restaurantType = body.restaurantType;
     if (body.lifecycle !== undefined) updates.lifecycle = body.lifecycle;
     if (body.description !== undefined) updates.description = body.description.trim() || null;
     if (body.basePrice !== undefined) updates.basePrice = body.basePrice;
     if (body.costPrice !== undefined) updates.costPrice = body.costPrice;
     if (body.categoryId !== undefined) updates.categoryId = body.categoryId || null;
     if (body.baseUomId !== undefined) updates.baseUomId = body.baseUomId || null;
+    if (body.allergens !== undefined) updates.allergens = body.allergens;
+    if (body.nutritionInfo !== undefined) updates.nutritionInfo = body.nutritionInfo || null;
+    if (body.isActive !== undefined) updates.isActive = body.isActive;
+    if (body.isSellable !== undefined) updates.isSellable = body.isSellable;
+    if (body.isPurchasable !== undefined) updates.isPurchasable = body.isPurchasable;
+    if (body.isStockTracked !== undefined) updates.isStockTracked = body.isStockTracked;
 
     await ref.set(updates, { merge: true });
     const product = { id, ...(await ref.get()).data() };

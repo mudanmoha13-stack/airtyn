@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         || (row.sku?.trim() ?? 'Unnamed Product');
       const sku = (row.sku?.trim() || productName).replace(/\s+/g, '-').toUpperCase();
       const warehouseName = (row.warehouse ?? 'Main Warehouse').trim();
-      const qty = parseAmount(row.quantity);
+      const qty = parseAmount(row.quantity ?? '0');
       const unitPrice = row.unitPrice ? parseAmount(row.unitPrice) : 0;
       const costPrice = row.costPrice ? parseAmount(row.costPrice) : null;
 

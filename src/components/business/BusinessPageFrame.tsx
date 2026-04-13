@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { ArrowUpRight, LucideIcon } from 'lucide-react';
-import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,7 +34,6 @@ export function BusinessPageFrame({
   modules: Module[];
 }) {
   return (
-    <Shell>
       <div className="space-y-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
@@ -90,6 +88,5 @@ export function BusinessPageFrame({
           ))}
         </div>
       </div>
-    </Shell>
   );
 }
