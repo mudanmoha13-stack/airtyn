@@ -1,5 +1,5 @@
-import { RestaurantControlTower } from '@/components/business/RestaurantControlTower';
+import RestaurantHub from '@/components/business/RestaurantHub';
 
-export default function BusinessRestaurantPage() {
-  return <RestaurantControlTower />;
+export default function RestaurantHomePage() {
+  return <RestaurantHub />;
 }
