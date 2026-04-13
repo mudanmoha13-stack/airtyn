@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessReportsPage() {
-  return <BusinessModulePage moduleKey="analytics" actionLabel="Open analytics workflow" />;
+  redirect('/business?module=analytics');
 }

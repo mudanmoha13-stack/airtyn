@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessSalesPage() {
-  return <BusinessModulePage moduleKey="sales" actionLabel="Open Sales workflow" />;
+  redirect('/business?module=sales');
 }

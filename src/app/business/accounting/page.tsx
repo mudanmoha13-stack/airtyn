@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessAccountingPage() {
-  return <BusinessModulePage moduleKey="finance" actionLabel="Open finance workflow" />;
+  redirect('/business?module=finance');
 }

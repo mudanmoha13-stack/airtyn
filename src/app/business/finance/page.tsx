@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessFinancePage() {
-  return <BusinessModulePage moduleKey="finance" />;
+  redirect('/business?module=finance');
 }

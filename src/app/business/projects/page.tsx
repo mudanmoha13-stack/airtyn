@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessProjectsPage() {
-  return <BusinessModulePage moduleKey="projects" actionLabel="Open Project OS" actionHref="/" />;
+  redirect('/business?module=projects');
 }

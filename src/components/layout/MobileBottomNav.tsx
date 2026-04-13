@@ -1,15 +1,17 @@
 "use client";
 
 import React, { useEffect, useMemo } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { BarChart3, Brain, Calendar, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { useNavigationFeedback } from './NavigationFeedback';
 import { BUSINESS_BOTTOM_NAV_ITEMS, getAppProduct } from '@/lib/navigation';
+import { matchesBusinessHref } from '@/lib/business-navigation';
 
 export const MobileBottomNav = () => {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { beginNavigation, registerRecentPage, pendingHref } = useNavigationFeedback();
   const { projects } = useAppState();
@@ -43,10 +45,12 @@ export const MobileBottomNav = () => {
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/92 px-2 pb-[calc(env(safe-area-inset-bottom)+0.4rem)] pt-2 backdrop-blur-xl md:hidden">
       <div className="mx-auto grid max-w-xl grid-cols-5 gap-1 rounded-2xl border border-white/10 bg-card/80 p-1.5 shadow-lg shadow-black/10">
         {items.map((item) => {
-          const isActive = ((item.href === '/'
-            ? pathname === '/'
-            : pathname === item.href || pathname.startsWith(`${item.href}/`))
-            || pendingHref === item.href);
+          const routeIsActive = item.href.startsWith('/business')
+            ? matchesBusinessHref(pathname, searchParams, item.href)
+            : item.href === '/'
+              ? pathname === '/'
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = routeIsActive || pendingHref === item.href;
 
           return (
             <button

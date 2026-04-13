@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 const RECENT_PAGES_KEY = 'pinkplan-recent-pages-v1';
 const PINNED_ACTIONS_KEY = 'pinkplan-pinned-actions-v1';
@@ -29,6 +29,7 @@ const NavigationFeedbackContext = createContext<NavigationFeedbackContextValue |
 
 export const NavigationFeedbackProvider = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export const NavigationFeedbackProvider = ({ children }: { children: React.React
     setPendingHref(null);
     const timeout = window.setTimeout(() => setLoading(false), 180);
     return () => window.clearTimeout(timeout);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   const value = useMemo<NavigationFeedbackContextValue>(() => ({
     loading,

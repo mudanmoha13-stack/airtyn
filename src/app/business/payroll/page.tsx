@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessPayrollPage() {
-  return <BusinessModulePage moduleKey="hr" actionLabel="Open payroll workflow" />;
+  redirect('/business?module=hr');
 }

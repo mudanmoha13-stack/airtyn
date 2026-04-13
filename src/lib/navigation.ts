@@ -32,6 +32,7 @@ import {
   Webhook,
   Workflow,
 } from 'lucide-react';
+import { buildBusinessWorkspaceHref } from '@/lib/business-navigation';
 
 export type AppProduct = 'projects' | 'business';
 
@@ -92,34 +93,34 @@ export const PROJECT_SETTING_ITEMS: NavItemConfig[] = [
 
 export const BUSINESS_OVERVIEW_ITEMS: NavItemConfig[] = [
   { icon: Building2, label: 'Business HQ', href: '/business', group: 'Overview' },
-  { icon: Briefcase, label: 'Projects', href: '/business/projects', group: 'Overview' },
+  { icon: Briefcase, label: 'Projects', href: buildBusinessWorkspaceHref('projects'), group: 'Overview' },
   { icon: Workflow, label: 'Automations', href: '/business/automations', group: 'Overview' },
 ];
 
 export const BUSINESS_COMMERCIAL_ITEMS: NavItemConfig[] = [
-  { icon: ShoppingCart, label: 'Sales & CRM', href: '/business/sales', group: 'Commercial' },
-  { icon: Headset, label: 'Support', href: '/business/support', group: 'Commercial' },
-  { icon: BarChart3, label: 'Analytics', href: '/business/analytics', group: 'Commercial' },
+  { icon: ShoppingCart, label: 'Sales & CRM', href: buildBusinessWorkspaceHref('sales'), group: 'Commercial' },
+  { icon: Headset, label: 'Support', href: buildBusinessWorkspaceHref('support'), group: 'Commercial' },
+  { icon: BarChart3, label: 'Analytics', href: buildBusinessWorkspaceHref('analytics'), group: 'Commercial' },
 ];
 
 export const BUSINESS_OPERATIONS_ITEMS: NavItemConfig[] = [
-  { icon: Package2, label: 'Inventory', href: '/business/inventory', group: 'Operations' },
-  { icon: ShoppingCart, label: 'Procurement', href: '/business/procurement', group: 'Operations' },
-  { icon: Wallet, label: 'HR', href: '/business/hr', group: 'Operations' },
+  { icon: Package2, label: 'Inventory', href: buildBusinessWorkspaceHref('inventory'), group: 'Operations' },
+  { icon: ShoppingCart, label: 'Procurement', href: buildBusinessWorkspaceHref('procurement'), group: 'Operations' },
+  { icon: Wallet, label: 'HR', href: buildBusinessWorkspaceHref('hr'), group: 'Operations' },
 ];
 
 export const BUSINESS_FINANCE_ITEMS: NavItemConfig[] = [
-  { icon: CircleDollarSign, label: 'Accounting', href: '/business/finance', group: 'Finance' },
+  { icon: CircleDollarSign, label: 'Accounting', href: buildBusinessWorkspaceHref('finance'), group: 'Finance' },
   { icon: Webhook, label: 'Integrations', href: '/business/integrations', group: 'Finance' },
   { icon: Settings, label: 'Business Settings', href: '/business/settings', group: 'Finance' },
 ];
 
 export const BUSINESS_BOTTOM_NAV_ITEMS: NavItemConfig[] = [
   { href: '/business', label: 'HQ', icon: Building2, group: 'Overview' },
-  { href: '/business/sales', label: 'Sales', icon: ShoppingCart, group: 'Commercial' },
-  { href: '/business/finance', label: 'Accounting', icon: CircleDollarSign, group: 'Finance' },
-  { href: '/business/inventory', label: 'Stock', icon: Package2, group: 'Operations' },
-  { href: '/business/hr', label: 'HR', icon: Wallet, group: 'Operations' },
+  { href: buildBusinessWorkspaceHref('sales'), label: 'Sales', icon: ShoppingCart, group: 'Commercial' },
+  { href: buildBusinessWorkspaceHref('finance'), label: 'Accounting', icon: CircleDollarSign, group: 'Finance' },
+  { href: buildBusinessWorkspaceHref('inventory'), label: 'Stock', icon: Package2, group: 'Operations' },
+  { href: buildBusinessWorkspaceHref('hr'), label: 'HR', icon: Wallet, group: 'Operations' },
 ];
 
 export const BUSINESS_SECTIONS: NavSectionConfig[] = [

@@ -1,5 +1,5 @@
-import { BusinessModulePage } from '@/components/business/BusinessModulePage';
+import { redirect } from 'next/navigation';
 
 export default function BusinessHrPage() {
-  return <BusinessModulePage moduleKey="hr" />;
+  redirect('/business?module=hr');
 }

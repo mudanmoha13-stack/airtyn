@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   BarChart3,
   Briefcase,
@@ -14,29 +14,31 @@ import {
   Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { buildBusinessWorkspaceHref, matchesBusinessHref } from '@/lib/business-navigation';
 
 const DOCK_MODULES = [
   { href: '/business', label: 'HQ', icon: Building2, exact: true },
-  { href: '/business/sales', label: 'Sales & CRM', icon: ShoppingCart },
-  { href: '/business/finance', label: 'Finance', icon: CircleDollarSign },
-  { href: '/business/hr', label: 'HR', icon: Wallet },
-  { href: '/business/inventory', label: 'Inventory', icon: Package2 },
-  { href: '/business/projects', label: 'Projects', icon: Briefcase },
-  { href: '/business/procurement', label: 'Procurement', icon: ShoppingCart },
-  { href: '/business/support', label: 'Support', icon: Headset },
-  { href: '/business/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: buildBusinessWorkspaceHref('sales'), label: 'Sales & CRM', icon: ShoppingCart },
+  { href: buildBusinessWorkspaceHref('finance'), label: 'Finance', icon: CircleDollarSign },
+  { href: buildBusinessWorkspaceHref('hr'), label: 'HR', icon: Wallet },
+  { href: buildBusinessWorkspaceHref('inventory'), label: 'Inventory', icon: Package2 },
+  { href: buildBusinessWorkspaceHref('projects'), label: 'Projects', icon: Briefcase },
+  { href: buildBusinessWorkspaceHref('procurement'), label: 'Procurement', icon: ShoppingCart },
+  { href: buildBusinessWorkspaceHref('support'), label: 'Support', icon: Headset },
+  { href: buildBusinessWorkspaceHref('analytics'), label: 'Analytics', icon: BarChart3 },
 ];
 
 export function BusinessModuleDock() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   return (
     <div className="hidden md:block fixed bottom-0 left-0 right-0 z-40 border-t border-white/5 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-full items-center gap-1 overflow-x-auto px-4 py-1.5 scrollbar-none">
         {DOCK_MODULES.map(({ href, label, icon: Icon, exact }) => {
           const isActive = exact
-            ? pathname === href
-            : pathname === href || pathname.startsWith(`${href}/`);
+            ? pathname === href && !searchParams.get('module')
+            : matchesBusinessHref(pathname, searchParams, href);
 
           return (
             <Link

@@ -1289,10 +1289,12 @@ export function BusinessModulePage({
   moduleKey,
   actionLabel = 'Open workflow',
   actionHref,
+  embedded = false,
 }: {
   moduleKey: BusinessModuleKey;
   actionLabel?: string;
   actionHref?: string;
+  embedded?: boolean;
 }) {
   const module = BUSINESS_MODULES_BY_KEY[moduleKey];
   const Icon = module.icon;
@@ -1307,9 +1309,8 @@ export function BusinessModulePage({
     return allSectionIds.filter((id) => !visibleSet.has(id));
   }, [tabs, activeTab]);
 
-  return (
-    <Shell>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
+  const content = (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
         {hiddenSectionIds.length > 0 ? (
           <style>{hiddenSectionIds.map((id) => `#${id}{display:none !important;}`).join('\n')}</style>
         ) : null}
@@ -1390,7 +1391,12 @@ export function BusinessModulePage({
         ) : (
           <GenericModuleContent module={module} moduleKey={moduleKey} labels={labels} />
         )}
-      </div>
-    </Shell>
+    </div>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <Shell>{content}</Shell>;
 }

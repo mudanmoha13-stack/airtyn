@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { BusinessModuleSpec } from '@/lib/business-os';
 
 type InventoryProduct = {
@@ -169,6 +170,61 @@ const COMPANY_TOOLKIT: Record<CompanyNature, { label: string; tools: string[] }>
   },
 };
 
+type SalesWorkspaceTab = 'overview' | 'orders' | 'crm' | 'subscriptions' | 'pricing' | 'pos';
+
+const SALES_TAB_LABELS: Array<{ id: SalesWorkspaceTab; label: string }> = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'crm', label: 'CRM' },
+  { id: 'subscriptions', label: 'Subscriptions' },
+  { id: 'pricing', label: 'Pricing & Credit' },
+  { id: 'pos', label: 'POS' },
+];
+
+const SALES_TAB_DEFAULT_SECTION: Record<SalesWorkspaceTab, string> = {
+  overview: 'sales-overview',
+  orders: 'sales-quotations',
+  crm: 'crm-workbench',
+  subscriptions: 'subscriptions-hub',
+  pricing: 'sales-pricing',
+  pos: 'sales-pos',
+};
+
+const SALES_SECTION_TAB_MAP: Record<string, SalesWorkspaceTab> = {
+  'sales-overview': 'overview',
+  'sales-quotations': 'orders',
+  operations: 'orders',
+  'crm-workbench': 'crm',
+  'subscriptions-hub': 'subscriptions',
+  'sales-pricing': 'pricing',
+  'sales-credit': 'pricing',
+  'sales-pos': 'pos',
+  'sales-payments': 'pos',
+  'pos-restaurant': 'pos',
+  'rental-desk': 'pos',
+  'sales-channels': 'pos',
+  'salesperson-tracking': 'pos',
+};
+
+function SalesLoadingCard({ title, description }: { title: string; description: string }) {
+  return (
+    <Card className="glass-card border-white/5">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="h-4 w-40 animate-pulse rounded bg-white/10" />
+        <div className="h-24 animate-pulse rounded-xl bg-white/5" />
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="h-20 animate-pulse rounded-xl bg-white/5" />
+          <div className="h-20 animate-pulse rounded-xl bg-white/5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [products, setProducts] = useState<InventoryProduct[]>([]);
@@ -243,6 +299,22 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   const [crmValue, setCrmValue] = useState('0');
   const [crmFollowUp, setCrmFollowUp] = useState('');
   const [crmStageFilter, setCrmStageFilter] = useState<'all' | 'draft' | 'open' | 'settled'>('all');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const sendTestEmail = async () => {
+    setTestEmailSending(true);
+    setTestEmailResult('idle');
+    try {
+      const response = await fetch('/api/email/test', { method: 'POST' });
+      const data = await response.json() as { ok: boolean; id?: string; error?: string };
+      setTestEmailResult(data.ok ? 'success' : 'error');
+    } catch {
+      setTestEmailResult('error');
+    } finally {
+      setTestEmailSending(false);
+    }
+  };
 
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
   const [subscriptionCustomer, setSubscriptionCustomer] = useState('');
@@ -258,136 +330,220 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
 
   const [selectedCreditId, setSelectedCreditId] = useState('');
 
-  useEffect(() => {
-    let mounted = true;
+  const [activeTab, setActiveTab] = useState<SalesWorkspaceTab>('overview');
+  const [hasLoadedOrders, setHasLoadedOrders] = useState(false);
+  const [hasLoadedProducts, setHasLoadedProducts] = useState(false);
+  const [hasLoadedEmployees, setHasLoadedEmployees] = useState(false);
+  const [hasLoadedPricingCredit, setHasLoadedPricingCredit] = useState(false);
+  const [hasLoadedPosCache, setHasLoadedPosCache] = useState(false);
+  const [hasLoadedCrmCache, setHasLoadedCrmCache] = useState(false);
+  const [hasLoadedSubscriptionsCache, setHasLoadedSubscriptionsCache] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
 
-    const load = async () => {
-      try {
-        const [salesResponse, productsResponse, employeesResponse] = await Promise.all([
-          fetch('/api/business/sales/orders', { cache: 'no-store' }),
-          fetch('/api/business/products', { cache: 'no-store' }),
-          fetch('/api/business/hr/operations', { cache: 'no-store' }),
-        ]);
+  const loadSalesOrders = async () => {
+    if (ordersLoading || hasLoadedOrders) return;
+    setOrdersLoading(true);
+    try {
+      const salesResponse = await fetch('/api/business/sales/orders', { cache: 'no-store' });
+      const salesData = (await salesResponse.json()) as { ok: boolean; orders?: SalesOrderRow[] };
+      setRows(salesData.ok && salesData.orders ? salesData.orders : []);
+      setHasLoadedOrders(true);
+    } catch {
+      setRows([]);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
 
-        const salesData = (await salesResponse.json()) as { ok: boolean; orders?: SalesOrderRow[] };
-        const productsData = (await productsResponse.json()) as {
-          ok: boolean;
-          products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string; basePrice: number | null; costPrice?: number | null }>;
-        };
-        const employeesData = (await employeesResponse.json()) as {
-          ok: boolean;
-          employees?: Array<{ id: string; name: string; email: string }>;
-        };
+  const loadCatalog = async () => {
+    if (productsLoading || hasLoadedProducts) return;
+    setProductsLoading(true);
+    try {
+      const productsResponse = await fetch('/api/business/products', { cache: 'no-store' });
+      const productsData = (await productsResponse.json()) as {
+        ok: boolean;
+        products?: Array<{ id: string; name: string; sku: string | null; category: string | null; productType: string; basePrice: number | null; costPrice?: number | null }>;
+      };
 
-        if (!mounted) return;
-
-        if (salesData.ok && salesData.orders) {
-          setRows(salesData.orders);
-        } else {
-          setRows([]);
-        }
-
-        if (productsData.ok && productsData.products) {
-          setProducts(productsData.products.map((item) => ({
-            id: item.id,
-            name: item.name,
-            sku: item.sku ?? item.name,
-            category: item.category ?? 'general',
-            productType: item.productType,
-            basePrice: item.basePrice ?? 0,
-            costPrice: item.costPrice ?? 0,
-          })));
-        }
-
-        if (employeesData.ok && employeesData.employees) {
-          setEmployees(employeesData.employees);
-        }
-      } catch {
-        if (!mounted) return;
-        setRows([]);
+      if (productsData.ok && productsData.products) {
+        setProducts(productsData.products.map((item) => ({
+          id: item.id,
+          name: item.name,
+          sku: item.sku ?? item.name,
+          category: item.category ?? 'general',
+          productType: item.productType,
+          basePrice: item.basePrice ?? 0,
+          costPrice: item.costPrice ?? 0,
+        })));
       }
+      setHasLoadedProducts(true);
+    } finally {
+      setProductsLoading(false);
+    }
+  };
 
-      if (typeof window !== 'undefined') {
-        const natureRaw = window.localStorage.getItem('pinkplan:sales:company-nature');
-        const rulesRaw = window.localStorage.getItem('pinkplan:sales:pricing-rules');
-        const creditsRaw = window.localStorage.getItem('pinkplan:sales:credits');
-        const queueRaw = window.localStorage.getItem('pinkplan:sales:offline-queue');
+  const loadEmployees = async () => {
+    if (employeesLoading || hasLoadedEmployees) return;
+    setEmployeesLoading(true);
+    try {
+      const employeesResponse = await fetch('/api/business/hr/employees', { cache: 'no-store' });
+      const employeesData = (await employeesResponse.json()) as {
+        ok: boolean;
+        employees?: Array<{ id: string; name: string; email: string }>;
+      };
 
-        if (
-          natureRaw === 'b2b_services' ||
-          natureRaw === 'retail_shop' ||
-          natureRaw === 'restaurant' ||
-          natureRaw === 'rental_business' ||
-          natureRaw === 'mixed'
-        ) {
-          setCompanyNature(natureRaw);
-        }
-
-        if (rulesRaw) setPricingRules(JSON.parse(rulesRaw) as PricingRule[]);
-        else {
-          setPricingRules([
-            { id: 'rule-seed-1', name: 'Retail launch 10%', kind: 'promotion', value: 10 },
-            { id: 'rule-seed-2', name: 'Tier Gold 7%', kind: 'tier', value: 7 },
-          ]);
-        }
-
-        if (creditsRaw) setCredits(JSON.parse(creditsRaw) as CreditProfile[]);
-        else {
-          setCredits([
-            { id: 'credit-seed-1', customer: 'Apex Retail', limit: 15000, used: 6400 },
-            { id: 'credit-seed-2', customer: 'Northwind B2B', limit: 9000, used: 2000 },
-          ]);
-        }
-
-        if (queueRaw) setOfflineQueue(JSON.parse(queueRaw) as OfflineSale[]);
-
-        const crmRaw = window.localStorage.getItem('pinkplan:sales:crm-opportunities');
-        if (crmRaw) {
-          setCrmOpportunities(JSON.parse(crmRaw) as CrmOpportunity[]);
-        }
-
-        const subscriptionsRaw = window.localStorage.getItem('pinkplan:sales:subscriptions');
-        if (subscriptionsRaw) {
-          setSubscriptions(JSON.parse(subscriptionsRaw) as SubscriptionRecord[]);
-        } else {
-          setSubscriptions([
-            {
-              id: 'sub-seed-1',
-              customer: 'Northwind B2B',
-              plan: 'Growth',
-              ownerId: 'seed-owner-1',
-              ownerName: 'Account Team',
-              amount: 299,
-              cycle: 'monthly',
-              status: 'active',
-              renewalDate: new Date().toISOString().slice(0, 10),
-            },
-          ]);
-        }
+      if (employeesData.ok && employeesData.employees) {
+        setEmployees(employeesData.employees);
       }
-    };
+      setHasLoadedEmployees(true);
+    } finally {
+      setEmployeesLoading(false);
+    }
+  };
 
-    void load();
+  const hydratePricingAndCredit = () => {
+    if (typeof window === 'undefined' || hasLoadedPricingCredit) return;
+    const rulesRaw = window.localStorage.getItem('pinkplan:sales:pricing-rules');
+    const creditsRaw = window.localStorage.getItem('pinkplan:sales:credits');
 
-    return () => {
-      mounted = false;
-    };
-  }, [module.records]);
+    if (rulesRaw) setPricingRules(JSON.parse(rulesRaw) as PricingRule[]);
+    else {
+      setPricingRules([
+        { id: 'rule-seed-1', name: 'Retail launch 10%', kind: 'promotion', value: 10 },
+        { id: 'rule-seed-2', name: 'Tier Gold 7%', kind: 'tier', value: 7 },
+      ]);
+    }
+
+    if (creditsRaw) setCredits(JSON.parse(creditsRaw) as CreditProfile[]);
+    else {
+      setCredits([
+        { id: 'credit-seed-1', customer: 'Apex Retail', limit: 15000, used: 6400 },
+        { id: 'credit-seed-2', customer: 'Northwind B2B', limit: 9000, used: 2000 },
+      ]);
+    }
+
+    setHasLoadedPricingCredit(true);
+  };
+
+  const hydratePosCache = () => {
+    if (typeof window === 'undefined' || hasLoadedPosCache) return;
+    const queueRaw = window.localStorage.getItem('pinkplan:sales:offline-queue');
+    if (queueRaw) setOfflineQueue(JSON.parse(queueRaw) as OfflineSale[]);
+    setHasLoadedPosCache(true);
+  };
+
+  const hydrateCrmCache = () => {
+    if (typeof window === 'undefined' || hasLoadedCrmCache) return;
+    const crmRaw = window.localStorage.getItem('pinkplan:sales:crm-opportunities');
+    if (crmRaw) setCrmOpportunities(JSON.parse(crmRaw) as CrmOpportunity[]);
+    setHasLoadedCrmCache(true);
+  };
+
+  const hydrateSubscriptionsCache = () => {
+    if (typeof window === 'undefined' || hasLoadedSubscriptionsCache) return;
+    const subscriptionsRaw = window.localStorage.getItem('pinkplan:sales:subscriptions');
+    if (subscriptionsRaw) {
+      setSubscriptions(JSON.parse(subscriptionsRaw) as SubscriptionRecord[]);
+    } else {
+      setSubscriptions([
+        {
+          id: 'sub-seed-1',
+          customer: 'Northwind B2B',
+          plan: 'Growth',
+          ownerId: 'seed-owner-1',
+          ownerName: 'Account Team',
+          amount: 299,
+          cycle: 'monthly',
+          status: 'active',
+          renewalDate: new Date().toISOString().slice(0, 10),
+        },
+      ]);
+    }
+    setHasLoadedSubscriptionsCache(true);
+  };
+
+  const switchToTab = (tab: SalesWorkspaceTab, sectionId?: string) => {
+    setActiveTab(tab);
+    if (typeof window === 'undefined') return;
+    const targetSection = sectionId ?? SALES_TAB_DEFAULT_SECTION[tab];
+    const url = new URL(window.location.href);
+    url.hash = targetSection;
+    window.history.replaceState({}, '', url);
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const el = document.getElementById(targetSection);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 40);
+    });
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const natureRaw = window.localStorage.getItem('pinkplan:sales:company-nature');
+    if (
+      natureRaw === 'b2b_services' ||
+      natureRaw === 'retail_shop' ||
+      natureRaw === 'restaurant' ||
+      natureRaw === 'rental_business' ||
+      natureRaw === 'mixed'
+    ) {
+      setCompanyNature(natureRaw);
+    }
+
+    const syncHashTab = () => {
+      const hash = window.location.hash.replace('#', '');
+      const nextTab = SALES_SECTION_TAB_MAP[hash];
+      if (nextTab) {
+        setActiveTab(nextTab);
+      }
+    };
+
+    syncHashTab();
+    window.addEventListener('hashchange', syncHashTab);
+    return () => window.removeEventListener('hashchange', syncHashTab);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'overview' || activeTab === 'orders' || activeTab === 'pos') {
+      void loadSalesOrders();
+    }
+  }, [activeTab, module.records]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'pos') {
+      void loadCatalog();
+    }
+  }, [activeTab, module.records]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'crm' || activeTab === 'subscriptions' || activeTab === 'pos') {
+      void loadEmployees();
+    }
+  }, [activeTab, module.records]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' || activeTab === 'pricing') hydratePricingAndCredit();
+    if (activeTab === 'crm') hydrateCrmCache();
+    if (activeTab === 'subscriptions') hydrateSubscriptionsCache();
+    if (activeTab === 'pos') hydratePosCache();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !hasLoadedPricingCredit) return;
     window.localStorage.setItem('pinkplan:sales:pricing-rules', JSON.stringify(pricingRules));
-  }, [pricingRules]);
+  }, [hasLoadedPricingCredit, pricingRules]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !hasLoadedPricingCredit) return;
     window.localStorage.setItem('pinkplan:sales:credits', JSON.stringify(credits));
-  }, [credits]);
+  }, [credits, hasLoadedPricingCredit]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !hasLoadedPosCache) return;
     window.localStorage.setItem('pinkplan:sales:offline-queue', JSON.stringify(offlineQueue));
-  }, [offlineQueue]);
+  }, [hasLoadedPosCache, offlineQueue]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -395,14 +551,14 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   }, [companyNature]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !hasLoadedCrmCache) return;
     window.localStorage.setItem('pinkplan:sales:crm-opportunities', JSON.stringify(crmOpportunities));
-  }, [crmOpportunities]);
+  }, [crmOpportunities, hasLoadedCrmCache]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !hasLoadedSubscriptionsCache) return;
     window.localStorage.setItem('pinkplan:sales:subscriptions', JSON.stringify(subscriptions));
-  }, [subscriptions]);
+  }, [hasLoadedSubscriptionsCache, subscriptions]);
 
   useEffect(() => {
     if (!selectedProductId) return;
@@ -564,11 +720,14 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
   }, [rows]);
 
   const scrollToSection = (sectionId: string) => {
+    const targetTab = SALES_SECTION_TAB_MAP[sectionId];
+    if (targetTab) {
+      switchToTab(targetTab, sectionId);
+      return;
+    }
     if (typeof window === 'undefined') return;
     const el = document.getElementById(sectionId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const openOperationsView = (filter: string) => {
@@ -742,6 +901,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     const data = (await refresh.json()) as { ok: boolean; orders?: SalesOrderRow[] };
     if (data.ok && data.orders) {
       setRows(data.orders);
+      setHasLoadedOrders(true);
     }
   };
 
@@ -994,6 +1154,19 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
     }));
   };
 
+  const overviewCards = [
+    { label: 'Booked Revenue', value: `${CURRENCY_SYMBOL[currency] ?? ''}${bookedRevenue.toFixed(2)}` },
+    { label: 'Open Orders', value: String(openOrders.length) },
+    { label: 'Settled Orders', value: String(settledOrders.length) },
+    { label: 'Average Order', value: `${CURRENCY_SYMBOL[currency] ?? ''}${averageOrderValue.toFixed(2)}` },
+  ];
+
+  const ordersTabReady = hasLoadedOrders && hasLoadedProducts && hasLoadedEmployees && hasLoadedPricingCredit;
+  const crmTabReady = hasLoadedEmployees && hasLoadedCrmCache;
+  const subscriptionsTabReady = hasLoadedEmployees && hasLoadedSubscriptionsCache;
+  const pricingTabReady = hasLoadedPricingCredit;
+  const posTabReady = hasLoadedOrders && hasLoadedProducts && hasLoadedEmployees && hasLoadedPosCache;
+
   return (
     <>
       <Card className="glass-card border-white/5">
@@ -1029,328 +1202,421 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-12">
-        <Card id="sales-quotations" className="glass-card border-white/5 xl:col-span-7 scroll-mt-24">
-          <CardHeader>
-            <CardTitle>Sales</CardTitle>
-            <CardDescription>Quotations to invoices, pricelists, discount rules, order confirmations, and sales analytics.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p className="text-xs uppercase tracking-[0.14em] text-primary">1. Sales Workflow</p>
-            <div className="grid gap-2">
-              <select
-                value={quoteEmployeeId}
-                onChange={(event) => setQuoteEmployeeId(event.target.value)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select employee</option>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>{employee.name}</option>
-                ))}
-              </select>
-              <select
-                value={quoteProductId}
-                onChange={(event) => {
-                  setQuoteProductId(event.target.value);
-                  const product = products.find((item) => item.id === event.target.value);
-                  if (product) setQuotePrice(String(product.basePrice));
-                }}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select product</option>
-                {products.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-              <div className="grid gap-2 md:grid-cols-2">
-                <Input placeholder="Qty" value={quoteQty} onChange={(event) => setQuoteQty(event.target.value)} />
-                <Input placeholder="Unit price" value={quotePrice} onChange={(event) => setQuotePrice(event.target.value)} />
-              </div>
-              <Button className="gradient-amber text-black font-semibold" onClick={createQuotation}>Create Quotation</Button>
-            </div>
-
-            <div className="rounded-xl border border-white/5 bg-card/40 p-3">
-              <p className="text-xs uppercase tracking-[0.14em] text-primary">1.1 Core Tasks</p>
-              <div className="mt-2 grid gap-2 md:grid-cols-3">
-                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('draft')}>
-                  Draft quotations: {draftOrders.length}
-                </Button>
-                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
-                  Open confirmations: {openOrders.length}
-                </Button>
-                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
-                  Settled invoices: {settledOrders.length}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {draftOrders.slice(0, 2).map((order) => (
-                <div key={order.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
-                  <p className="text-xs text-foreground">{order.orderNo} • {order.employeeName}</p>
-                  <div className="mt-2 flex gap-2">
-                    <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'open')}>
-                      Confirm Order
-                    </Button>
-                    <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'settled')}>
-                      Convert to Invoice
-                    </Button>
-                  </div>
-                </div>
+        <Tabs value={activeTab} onValueChange={(value) => switchToTab(value as SalesWorkspaceTab)} className="space-y-4">
+          <div className="overflow-x-auto pb-1">
+            <TabsList className="h-auto min-w-max gap-2 rounded-2xl border border-white/5 bg-card/40 p-1">
+              {SALES_TAB_LABELS.map((tab) => (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  className="rounded-xl px-4 py-2 data-[state=active]:bg-background data-[state=active]:text-foreground"
+                >
+                  {tab.label}
+                </TabsTrigger>
               ))}
-              {draftOrders.length === 0 ? (
-                <div className="flex items-center justify-between rounded-lg border border-dashed border-white/10 bg-card/30 p-2">
-                  <p className="text-xs">No draft quotations available.</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/10 bg-card/40"
-                    onClick={() => {
-                      scrollToSection('sales-quotations');
-                    }}
-                  >
-                    Start New Quote
-                  </Button>
-                </div>
-              ) : null}
-            </div>
+            </TabsList>
+          </div>
+        </Tabs>
 
-            <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">2. Pricing & Discounts</p>
-            <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
-              <div className="grid gap-2 md:grid-cols-2">
-                <Input placeholder="Base amount" value={pricingBaseAmount} onChange={(event) => setPricingBaseAmount(event.target.value)} />
-                <select
-                  value={selectedPricingRuleId}
-                  onChange={(event) => setSelectedPricingRuleId(event.target.value)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">Auto best rule</option>
-                  {pricingRules.map((rule) => (
-                    <option key={rule.id} value={rule.id}>{rule.name} ({rule.value}%)</option>
-                  ))}
-                </select>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {selectedPricingRule ? `${selectedPricingRule.name}: -${pricingPreview.effect.toFixed(2)}` : 'No pricing rule selected'} | Final: {pricingPreview.final.toFixed(2)}
-              </p>
-              <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-pricing')}>
-                Open Pricing Rules
-              </Button>
-            </div>
-
-            <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">3. Credit Management</p>
-            <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
-              <select
-                value={selectedCreditId}
-                onChange={(event) => setSelectedCreditId(event.target.value)}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Select customer profile</option>
-                {credits.map((profile) => (
-                  <option key={profile.id} value={profile.id}>{profile.customer}</option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">
-                Required for next confirmation: {nextConfirmationAmount.toFixed(2)} | Available credit: {selectedCreditAvailable.toFixed(2)}
-              </p>
-              <Badge
-                variant="outline"
-                className={confirmationAllowed ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}
-              >
-                {confirmationAllowed ? 'Confirmation allowed' : 'Confirmation gated by credit'}
-              </Badge>
-              <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-credit')}>
-                Open Customer Credit
-              </Button>
-            </div>
-
-            <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">4. Sales Operations & Analytics</p>
-            <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
-              <p className="text-xs text-muted-foreground">Booked revenue: {bookedRevenue.toFixed(2)} | Avg order: {averageOrderValue.toFixed(2)} | Conversion: {conversionRate}%</p>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('all')}>
-                  Open Feed
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
-                  View Open Orders
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
-                  View Settled Orders
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4 xl:col-span-5">
-          <Card id="crm-workbench" className="glass-card border-white/5 scroll-mt-24">
-            <CardHeader>
-              <CardTitle>CRM</CardTitle>
-              <CardDescription>Visual pipeline, lead management, automated follow-ups, email integration, and sales forecasting.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <div className="grid gap-2">
-                <Input placeholder="Opportunity title" value={crmTitle} onChange={(event) => setCrmTitle(event.target.value)} />
-                <Input placeholder="Customer" value={crmCustomer} onChange={(event) => setCrmCustomer(event.target.value)} />
-                <select
-                  value={crmOwnerId}
-                  onChange={(event) => setCrmOwnerId(event.target.value)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">Select owner</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>{employee.name}</option>
-                  ))}
-                </select>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <Input placeholder="Customer email" type="email" value={crmEmail} onChange={(event) => setCrmEmail(event.target.value)} />
-                  <Input placeholder="Opportunity value" value={crmValue} onChange={(event) => setCrmValue(event.target.value)} />
-                </div>
-                <Input type="date" value={crmFollowUp} onChange={(event) => setCrmFollowUp(event.target.value)} />
-                <Button className="gradient-amber text-black font-semibold" onClick={addCrmOpportunity}>Add Opportunity</Button>
-              </div>
-
-              <div className="grid gap-2 md:grid-cols-3">
-                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('open')}>
-                  Open opportunities: {crmOpenCount}
-                </Button>
-                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('draft')}>
-                  Draft opportunities: {crmDraftCount}
-                </Button>
-                <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('settled')}>
-                  Settled/won opportunities: {crmSettledCount}
-                </Button>
-              </div>
-
-              <div className="rounded-xl border border-white/5 bg-card/40 p-3">
-                <p>Forecasted revenue: {CURRENCY_SYMBOL[currency] ?? ''}{crmForecast.toFixed(2)}</p>
-                <p>Due follow-ups: {dueFollowUps.length}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => setCrmStageFilter('all')}>
-                    Show All
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={runFollowUpAutomation}>
-                    Run Follow-up Automation
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {visibleCrmOpportunities.length === 0 ? (
-                  <p className="text-xs">No opportunities for this view.</p>
+        {activeTab === 'overview' ? (
+          <div id="sales-overview" className="grid gap-4 xl:grid-cols-12 scroll-mt-24">
+            <Card className="glass-card border-white/5 xl:col-span-12">
+              <CardHeader>
+                <CardTitle>Sales Overview</CardTitle>
+                <CardDescription>Load only the summary first, then open the workspace you need.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {ordersLoading && !hasLoadedOrders ? (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {overviewCards.map((card) => (
+                      <div key={card.label} className="h-24 animate-pulse rounded-2xl border border-white/5 bg-card/40" />
+                    ))}
+                  </div>
                 ) : (
-                  visibleCrmOpportunities.slice(0, 4).map((item) => (
-                    <div key={item.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
-                      <p className="text-xs text-foreground">{item.title} • {item.customer}</p>
-                      <p className="text-xs">{item.stage} • {CURRENCY_SYMBOL[currency] ?? ''}{item.value.toFixed(2)} • Follow-up: {item.nextFollowUp || 'Not set'}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => advanceCrmOpportunity(item.id)}>
-                          Advance Stage
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {overviewCards.map((card) => (
+                      <div key={card.label} className="rounded-2xl border border-white/5 bg-card/40 p-4">
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{card.label}</p>
+                        <p className="mt-3 text-2xl font-semibold text-foreground">{card.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => switchToTab('orders', 'sales-quotations')}>
+                    Continue to Orders
+                  </Button>
+                  <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => switchToTab('crm', 'crm-workbench')}>
+                    Open CRM Workspace
+                  </Button>
+                  <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => switchToTab('pos', 'sales-pos')}>
+                    Open POS Workspace
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+
+        {activeTab === 'orders' || activeTab === 'crm' || activeTab === 'subscriptions' ? (
+          <div className="grid gap-4 xl:grid-cols-12">
+            {activeTab === 'orders' ? (
+              ordersTabReady ? (
+                <Card id="sales-quotations" className="glass-card border-white/5 xl:col-span-12 scroll-mt-24">
+                  <CardHeader>
+                    <CardTitle>Sales</CardTitle>
+                    <CardDescription>Quotations to invoices, pricelists, discount rules, order confirmations, and sales analytics.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm text-muted-foreground">
+                    <p className="text-xs uppercase tracking-[0.14em] text-primary">1. Sales Workflow</p>
+                    <div className="grid gap-2">
+                      <select
+                        value={quoteEmployeeId}
+                        onChange={(event) => setQuoteEmployeeId(event.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Select employee</option>
+                        {employees.map((employee) => (
+                          <option key={employee.id} value={employee.id}>{employee.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={quoteProductId}
+                        onChange={(event) => {
+                          setQuoteProductId(event.target.value);
+                          const product = products.find((item) => item.id === event.target.value);
+                          if (product) setQuotePrice(String(product.basePrice));
+                        }}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Select product</option>
+                        {products.map((item) => (
+                          <option key={item.id} value={item.id}>{item.name}</option>
+                        ))}
+                      </select>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input placeholder="Qty" value={quoteQty} onChange={(event) => setQuoteQty(event.target.value)} />
+                        <Input placeholder="Unit price" value={quotePrice} onChange={(event) => setQuotePrice(event.target.value)} />
+                      </div>
+                      <Button className="gradient-amber text-black font-semibold" onClick={createQuotation}>Create Quotation</Button>
+                    </div>
+
+                    <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                      <p className="text-xs uppercase tracking-[0.14em] text-primary">1.1 Core Tasks</p>
+                      <div className="mt-2 grid gap-2 md:grid-cols-3">
+                        <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('draft')}>
+                          Draft quotations: {draftOrders.length}
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-white/10 bg-card/40"
-                          disabled={!item.email}
-                          onClick={() => {
-                            if (!item.email) return;
-                            window.open(`mailto:${item.email}?subject=${encodeURIComponent(`Follow-up: ${item.title}`)}`);
-                          }}
+                        <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
+                          Open confirmations: {openOrders.length}
+                        </Button>
+                        <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
+                          Settled invoices: {settledOrders.length}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {draftOrders.slice(0, 2).map((order) => (
+                        <div key={order.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                          <p className="text-xs text-foreground">{order.orderNo} • {order.employeeName}</p>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'open')}>
+                              Confirm Order
+                            </Button>
+                            <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => updateOrderStatus(order.id, 'settled')}>
+                              Convert to Invoice
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {draftOrders.length === 0 ? (
+                        <div className="flex items-center justify-between rounded-lg border border-dashed border-white/10 bg-card/30 p-2">
+                          <p className="text-xs">No draft quotations available.</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-white/10 bg-card/40"
+                            onClick={() => {
+                              scrollToSection('sales-quotations');
+                            }}
+                          >
+                            Start New Quote
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">2. Pricing & Discounts</p>
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Input placeholder="Base amount" value={pricingBaseAmount} onChange={(event) => setPricingBaseAmount(event.target.value)} />
+                        <select
+                          value={selectedPricingRuleId}
+                          onChange={(event) => setSelectedPricingRuleId(event.target.value)}
+                          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                         >
-                          Send Follow-up Email
-                        </Button>
+                          <option value="">Auto best rule</option>
+                          {pricingRules.map((rule) => (
+                            <option key={rule.id} value={rule.id}>{rule.name} ({rule.value}%)</option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card id="subscriptions-hub" className="glass-card border-white/5 scroll-mt-24">
-            <CardHeader>
-              <CardTitle>Subscriptions</CardTitle>
-              <CardDescription>Recurring billing, renewal management, churn tracking, and MRR dashboard.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <div className="grid gap-2">
-                <Input placeholder="Customer" value={subscriptionCustomer} onChange={(event) => setSubscriptionCustomer(event.target.value)} />
-                <Input placeholder="Plan" value={subscriptionPlan} onChange={(event) => setSubscriptionPlan(event.target.value)} />
-                <select
-                  value={subscriptionOwnerId}
-                  onChange={(event) => setSubscriptionOwnerId(event.target.value)}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">Select owner</option>
-                  {employees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>{employee.name}</option>
-                  ))}
-                </select>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <Input placeholder="Recurring amount" value={subscriptionAmount} onChange={(event) => setSubscriptionAmount(event.target.value)} />
-                  <select
-                    value={subscriptionCycle}
-                    onChange={(event) => setSubscriptionCycle(event.target.value as 'monthly' | 'quarterly' | 'yearly')}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="monthly">monthly</option>
-                    <option value="quarterly">quarterly</option>
-                    <option value="yearly">yearly</option>
-                  </select>
-                </div>
-                <Input type="date" value={subscriptionRenewalDate} onChange={(event) => setSubscriptionRenewalDate(event.target.value)} />
-                <Button className="gradient-amber text-black font-semibold" onClick={addSubscription}>Add Subscription</Button>
-              </div>
-
-              <div className="rounded-xl border border-white/5 bg-card/40 p-3">
-                <div>Active subscriptions: {activeSubscriptions}</div>
-                <div>Estimated MRR: {CURRENCY_SYMBOL[currency] ?? ''}{estimatedMrr.toFixed(0)}</div>
-                <div>Renewals due this cycle: {renewalsDueThisCycle}</div>
-                <div>Churn rate: {churnRate}%</div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {['all', 'active', 'trial', 'paused', 'churned'].map((status) => (
-                  <Button
-                    key={status}
-                    type="button"
-                    size="sm"
-                    variant={subscriptionFilter === status ? 'default' : 'outline'}
-                    className={subscriptionFilter === status ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
-                    onClick={() => setSubscriptionFilter(status as 'all' | 'active' | 'trial' | 'paused' | 'churned')}
-                  >
-                    {status}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                {visibleSubscriptions.length === 0 ? (
-                  <p className="text-xs">No subscriptions in this view.</p>
-                ) : (
-                  visibleSubscriptions.slice(0, 4).map((subscription) => (
-                    <div key={subscription.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
-                      <p className="text-xs text-foreground">{subscription.customer} • {subscription.plan}</p>
-                      <p className="text-xs">
-                        {subscription.status} • {CURRENCY_SYMBOL[currency] ?? ''}{subscription.amount.toFixed(2)} / {subscription.cycle} • Renewal: {subscription.renewalDate || 'Not set'}
+                      <p className="text-xs text-muted-foreground">
+                        {selectedPricingRule ? `${selectedPricingRule.name}: -${pricingPreview.effect.toFixed(2)}` : 'No pricing rule selected'} | Final: {pricingPreview.final.toFixed(2)}
                       </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => renewSubscription(subscription.id)}>
-                          Renew
+                      <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-pricing')}>
+                        Open Pricing Rules
+                      </Button>
+                    </div>
+
+                    <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">3. Credit Management</p>
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+                      <select
+                        value={selectedCreditId}
+                        onChange={(event) => setSelectedCreditId(event.target.value)}
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Select customer profile</option>
+                        {credits.map((profile) => (
+                          <option key={profile.id} value={profile.id}>{profile.customer}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground">
+                        Required for next confirmation: {nextConfirmationAmount.toFixed(2)} | Available credit: {selectedCreditAvailable.toFixed(2)}
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={confirmationAllowed ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}
+                      >
+                        {confirmationAllowed ? 'Confirmation allowed' : 'Confirmation gated by credit'}
+                      </Badge>
+                      <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => scrollToSection('sales-credit')}>
+                        Open Customer Credit
+                      </Button>
+                    </div>
+
+                    <p className="pt-2 text-xs uppercase tracking-[0.14em] text-primary">4. Sales Operations & Analytics</p>
+                    <div className="space-y-2 rounded-xl border border-white/5 bg-card/40 p-3">
+                      <p className="text-xs text-muted-foreground">Booked revenue: {bookedRevenue.toFixed(2)} | Avg order: {averageOrderValue.toFixed(2)} | Conversion: {conversionRate}%</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('all')}>
+                          Open Feed
                         </Button>
-                        <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => cycleSubscriptionStatus(subscription.id)}>
-                          Cycle Status
+                        <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('open')}>
+                          View Open Orders
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => openOperationsView('settled')}>
+                          View Settled Orders
                         </Button>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="xl:col-span-12">
+                  <SalesLoadingCard title="Loading Orders Workspace" description="Preparing quotations, catalog, and team references." />
+                </div>
+              )
+            ) : null}
 
+            {activeTab === 'crm' || activeTab === 'subscriptions' ? (
+              <div className="space-y-4 xl:col-span-12">
+                {activeTab === 'crm' ? (
+                  crmTabReady ? (
+                    <Card id="crm-workbench" className="glass-card border-white/5 scroll-mt-24">
+                      <CardHeader>
+                        <CardTitle>CRM</CardTitle>
+                        <CardDescription>Visual pipeline, lead management, automated follow-ups, email integration, and sales forecasting.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm text-muted-foreground">
+                        <div className="grid gap-2">
+                          <Input placeholder="Opportunity title" value={crmTitle} onChange={(event) => setCrmTitle(event.target.value)} />
+                          <Input placeholder="Customer" value={crmCustomer} onChange={(event) => setCrmCustomer(event.target.value)} />
+                          <select
+                            value={crmOwnerId}
+                            onChange={(event) => setCrmOwnerId(event.target.value)}
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Select owner</option>
+                            {employees.map((employee) => (
+                              <option key={employee.id} value={employee.id}>{employee.name}</option>
+                            ))}
+                          </select>
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <Input placeholder="Customer email" type="email" value={crmEmail} onChange={(event) => setCrmEmail(event.target.value)} />
+                            <Input placeholder="Opportunity value" value={crmValue} onChange={(event) => setCrmValue(event.target.value)} />
+                          </div>
+                          <Input type="date" value={crmFollowUp} onChange={(event) => setCrmFollowUp(event.target.value)} />
+                          <Button className="gradient-amber text-black font-semibold" onClick={addCrmOpportunity}>Add Opportunity</Button>
+                        </div>
+
+                        <div className="grid gap-2 md:grid-cols-3">
+                          <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('open')}>
+                            Open opportunities: {crmOpenCount}
+                          </Button>
+                          <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('draft')}>
+                            Draft opportunities: {crmDraftCount}
+                          </Button>
+                          <Button type="button" variant="outline" className="justify-start border-white/10 bg-card/40" onClick={() => setCrmStageFilter('settled')}>
+                            Settled/won opportunities: {crmSettledCount}
+                          </Button>
+                        </div>
+
+                        <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                          <p>Forecasted revenue: {CURRENCY_SYMBOL[currency] ?? ''}{crmForecast.toFixed(2)}</p>
+                          <p>Due follow-ups: {dueFollowUps.length}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => setCrmStageFilter('all')}>
+                              Show All
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={runFollowUpAutomation}>
+                              Run Follow-up Automation
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className={testEmailResult === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : testEmailResult === 'error' ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-white/10 bg-card/40'}
+                              onClick={sendTestEmail}
+                              disabled={testEmailSending}
+                            >
+                              {testEmailSending ? 'Sending…' : testEmailResult === 'success' ? 'Email sent ✓' : testEmailResult === 'error' ? 'Failed – retry' : 'Send Test Email'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {visibleCrmOpportunities.length === 0 ? (
+                            <p className="text-xs">No opportunities for this view.</p>
+                          ) : (
+                            visibleCrmOpportunities.slice(0, 4).map((item) => (
+                              <div key={item.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                                <p className="text-xs text-foreground">{item.title} • {item.customer}</p>
+                                <p className="text-xs">{item.stage} • {CURRENCY_SYMBOL[currency] ?? ''}{item.value.toFixed(2)} • Follow-up: {item.nextFollowUp || 'Not set'}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => advanceCrmOpportunity(item.id)}>
+                                    Advance Stage
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-white/10 bg-card/40"
+                                    disabled={!item.email}
+                                    onClick={() => {
+                                      if (!item.email) return;
+                                      window.open(`mailto:${item.email}?subject=${encodeURIComponent(`Follow-up: ${item.title}`)}`);
+                                    }}
+                                  >
+                                    Send Follow-up Email
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <SalesLoadingCard title="Loading CRM Workspace" description="Preparing opportunities, owners, and follow-up automation." />
+                  )
+                ) : null}
+
+                {activeTab === 'subscriptions' ? (
+                  subscriptionsTabReady ? (
+                    <Card id="subscriptions-hub" className="glass-card border-white/5 scroll-mt-24">
+                      <CardHeader>
+                        <CardTitle>Subscriptions</CardTitle>
+                        <CardDescription>Recurring billing, renewal management, churn tracking, and MRR dashboard.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm text-muted-foreground">
+                        <div className="grid gap-2">
+                          <Input placeholder="Customer" value={subscriptionCustomer} onChange={(event) => setSubscriptionCustomer(event.target.value)} />
+                          <Input placeholder="Plan" value={subscriptionPlan} onChange={(event) => setSubscriptionPlan(event.target.value)} />
+                          <select
+                            value={subscriptionOwnerId}
+                            onChange={(event) => setSubscriptionOwnerId(event.target.value)}
+                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Select owner</option>
+                            {employees.map((employee) => (
+                              <option key={employee.id} value={employee.id}>{employee.name}</option>
+                            ))}
+                          </select>
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <Input placeholder="Recurring amount" value={subscriptionAmount} onChange={(event) => setSubscriptionAmount(event.target.value)} />
+                            <select
+                              value={subscriptionCycle}
+                              onChange={(event) => setSubscriptionCycle(event.target.value as 'monthly' | 'quarterly' | 'yearly')}
+                              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="monthly">monthly</option>
+                              <option value="quarterly">quarterly</option>
+                              <option value="yearly">yearly</option>
+                            </select>
+                          </div>
+                          <Input type="date" value={subscriptionRenewalDate} onChange={(event) => setSubscriptionRenewalDate(event.target.value)} />
+                          <Button className="gradient-amber text-black font-semibold" onClick={addSubscription}>Add Subscription</Button>
+                        </div>
+
+                        <div className="rounded-xl border border-white/5 bg-card/40 p-3">
+                          <div>Active subscriptions: {activeSubscriptions}</div>
+                          <div>Estimated MRR: {CURRENCY_SYMBOL[currency] ?? ''}{estimatedMrr.toFixed(0)}</div>
+                          <div>Renewals due this cycle: {renewalsDueThisCycle}</div>
+                          <div>Churn rate: {churnRate}%</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {['all', 'active', 'trial', 'paused', 'churned'].map((status) => (
+                            <Button
+                              key={status}
+                              type="button"
+                              size="sm"
+                              variant={subscriptionFilter === status ? 'default' : 'outline'}
+                              className={subscriptionFilter === status ? 'gradient-amber text-black font-semibold' : 'border-white/10 bg-card/40'}
+                              onClick={() => setSubscriptionFilter(status as 'all' | 'active' | 'trial' | 'paused' | 'churned')}
+                            >
+                              {status}
+                            </Button>
+                          ))}
+                        </div>
+
+                        <div className="space-y-2">
+                          {visibleSubscriptions.length === 0 ? (
+                            <p className="text-xs">No subscriptions in this view.</p>
+                          ) : (
+                            visibleSubscriptions.slice(0, 4).map((subscription) => (
+                              <div key={subscription.id} className="rounded-lg border border-white/5 bg-card/40 p-2">
+                                <p className="text-xs text-foreground">{subscription.customer} • {subscription.plan}</p>
+                                <p className="text-xs">
+                                  {subscription.status} • {CURRENCY_SYMBOL[currency] ?? ''}{subscription.amount.toFixed(2)} / {subscription.cycle} • Renewal: {subscription.renewalDate || 'Not set'}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => renewSubscription(subscription.id)}>
+                                    Renew
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="border-white/10 bg-card/40" onClick={() => cycleSubscriptionStatus(subscription.id)}>
+                                    Cycle Status
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <SalesLoadingCard title="Loading Subscription Workspace" description="Preparing recurring revenue, renewals, and customer plans." />
+                  )
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+      {activeTab === 'pricing' ? (
+      pricingTabReady ? (
       <div className="grid gap-4 xl:grid-cols-12">
         <Card id="sales-pricing" className="glass-card border-white/5 xl:col-span-6 scroll-mt-24">
           <CardHeader>
@@ -1417,7 +1683,13 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           </CardContent>
         </Card>
       </div>
+      ) : (
+        <SalesLoadingCard title="Loading Pricing Workspace" description="Preparing pricing rules and customer credit controls." />
+      )
+      ) : null}
 
+      {activeTab === 'pos' ? (
+      posTabReady ? (
       <div className="grid gap-4 xl:grid-cols-12">
         <Card id="sales-pos" className="glass-card border-white/5 xl:col-span-12 scroll-mt-24">
           <CardHeader>
@@ -1614,7 +1886,13 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           </CardContent>
         </Card>
       </div>
+      ) : (
+        <SalesLoadingCard title="Loading POS Workspace" description="Preparing products, employees, and offline checkout tools." />
+      )
+      ) : null}
 
+      {activeTab === 'pos' ? (
+      posTabReady ? (
       <div className="grid gap-4 xl:grid-cols-12">
         <Card id="sales-channels" className="glass-card border-white/5 xl:col-span-7 scroll-mt-24">
           <CardHeader>
@@ -1653,7 +1931,10 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           </CardContent>
         </Card>
       </div>
+      ) : null
+      ) : null}
 
+      {activeTab === 'orders' ? (
       <Card id="operations" className="glass-card border-white/5 scroll-mt-24">
         <CardHeader>
           <CardTitle>Sales Operations Feed</CardTitle>
@@ -1694,6 +1975,7 @@ export function SalesModuleContent({ module }: { module: BusinessModuleSpec }) {
           </div>
         </CardContent>
       </Card>
+      ) : null}
     </>
   );
 }
