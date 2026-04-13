@@ -1,4 +1,4 @@
-import { ensureRedisConnection } from '@/lib/server/redis';
+import { tryRedisConnection } from '@/lib/server/redis';
 import { adminFirestore } from '@/lib/server/firebase-admin';
 import { col, normalizeDate } from '@/lib/server/firestore-data';
 
@@ -6,20 +6,22 @@ const USERS_CACHE_KEY = 'pinkplan:users:all';
 const USERS_CACHE_TTL_SECONDS = 60;
 
 export async function listUsersCached() {
-  const redis = await ensureRedisConnection();
-  const cached = await redis.get(USERS_CACHE_KEY);
-  if (cached) {
-    return JSON.parse(cached) as Awaited<ReturnType<typeof fetchUsers>>;
+  const redis = await tryRedisConnection();
+  if (redis) {
+    const cached = await redis.get(USERS_CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached) as Awaited<ReturnType<typeof fetchUsers>>;
+    }
+    const users = await fetchUsers();
+    await redis.set(USERS_CACHE_KEY, JSON.stringify(users), { EX: USERS_CACHE_TTL_SECONDS });
+    return users;
   }
-
-  const users = await fetchUsers();
-  await redis.set(USERS_CACHE_KEY, JSON.stringify(users), { EX: USERS_CACHE_TTL_SECONDS });
-  return users;
+  return fetchUsers();
 }
 
 export async function invalidateUsersCache() {
-  const redis = await ensureRedisConnection();
-  await redis.del(USERS_CACHE_KEY);
+  const redis = await tryRedisConnection();
+  if (redis) await redis.del(USERS_CACHE_KEY);
 }
 
 async function fetchUsers() {

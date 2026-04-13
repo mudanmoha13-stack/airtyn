@@ -34,18 +34,17 @@ const BUSINESS_TYPES = [
 type ProjectMode = 'idle' | 'signin' | 'setup';
 
 const ProjectOSCard = () => {
-  const { signIn, completeOnboarding } = useAppState();
+  const { signIn } = useAppState();
   const [mode, setMode] = useState<ProjectMode>('idle');
 
   const [signinEmail, setSigninEmail]       = useState('');
   const [signinPassword, setSigninPassword] = useState('');
   const [signinError, setSigninError]       = useState('');
 
-  const [tenantName, setTenantName]       = useState('');
-  const [workspaceName, setWorkspaceName] = useState('');
-  const [name, setName]                   = useState('');
-  const [email, setEmail]                 = useState('');
-  const [password, setPassword]           = useState('');
+  const [setupEmail, setSetupEmail] = useState('');
+  const [setupSending, setSetupSending] = useState(false);
+  const [setupMessage, setSetupMessage] = useState('');
+  const [setupError, setSetupError] = useState('');
 
   const onSignIn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,9 +56,28 @@ const ProjectOSCard = () => {
     setSigninError('');
   };
 
-  const onSetup = (e: React.FormEvent) => {
+  const onSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    completeOnboarding({ tenantName, workspaceName, name, email, password, mode: 'projects' });
+    setSetupSending(true);
+    setSetupError('');
+    setSetupMessage('');
+
+    try {
+      const response = await fetch('/api/onboarding/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: setupEmail, mode: 'projects' }),
+      });
+      const data = (await response.json()) as { ok: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? 'Failed to send confirmation link');
+      }
+      setSetupMessage('Confirmation link sent. Check your email to continue onboarding.');
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : 'Failed to send confirmation link');
+    } finally {
+      setSetupSending(false);
+    }
   };
 
   return (
@@ -119,29 +137,17 @@ const ProjectOSCard = () => {
         )}
 
         {mode === 'setup' && (
-          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSetup}>
-            <div className="space-y-1.5">
-              <Label htmlFor="pm-org">Organization</Label>
-              <Input id="pm-org" value={tenantName} onChange={e => setTenantName(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pm-ws">Workspace</Label>
-              <Input id="pm-ws" value={workspaceName} onChange={e => setWorkspaceName(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pm-name">Your Name</Label>
-              <Input id="pm-name" value={name} onChange={e => setName(e.target.value)} required />
-            </div>
+          <form className="space-y-4" onSubmit={onSetup}>
             <div className="space-y-1.5">
               <Label htmlFor="pm-owner-email">Work Email</Label>
-              <Input id="pm-owner-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+              <Input id="pm-owner-email" type="email" value={setupEmail} onChange={e => setSetupEmail(e.target.value)} required />
             </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="pm-owner-pwd">Password</Label>
-              <Input id="pm-owner-pwd" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Button className="w-full gradient-pink-blue" type="submit">Create Organization</Button>
+            {setupError && <p className="text-sm text-destructive">{setupError}</p>}
+            {setupMessage && <p className="text-sm text-emerald-400">{setupMessage}</p>}
+            <div className="space-y-2">
+              <Button className="w-full gradient-pink-blue" type="submit" disabled={setupSending}>
+                {setupSending ? 'Sending confirmation...' : 'Send Confirmation Link'}
+              </Button>
               <Button className="w-full" variant="ghost" type="button" onClick={() => setMode('idle')}>Back</Button>
             </div>
           </form>
@@ -155,7 +161,7 @@ const ProjectOSCard = () => {
 type BusinessMode = 'idle' | 'signin' | 'setup';
 
 const BusinessOSCard = () => {
-  const { signIn, completeOnboarding } = useAppState();
+  const { signIn } = useAppState();
   const router = useRouter();
   const [mode, setMode] = useState<BusinessMode>('idle');
 
@@ -163,11 +169,10 @@ const BusinessOSCard = () => {
   const [signinPassword, setSigninPassword] = useState('');
   const [signinError, setSigninError]       = useState('');
 
-  const [businessType, setBusinessType]   = useState('');
-  const [tenantName, setTenantName]       = useState('');
-  const [name, setName]                   = useState('');
-  const [email, setEmail]                 = useState('');
-  const [password, setPassword]           = useState('');
+  const [setupEmail, setSetupEmail] = useState('');
+  const [setupSending, setSetupSending] = useState(false);
+  const [setupMessage, setSetupMessage] = useState('');
+  const [setupError, setSetupError] = useState('');
 
   const onSignIn = (e: React.FormEvent) => {
     e.preventDefault();
@@ -179,18 +184,28 @@ const BusinessOSCard = () => {
     router.push('/business');
   };
 
-  const onSetup = (e: React.FormEvent) => {
+  const onSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    completeOnboarding({
-      tenantName,
-      workspaceName: `${tenantName} Business`,
-      name,
-      email,
-      password,
-      mode: 'business',
-      businessType,
-    });
-    router.push('/business');
+    setSetupSending(true);
+    setSetupError('');
+    setSetupMessage('');
+
+    try {
+      const response = await fetch('/api/onboarding/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: setupEmail, mode: 'business' }),
+      });
+      const data = (await response.json()) as { ok: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? 'Failed to send confirmation link');
+      }
+      setSetupMessage('Confirmation link sent. Check your email to continue onboarding.');
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : 'Failed to send confirmation link');
+    } finally {
+      setSetupSending(false);
+    }
   };
 
   return (
@@ -256,39 +271,16 @@ const BusinessOSCard = () => {
         )}
 
         {mode === 'setup' && (
-          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={onSetup}>
-            <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="biz-type">What best describes your business?</Label>
-              <Select value={businessType} onValueChange={setBusinessType}>
-                <SelectTrigger id="biz-type">
-                  <SelectValue placeholder="Select your primary focus…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BUSINESS_TYPES.map(t => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="biz-org">Business Name</Label>
-              <Input id="biz-org" value={tenantName} onChange={e => setTenantName(e.target.value)} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="biz-name">Your Name</Label>
-              <Input id="biz-name" value={name} onChange={e => setName(e.target.value)} required />
-            </div>
+          <form className="space-y-4" onSubmit={onSetup}>
             <div className="space-y-1.5">
               <Label htmlFor="biz-owner-email">Work Email</Label>
-              <Input id="biz-owner-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+              <Input id="biz-owner-email" type="email" value={setupEmail} onChange={e => setSetupEmail(e.target.value)} required />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="biz-owner-pwd">Password</Label>
-              <Input id="biz-owner-pwd" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Button className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold" type="submit">
-                Launch Business OS
+            {setupError && <p className="text-sm text-destructive">{setupError}</p>}
+            {setupMessage && <p className="text-sm text-emerald-400">{setupMessage}</p>}
+            <div className="space-y-2">
+              <Button className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold" type="submit" disabled={setupSending}>
+                {setupSending ? 'Sending confirmation...' : 'Send Confirmation Link'}
               </Button>
               <Button className="w-full" variant="ghost" type="button" onClick={() => setMode('idle')}>Back</Button>
             </div>

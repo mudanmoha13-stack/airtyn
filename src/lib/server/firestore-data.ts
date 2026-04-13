@@ -13,6 +13,7 @@ export const col = {
   coreTaskComments: 'core_task_comments',
   coreTenants: 'core_tenants',
   coreWorkspaces: 'core_workspaces',
+  coreOnboardingTokens: 'core_onboarding_tokens',
 
   bizUsers: 'biz_users',
   bizEmployees: 'biz_employees',

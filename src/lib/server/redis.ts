@@ -38,3 +38,16 @@ export async function ensureRedisConnection() {
   }
   return client;
 }
+
+/**
+ * Like ensureRedisConnection but returns null instead of throwing when
+ * REDIS_URL is not configured. Use this for optional caching so callers
+ * can fall back to a direct data source.
+ */
+export async function tryRedisConnection() {
+  try {
+    return await ensureRedisConnection();
+  } catch {
+    return null;
+  }
+}
