@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessOwnerEmail, resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createOrderSchema = z.object({
   employeeId: z.string().min(1),
@@ -31,17 +32,18 @@ const patchSchema = z.object({
   status: z.enum(['draft', 'open', 'settled', 'closed', 'canceled']),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
 
     const [ordersSnap, linesSnap, paymentsSnap, productsSnap, employeesSnap, usersSnap] = await Promise.all([
-      adminFirestore.collection(col.bizOrders).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
-      adminFirestore.collection(col.bizOrderLines).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizPayments).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizUsers).get(),
+      adminFirestore.collection(col.bizOrders).where('tenantId', '==', tenantId).limit(200).get(),
+      adminFirestore.collection(col.bizOrderLines).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizPayments).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizUsers).where('tenantId', '==', tenantId).get(),
     ]);
 
     const linesByOrder = new Map<string, Array<Record<string, unknown>>>();
@@ -114,13 +116,18 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const payload = createOrderSchema.parse(await request.json());
 
     const orderNo = `SO-${Date.now().toString().slice(-8)}`;
 
     const productIds = Array.from(new Set(payload.lines.map((line) => line.productId)));
     const productSnaps = await Promise.all(productIds.map((id) => adminFirestore.collection(col.bizProducts).doc(id).get()));
+    const invalidProduct = productSnaps.find((snap) => !snap.exists || String(snap.data()?.tenantId ?? '') !== tenantId);
+    if (invalidProduct) {
+      return NextResponse.json({ ok: false, error: `Product ${invalidProduct.id} not found for tenant.` }, { status: 404 });
+    }
     const productPrice = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, Number(snap.data()?.basePrice ?? 0)]));
     const productCost = new Map(productSnaps.filter((snap) => snap.exists).map((snap) => [snap.id, Number(snap.data()?.costPrice ?? 0)]));
 
@@ -143,7 +150,7 @@ export async function POST(request: NextRequest) {
       for (const line of preparedLines) {
         const stockSnap = await adminFirestore
           .collection(col.bizStockItems)
-          .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+          .where('tenantId', '==', tenantId)
           .where('productId', '==', line.productId)
           .get();
 
@@ -186,7 +193,7 @@ export async function POST(request: NextRequest) {
         const moveId = makeId(col.bizStockMoves);
         await adminFirestore.collection(col.bizStockMoves).doc(moveId).set({
           id: moveId,
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
+          tenantId,
           productId: line.productId,
           quantity: line.quantity,
           moveType: 'out',
@@ -201,7 +208,7 @@ export async function POST(request: NextRequest) {
     const orderId = makeId(col.bizOrders);
     await adminFirestore.collection(col.bizOrders).doc(orderId).set({
       id: orderId,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       employeeId: payload.employeeId,
       orderNo,
       currency: payload.currency,
@@ -220,7 +227,7 @@ export async function POST(request: NextRequest) {
       const lineId = makeId(col.bizOrderLines);
       return adminFirestore.collection(col.bizOrderLines).doc(lineId).set({
         id: lineId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId,
         orderId,
         productId: line.productId,
         quantity: line.quantity,
@@ -236,7 +243,7 @@ export async function POST(request: NextRequest) {
         const paymentId = makeId(col.bizPayments);
         return adminFirestore.collection(col.bizPayments).doc(paymentId).set({
           id: paymentId,
-          tenantId: BUSINESS_DEFAULT_TENANT_ID,
+          tenantId,
           orderId,
           method: payment.method,
           amount: payment.amount,
@@ -258,8 +265,16 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(request);
     const payload = patchSchema.parse(await request.json());
-    await adminFirestore.collection(col.bizOrders).doc(payload.id).set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
+
+    const orderRef = adminFirestore.collection(col.bizOrders).doc(payload.id);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists || String(orderSnap.data()?.tenantId ?? '') !== tenantId) {
+      return NextResponse.json({ ok: false, error: 'Order not found for tenant' }, { status: 404 });
+    }
+
+    await orderRef.set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
     return NextResponse.json({ ok: true, id: payload.id, status: payload.status });
   } catch (error) {
     if (error instanceof z.ZodError) {

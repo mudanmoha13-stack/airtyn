@@ -161,6 +161,8 @@ interface AppState {
     name: string;
     email: string;
     password: string;
+    mode?: 'projects' | 'business';
+    businessType?: string;
   }) => void;
   inviteUser: (email: string, role: UserRole) => void;
   acceptInvitation: (invitationId: string, payload: { name: string; password: string }) => { ok: boolean; message?: string };
@@ -528,12 +530,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState((prev) => ({ ...prev, isAuthenticated: false, currentUser: null }));
   };
 
-  const completeOnboarding = ({ tenantName, workspaceName, name, email, password }: {
+  const completeOnboarding = ({ tenantName, workspaceName, name, email, password, mode, businessType }: {
     tenantName: string;
     workspaceName: string;
     name: string;
     email: string;
     password: string;
+    mode?: 'projects' | 'business';
+    businessType?: string;
   }) => {
     const now = new Date().toISOString();
     const tenantId = uid('tenant');
@@ -622,11 +626,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       emailNotifications: [],
     }));
 
-    void Promise.all([
+    const cloudWrites: Array<Promise<unknown>> = [
       upsertUserToApi(owner, tenantId),
       postJson('/api/projects', starterProject),
       postJson('/api/tasks', starterTask),
-    ]).catch(() => {
+    ];
+
+    if (mode === 'business') {
+      cloudWrites.push(
+        postJson('/api/business/bootstrap', {
+          tenant,
+          workspace,
+          owner,
+          businessType: businessType ?? null,
+        })
+      );
+    }
+
+    void Promise.all(cloudWrites).catch(() => {
       // Local state remains the source of truth if infrastructure is not configured yet.
     });
   };

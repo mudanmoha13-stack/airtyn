@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Search, Plus, Bell, Command, LogOut, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { PRODUCT_SWITCH_ITEMS, getAppProduct } from '@/lib/navigation';
 
 export const TopBar = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const product = getAppProduct(pathname);
   const { emailNotifications, signOut } = useAppState();
   const { openQuickNav, beginNavigation, registerRecentPage } = useNavigationFeedback();
@@ -25,6 +26,11 @@ export const TopBar = () => {
   const searchPlaceholder = product === 'business'
     ? 'Search sales, inventory, payroll, finance...'
     : 'Search projects, tasks, teams, reports...';
+
+  const handleLogout = () => {
+    signOut();
+    router.push('/');
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-card/40 px-4 backdrop-blur-md md:px-6">
@@ -90,9 +96,21 @@ export const TopBar = () => {
             </span>
           ) : null}
         </Button>
-        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground touch-manipulation" onClick={signOut}>
-          <LogOut className="h-4 w-4" />
-        </Button>
+        {product === 'business' ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 rounded-xl border-amber-500/20 bg-amber-500/10 px-3 text-amber-200 hover:bg-amber-500/20"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout Business
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground touch-manipulation" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </header>
   );

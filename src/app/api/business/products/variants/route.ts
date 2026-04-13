@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createSchema = z.object({
   productId: z.string().min(1),
@@ -13,15 +14,16 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(req);
     const { searchParams } = new URL(req.url);
     const productId = searchParams.get('productId');
 
-    let query = adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID);
+    let query = adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', tenantId);
     if (productId) query = query.where('productId', '==', productId);
 
     const [variantsSnap, productsSnap] = await Promise.all([
       query.orderBy('createdAt', 'desc').get(),
-      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', tenantId).get(),
     ]);
 
     const productMap = new Map(productsSnap.docs.map((doc) => [doc.id, doc.data()]));
@@ -45,18 +47,19 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(req);
+    await ensureBusinessTenantDoc(tenantId);
     const body = createSchema.parse(await req.json());
 
     const parent = await adminFirestore.collection(col.bizProducts).doc(body.productId).get();
-    if (!parent.exists) {
+    if (!parent.exists || String(parent.data()?.tenantId ?? '') !== tenantId) {
       return NextResponse.json({ ok: false, error: 'Parent product not found' }, { status: 404 });
     }
 
     const normalized = Object.fromEntries(Object.entries(body.attributeValues).map(([k, v]) => [k.trim().toLowerCase(), v.trim().toLowerCase()]));
     const existing = await adminFirestore
       .collection(col.bizProductVariants)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('productId', '==', body.productId)
       .get();
 
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
       sku = `${base}-${suffix}`;
     }
 
-    const sameSku = await adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).where('sku', '==', sku).limit(1).get();
+    const sameSku = await adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', tenantId).where('sku', '==', sku).limit(1).get();
     if (!sameSku.empty) {
       return NextResponse.json({ ok: false, error: `Variant SKU '${sku}' already exists`, duplicateField: 'sku' }, { status: 409 });
     }
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
     const id = makeId(col.bizProductVariants);
     const variant = {
       id,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       productId: body.productId,
       sku,
       attributeValues: body.attributeValues,

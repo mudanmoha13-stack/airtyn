@@ -59,7 +59,7 @@ const ProjectOSCard = () => {
 
   const onSetup = (e: React.FormEvent) => {
     e.preventDefault();
-    completeOnboarding({ tenantName, workspaceName, name, email, password });
+    completeOnboarding({ tenantName, workspaceName, name, email, password, mode: 'projects' });
   };
 
   return (
@@ -187,6 +187,8 @@ const BusinessOSCard = () => {
       name,
       email,
       password,
+      mode: 'business',
+      businessType,
     });
     router.push('/business');
   };

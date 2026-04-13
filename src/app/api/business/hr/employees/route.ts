@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessOwnerEmail, resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1).optional(),
@@ -13,12 +14,13 @@ const createEmployeeSchema = z.object({
   email: z.string().email(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const [employeeSnap, usersSnap] = await Promise.all([
-      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).orderBy('createdAt', 'desc').limit(200).get(),
-      adminFirestore.collection(col.bizUsers).get(),
+      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).orderBy('createdAt', 'desc').limit(200).get(),
+      adminFirestore.collection(col.bizUsers).where('tenantId', '==', tenantId).get(),
     ]);
     const users = new Map(usersSnap.docs.map((doc) => [doc.id, doc.data()]));
 
@@ -44,7 +46,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const payload = createEmployeeSchema.parse(await request.json());
 
     const normalizedName =
@@ -72,11 +75,12 @@ export async function POST(request: NextRequest) {
     const lastName = rest.join(' ');
 
     const normalizedEmail = payload.email.toLowerCase();
-    const existingUser = await adminFirestore.collection(col.bizUsers).where('email', '==', normalizedEmail).limit(1).get();
+    const existingUser = await adminFirestore.collection(col.bizUsers).where('tenantId', '==', tenantId).where('email', '==', normalizedEmail).limit(1).get();
     const userId = existingUser.empty ? makeId(col.bizUsers) : existingUser.docs[0].id;
     await adminFirestore.collection(col.bizUsers).doc(userId).set(
       {
         id: userId,
+        tenantId,
         email: normalizedEmail,
         passwordHash: 'temp-password-hash',
         status: 'active',
@@ -88,11 +92,11 @@ export async function POST(request: NextRequest) {
       { merge: true }
     );
 
-    const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('userId', '==', userId).limit(1).get();
+    const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).where('userId', '==', userId).limit(1).get();
     const employeeId = existingEmployee.empty ? makeId(col.bizEmployees) : existingEmployee.docs[0].id;
     const employee = {
       id: employeeId,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       userId,
       title: normalizedTitle,
       departmentId: payload.department,

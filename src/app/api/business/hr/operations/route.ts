@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessOwnerEmail, resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createSchema = z.discriminatedUnion('entityType', [
   z.object({
@@ -92,21 +93,22 @@ function getFirestoreErrorDescription(message: string): string {
   return 'Unexpected Firestore error. Check server logs for details.';
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
 
     // orderBy is intentionally omitted from all queries to avoid requiring composite indexes.
     // Results are sorted in JS below.
     const [employeeSnap, userSnap, contractSnap, attendanceSnap, leaveSnap, payrollSnap, payslipSnap, candidateSnap] = await Promise.all([
-      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(500).get(),
-      adminFirestore.collection(col.bizUsers).limit(500).get(),
-      adminFirestore.collection(col.bizContracts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
-      adminFirestore.collection(col.bizAttendance).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(300).get(),
-      adminFirestore.collection(col.bizLeaves).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
-      adminFirestore.collection(col.bizPayrollRuns).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(100).get(),
-      adminFirestore.collection(col.bizPayslips).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizCandidates).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
+      adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).limit(500).get(),
+      adminFirestore.collection(col.bizUsers).where('tenantId', '==', tenantId).limit(500).get(),
+      adminFirestore.collection(col.bizContracts).where('tenantId', '==', tenantId).limit(200).get(),
+      adminFirestore.collection(col.bizAttendance).where('tenantId', '==', tenantId).limit(300).get(),
+      adminFirestore.collection(col.bizLeaves).where('tenantId', '==', tenantId).limit(200).get(),
+      adminFirestore.collection(col.bizPayrollRuns).where('tenantId', '==', tenantId).limit(100).get(),
+      adminFirestore.collection(col.bizPayslips).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizCandidates).where('tenantId', '==', tenantId).limit(200).get(),
     ]);
 
     // Payroll audit log is optional — skip silently if collection/index not ready.
@@ -114,7 +116,7 @@ export async function GET() {
     try {
       const payrollLogSnap = await adminFirestore
         .collection(col.bizAuditLogs)
-        .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+        .where('tenantId', '==', tenantId)
         .where('module', '==', 'hr')
         .where('entityType', '==', 'payroll_run')
         .limit(500)
@@ -254,7 +256,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const payload = createSchema.parse(await request.json());
 
     if (payload.entityType === 'employee') {
@@ -262,17 +265,17 @@ export async function POST(request: NextRequest) {
       const lastName = rest.join(' ');
       const email = payload.email.toLowerCase();
 
-      const existingUser = await adminFirestore.collection(col.bizUsers).where('email', '==', email).limit(1).get();
+      const existingUser = await adminFirestore.collection(col.bizUsers).where('tenantId', '==', tenantId).where('email', '==', email).limit(1).get();
       const userId = existingUser.empty ? makeId(col.bizUsers) : existingUser.docs[0].id;
       await adminFirestore.collection(col.bizUsers).doc(userId).set(
-        { id: userId, email, firstName, lastName: lastName || null, passwordHash: 'temp-password-hash', status: 'active', createdAt: nowIso(), updatedAt: nowIso() },
+        { id: userId, tenantId, email, firstName, lastName: lastName || null, passwordHash: 'temp-password-hash', status: 'active', createdAt: nowIso(), updatedAt: nowIso() },
         { merge: true }
       );
 
-      const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('userId', '==', userId).limit(1).get();
+      const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).where('userId', '==', userId).limit(1).get();
       const employeeId = existingEmployee.empty ? makeId(col.bizEmployees) : existingEmployee.docs[0].id;
       await adminFirestore.collection(col.bizEmployees).doc(employeeId).set(
-        { id: employeeId, tenantId: BUSINESS_DEFAULT_TENANT_ID, userId, name: payload.name.trim(), email: payload.email.toLowerCase(), title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, status: 'active', createdAt: nowIso(), updatedAt: nowIso() },
+        { id: employeeId, tenantId: tenantId, userId, name: payload.name.trim(), email: payload.email.toLowerCase(), title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, status: 'active', createdAt: nowIso(), updatedAt: nowIso() },
         { merge: true }
       );
 
@@ -283,7 +286,7 @@ export async function POST(request: NextRequest) {
       const id = makeId(col.bizContracts);
       await adminFirestore.collection(col.bizContracts).doc(id).set({
         id,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         employeeId: payload.employeeId,
         type: payload.contractType,
         startDate: payload.startDate,
@@ -297,7 +300,7 @@ export async function POST(request: NextRequest) {
       const id = makeId(col.bizAttendance);
       await adminFirestore.collection(col.bizAttendance).doc(id).set({
         id,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         employeeId: payload.employeeId,
         checkIn: payload.checkIn ?? nowIso(),
         checkOut: payload.checkOut ?? null,
@@ -309,7 +312,7 @@ export async function POST(request: NextRequest) {
       const id = makeId(col.bizLeaves);
       await adminFirestore.collection(col.bizLeaves).doc(id).set({
         id,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         employeeId: payload.employeeId,
         type: payload.leaveType,
         status: 'requested',
@@ -324,7 +327,7 @@ export async function POST(request: NextRequest) {
       const runId = makeId(col.bizPayrollRuns);
       await adminFirestore.collection(col.bizPayrollRuns).doc(runId).set({
         id: runId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         periodStart: payload.periodStart,
         periodEnd: payload.periodEnd,
         createdAt: nowIso(),
@@ -333,7 +336,7 @@ export async function POST(request: NextRequest) {
       const payslipId = makeId(col.bizPayslips);
       await adminFirestore.collection(col.bizPayslips).doc(payslipId).set({
         id: payslipId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         payrollRunId: runId,
         employeeId: payload.employeeId,
         netPay: payload.netPay,
@@ -342,7 +345,7 @@ export async function POST(request: NextRequest) {
       const logId = makeId(col.bizAuditLogs);
       await adminFirestore.collection(col.bizAuditLogs).doc(logId).set({
         id: logId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         module: 'hr',
         entityType: 'payroll_run',
         entityId: runId,
@@ -358,7 +361,7 @@ export async function POST(request: NextRequest) {
       const id = makeId(col.bizCandidates);
       await adminFirestore.collection(col.bizCandidates).doc(id).set({
         id,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         name: payload.name,
         stage: payload.stage,
         roleTitle: payload.roleTitle,
@@ -385,24 +388,41 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const payload = patchSchema.parse(await request.json());
 
     if (payload.entityType === 'leave') {
-      await adminFirestore.collection(col.bizLeaves).doc(payload.id).set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
+      const leaveRef = adminFirestore.collection(col.bizLeaves).doc(payload.id);
+      const leaveSnap = await leaveRef.get();
+      if (!leaveSnap.exists || String(leaveSnap.data()?.tenantId ?? '') !== tenantId) {
+        return NextResponse.json({ ok: false, error: 'Leave record not found for tenant' }, { status: 404 });
+      }
+      await leaveRef.set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
       return NextResponse.json({ ok: true, id: payload.id });
     }
 
     if (payload.entityType === 'candidate') {
-      await adminFirestore.collection(col.bizCandidates).doc(payload.id).set({ stage: payload.stage, updatedAt: nowIso() }, { merge: true });
+      const candidateRef = adminFirestore.collection(col.bizCandidates).doc(payload.id);
+      const candidateSnap = await candidateRef.get();
+      if (!candidateSnap.exists || String(candidateSnap.data()?.tenantId ?? '') !== tenantId) {
+        return NextResponse.json({ ok: false, error: 'Candidate not found for tenant' }, { status: 404 });
+      }
+      await candidateRef.set({ stage: payload.stage, updatedAt: nowIso() }, { merge: true });
       return NextResponse.json({ ok: true, id: payload.id });
     }
 
     if (payload.entityType === 'payroll') {
+      const payrollRef = adminFirestore.collection(col.bizPayrollRuns).doc(payload.id);
+      const payrollSnap = await payrollRef.get();
+      if (!payrollSnap.exists || String(payrollSnap.data()?.tenantId ?? '') !== tenantId) {
+        return NextResponse.json({ ok: false, error: 'Payroll run not found for tenant' }, { status: 404 });
+      }
+
       const logId = makeId(col.bizAuditLogs);
       await adminFirestore.collection(col.bizAuditLogs).doc(logId).set({
         id: logId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId: tenantId,
         module: 'hr',
         entityType: 'payroll_run',
         entityId: payload.id,
@@ -415,9 +435,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (payload.entityType === 'employee') {
-      await adminFirestore.collection(col.bizEmployees).doc(payload.id).set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
+      const employeeRef = adminFirestore.collection(col.bizEmployees).doc(payload.id);
+      const employeeDoc = await employeeRef.get();
+      if (!employeeDoc.exists || String(employeeDoc.data()?.tenantId ?? '') !== tenantId) {
+        return NextResponse.json({ ok: false, error: 'Employee not found for tenant' }, { status: 404 });
+      }
+      await employeeRef.set({ status: payload.status, updatedAt: nowIso() }, { merge: true });
 
-      const employeeDoc = await adminFirestore.collection(col.bizEmployees).doc(payload.id).get();
       const userId = String(employeeDoc.data()?.userId ?? '');
       if (userId) {
         const mappedUserStatus = payload.status === 'deactive' ? 'inactive' : payload.status;
@@ -442,3 +466,4 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+

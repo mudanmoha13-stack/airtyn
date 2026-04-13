@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, normalizeDate, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, normalizeDate, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createProductSchema = z.object({
   name: z.string().min(1),
@@ -10,12 +11,13 @@ const createProductSchema = z.object({
   category: z.string().default('general'),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId);
     const snap = await adminFirestore
       .collection(col.bizProducts)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .limit(100)
       .get();
 
@@ -31,12 +33,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId);
     const payload = createProductSchema.parse(await request.json());
     const id = makeId(col.bizProducts);
     const product = {
       id,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       name: payload.name,
       sku: payload.sku.toUpperCase(),
       productType: payload.productType,

@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessOwnerEmail, resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -27,15 +28,16 @@ const patchSchema = z.object({
   baseUomId: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(request);
     const [productsSnap, categoriesSnap, uomsSnap, variantsSnap, bundlesSnap, bundleItemsSnap] = await Promise.all([
-      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizProductCategories).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizUoms).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizProductBundles).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizBundleItems).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizProductCategories).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizUoms).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizProductVariants).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizProductBundles).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizBundleItems).where('tenantId', '==', tenantId).get(),
     ]);
 
     const categoryMap = new Map(categoriesSnap.docs.map((doc) => [doc.id, doc.data()]));
@@ -93,7 +95,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(req);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(req));
     const body = createSchema.parse(await req.json());
 
     const normalizedName = body.name.trim();
@@ -103,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     const sameName = await adminFirestore
       .collection(col.bizProducts)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('nameLower', '==', normalizedName.toLowerCase())
       .limit(1)
       .get();
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
 
     const sameSku = await adminFirestore
       .collection(col.bizProducts)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('sku', '==', sku)
       .limit(1)
       .get();
@@ -133,7 +136,7 @@ export async function POST(req: NextRequest) {
     const id = makeId(col.bizProducts);
     const product = {
       id,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       name: normalizedName,
       nameLower: normalizedName.toLowerCase(),
       description: body.description ?? null,
@@ -163,14 +166,21 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ ok: false, error: 'Missing id' }, { status: 400 });
 
     const body = patchSchema.parse(await req.json());
 
-    await adminFirestore.collection(col.bizProducts).doc(id).set({ ...body, updatedAt: nowIso() }, { merge: true });
-    const product = { id, ...(await adminFirestore.collection(col.bizProducts).doc(id).get()).data() };
+    const ref = adminFirestore.collection(col.bizProducts).doc(id);
+    const existing = await ref.get();
+    if (!existing.exists || String(existing.data()?.tenantId ?? '') !== tenantId) {
+      return NextResponse.json({ ok: false, error: 'Product not found for tenant' }, { status: 404 });
+    }
+
+    await ref.set({ ...body, updatedAt: nowIso() }, { merge: true });
+    const product = { id, ...(await ref.get()).data() };
 
     return NextResponse.json({ ok: true, product });
   } catch (e) {

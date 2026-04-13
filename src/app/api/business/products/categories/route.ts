@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -16,11 +17,12 @@ type ProductCategoryDoc = {
   parentId?: string | null;
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(request);
     const [categoriesSnap, productsSnap] = await Promise.all([
-      adminFirestore.collection(col.bizProductCategories).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).orderBy('name', 'asc').get(),
-      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProductCategories).where('tenantId', '==', tenantId).orderBy('name', 'asc').get(),
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', tenantId).get(),
     ]);
 
     const categories: ProductCategoryDoc[] = categoriesSnap.docs.map((doc) => {
@@ -53,7 +55,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(req);
+    await ensureBusinessTenantDoc(tenantId);
     const body = createSchema.parse(await req.json());
 
     const normalizedName = body.name.trim();
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     const existing = await adminFirestore
       .collection(col.bizProductCategories)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('nameLower', '==', normalizedName.toLowerCase())
       .limit(1)
       .get();
@@ -78,7 +81,7 @@ export async function POST(req: NextRequest) {
     const id = makeId(col.bizProductCategories);
     const category = {
       id,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       name: normalizedName,
       nameLower: normalizedName.toLowerCase(),
       code: body.code ?? normalizedName.slice(0, 4).toUpperCase().replace(/\s+/g, ''),

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessOwnerEmail, resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const stockStateSchema = z.enum(['on_hand', 'reserved', 'available', 'in_transit']);
 const ownershipSchema = z.enum(['company', 'consignment', 'vendor_owned']);
@@ -15,13 +16,14 @@ const createEntrySchema = z.object({
   quantity: z.number().min(0),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const [entriesSnap, productsSnap, warehousesSnap] = await Promise.all([
-      adminFirestore.collection(col.bizStockItems).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).limit(200).get(),
-      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizWarehouses).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizStockItems).where('tenantId', '==', tenantId).limit(200).get(),
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizWarehouses).where('tenantId', '==', tenantId).get(),
     ]);
     const productMap = new Map(productsSnap.docs.map((doc) => [doc.id, doc.data()]));
     const warehouseMap = new Map(warehousesSnap.docs.map((doc) => [doc.id, doc.data()]));
@@ -50,7 +52,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(request);
+    await ensureBusinessTenantDoc(tenantId, resolveBusinessOwnerEmail(request));
     const payload = createEntrySchema.parse(await request.json());
 
     const sku = payload.productSku.toUpperCase();
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const existingProduct = await adminFirestore
       .collection(col.bizProducts)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('sku', '==', sku)
       .limit(1)
       .get();
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (existingProduct.empty) {
       await adminFirestore.collection(col.bizProducts).doc(productId).set({
         id: productId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId,
         name: sku,
         sku,
         productType: 'physical',
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     const existingWarehouse = await adminFirestore
       .collection(col.bizWarehouses)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('name', '==', warehouseName)
       .limit(1)
       .get();
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
     if (existingWarehouse.empty) {
       await adminFirestore.collection(col.bizWarehouses).doc(warehouseId).set({
         id: warehouseId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId,
         name: warehouseName,
         region: 'default',
         createdAt: nowIso(),
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
     await stockRef.set(
       {
         id: key,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId,
         productId,
         warehouseId,
         stockState: payload.stockState,
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest) {
     const moveId = makeId(col.bizStockMoves);
     await adminFirestore.collection(col.bizStockMoves).doc(moveId).set({
       id: moveId,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       productId,
       quantity: payload.quantity,
       moveType: payload.stockState === 'in_transit' ? 'transfer' : 'in',

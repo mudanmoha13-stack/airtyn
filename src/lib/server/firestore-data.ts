@@ -79,17 +79,29 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export async function ensureBusinessTenantDoc() {
-  const ref = adminFirestore.collection(col.coreTenants).doc(BUSINESS_DEFAULT_TENANT_ID);
+export async function ensureBusinessTenantDoc(tenantId = BUSINESS_DEFAULT_TENANT_ID, ownerEmail?: string) {
+  const ref = adminFirestore.collection(col.coreTenants).doc(tenantId);
   const snap = await ref.get();
   if (!snap.exists) {
     await ref.set({
-      id: BUSINESS_DEFAULT_TENANT_ID,
-      name: 'Business Demo Tenant',
+      id: tenantId,
+      name: tenantId === BUSINESS_DEFAULT_TENANT_ID ? 'Business Demo Tenant' : `Business Tenant ${tenantId}`,
+      ownerEmail: ownerEmail?.toLowerCase() ?? null,
       status: 'active',
       createdAt: nowIso(),
       updatedAt: nowIso(),
     });
+    return;
+  }
+
+  if (ownerEmail) {
+    await ref.set(
+      {
+        ownerEmail: ownerEmail.toLowerCase(),
+        updatedAt: nowIso(),
+      },
+      { merge: true }
+    );
   }
 }
 

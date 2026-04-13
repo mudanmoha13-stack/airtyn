@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const createBundleSchema = z.object({
   productId: z.string().min(1),
@@ -14,12 +15,13 @@ const createBundleSchema = z.object({
   })).min(1),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(request);
     const [bundleSnap, itemSnap, productsSnap] = await Promise.all([
-      adminFirestore.collection(col.bizProductBundles).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).orderBy('createdAt', 'desc').get(),
-      adminFirestore.collection(col.bizBundleItems).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
-      adminFirestore.collection(col.bizProducts).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get(),
+      adminFirestore.collection(col.bizProductBundles).where('tenantId', '==', tenantId).orderBy('createdAt', 'desc').get(),
+      adminFirestore.collection(col.bizBundleItems).where('tenantId', '==', tenantId).get(),
+      adminFirestore.collection(col.bizProducts).where('tenantId', '==', tenantId).get(),
     ]);
 
     const products = new Map(productsSnap.docs.map((doc) => [doc.id, doc.data()]));
@@ -58,7 +60,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(req);
+    await ensureBusinessTenantDoc(tenantId);
     const body = createBundleSchema.parse(await req.json());
 
     const normalizedName = body.name.trim();
@@ -76,9 +79,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Bundle contains duplicate component rows. Merge quantities instead.' }, { status: 409 });
     }
 
+    const productIdsToValidate = Array.from(new Set([body.productId, ...body.items.map((item) => item.componentProductId)]));
+    const productRefs = await Promise.all(productIdsToValidate.map((id) => adminFirestore.collection(col.bizProducts).doc(id).get()));
+    const invalidProduct = productRefs.find((doc) => !doc.exists || String(doc.data()?.tenantId ?? '') !== tenantId);
+    if (invalidProduct) {
+      return NextResponse.json({ ok: false, error: `Product ${invalidProduct.id} not found for tenant` }, { status: 404 });
+    }
+
     const existingBundle = await adminFirestore
       .collection(col.bizProductBundles)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('productId', '==', body.productId)
       .where('nameLower', '==', normalizedName.toLowerCase())
       .limit(1)
@@ -91,7 +101,7 @@ export async function POST(req: NextRequest) {
     const bundleId = makeId(col.bizProductBundles);
     await adminFirestore.collection(col.bizProductBundles).doc(bundleId).set({
       id: bundleId,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       productId: body.productId,
       name: normalizedName,
       nameLower: normalizedName.toLowerCase(),
@@ -104,7 +114,7 @@ export async function POST(req: NextRequest) {
       const itemId = makeId(col.bizBundleItems);
       return adminFirestore.collection(col.bizBundleItems).doc(itemId).set({
         id: itemId,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId,
         bundleId,
         componentProductId: item.componentProductId,
         quantity: item.quantity,

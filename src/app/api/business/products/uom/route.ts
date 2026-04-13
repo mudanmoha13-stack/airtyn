@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminFirestore } from '@/lib/server/firebase-admin';
-import { BUSINESS_DEFAULT_TENANT_ID, col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { col, ensureBusinessTenantDoc, makeId, nowIso } from '@/lib/server/firestore-data';
+import { resolveBusinessTenantId } from '@/lib/server/business-tenant';
 
 const uomSchema = z.object({
   name: z.string().min(1),
@@ -17,13 +18,14 @@ const conversionSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
+    const tenantId = resolveBusinessTenantId(req);
     const { searchParams } = new URL(req.url);
     const includeConversions = searchParams.get('conversions') === 'true';
 
     const [uomSnap, conversionSnap] = await Promise.all([
-      adminFirestore.collection(col.bizUoms).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).orderBy('name', 'asc').get(),
+      adminFirestore.collection(col.bizUoms).where('tenantId', '==', tenantId).orderBy('name', 'asc').get(),
       includeConversions
-        ? adminFirestore.collection(col.bizUomConversions).where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID).get()
+        ? adminFirestore.collection(col.bizUomConversions).where('tenantId', '==', tenantId).get()
         : Promise.resolve(null),
     ]);
 
@@ -68,7 +70,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureBusinessTenantDoc();
+    const tenantId = resolveBusinessTenantId(req);
+    await ensureBusinessTenantDoc(tenantId);
     const { searchParams } = new URL(req.url);
 
     if (searchParams.get('conversion') === 'true') {
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
 
       const existing = await adminFirestore
         .collection(col.bizUomConversions)
-        .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+        .where('tenantId', '==', tenantId)
         .where('fromUomId', '==', body.fromUomId)
         .where('toUomId', '==', body.toUomId)
         .limit(1)
@@ -93,7 +96,7 @@ export async function POST(req: NextRequest) {
       const id = makeId(col.bizUomConversions);
       await adminFirestore.collection(col.bizUomConversions).doc(id).set({
         id,
-        tenantId: BUSINESS_DEFAULT_TENANT_ID,
+        tenantId,
         fromUomId: body.fromUomId,
         toUomId: body.toUomId,
         factor: body.factor,
@@ -126,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     const existingUom = await adminFirestore
       .collection(col.bizUoms)
-      .where('tenantId', '==', BUSINESS_DEFAULT_TENANT_ID)
+      .where('tenantId', '==', tenantId)
       .where('symbol', '==', normalizedSymbol)
       .limit(1)
       .get();
@@ -138,7 +141,7 @@ export async function POST(req: NextRequest) {
     const id = makeId(col.bizUoms);
     const uom = {
       id,
-      tenantId: BUSINESS_DEFAULT_TENANT_ID,
+      tenantId,
       name: body.name,
       symbol: normalizedSymbol,
       category: body.category ?? null,
