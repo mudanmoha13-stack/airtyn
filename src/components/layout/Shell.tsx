@@ -315,6 +315,10 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const pathname = usePathname();
   const product = getAppProduct(pathname);
 
+  // Routes that render standalone — no sidebar/topbar needed
+  const isStandaloneRoute = pathname.startsWith('/onboarding') || pathname.startsWith('/api') || pathname.startsWith('/invite');
+  if (isStandaloneRoute) return <>{children}</>;
+
   if (!isHydrated) {
     return <div className="h-screen w-full flex items-center justify-center">Loading workspace...</div>;
   }
@@ -332,10 +336,10 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           <AppSidebar />
           <SidebarInset className="flex flex-col flex-1 overflow-hidden">
             <TopBar />
+            {/* No key={pathname} here — we never want to unmount/remount children on navigation.
+                Doing so was the primary cause of perceived navigation lag. */}
             <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-24 pt-4 scrollbar-hide md:p-6 md:pb-6">
-              <div key={pathname} className="animate-in fade-in slide-in-from-bottom-1 duration-200">
-                {children}
-              </div>
+              {children}
             </main>
             <MobileBottomNav />
           </SidebarInset>

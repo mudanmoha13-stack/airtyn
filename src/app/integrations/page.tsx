@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -81,7 +80,6 @@ export default function IntegrationsPage() {
   };
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Integrations</h1>
@@ -352,6 +350,5 @@ export default function IntegrationsPage() {
           )}
         </Card>
       </div>
-    </Shell>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +18,6 @@ export default function AutomationScalePage() {
   const [actions, setActions] = useState('notify_slack #ops; assign oncall manager');
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Advanced Workflow Automation</h1>
@@ -94,6 +92,5 @@ export default function AutomationScalePage() {
           {automations.length === 0 && <p className="text-sm text-muted-foreground">No automations configured yet.</p>}
         </div>
       </div>
-    </Shell>
   );
 }

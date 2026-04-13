@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,6 @@ export default function ComplianceScalePage() {
   const [nextReviewDate, setNextReviewDate] = useState('');
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
@@ -84,6 +82,5 @@ export default function ComplianceScalePage() {
           ))}
         </div>
       </div>
-    </Shell>
   );
 }

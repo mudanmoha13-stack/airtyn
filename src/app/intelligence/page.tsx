@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { summarizeProjectActivity } from '@/ai/flows/project-summary-ai';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,7 +92,6 @@ export default function IntelligencePage() {
   };
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Intelligence</h1>
@@ -238,6 +236,5 @@ export default function IntelligencePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </Shell>
   );
 }

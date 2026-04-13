@@ -41,7 +41,7 @@ export function BusinessWorkspace() {
   return (
     <Shell>
       {!activeModule ? (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-300">
+        <div className="space-y-6">
           <div>
             <h1 className="bg-gradient-to-r from-white to-white/70 bg-clip-text text-3xl font-bold text-transparent">
               Business

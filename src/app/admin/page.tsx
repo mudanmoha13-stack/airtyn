@@ -1,7 +1,6 @@
 "use client";
 
 import React from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,19 +10,16 @@ export default function AdminPage() {
 
   if (!canManageMembers) {
     return (
-      <Shell>
         <Card className="glass-card max-w-2xl">
           <CardHeader>
             <CardTitle>Admin Access Required</CardTitle>
             <CardDescription>You need owner or admin permissions to view this panel.</CardDescription>
           </CardHeader>
         </Card>
-      </Shell>
     );
   }
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Admin Panel</h1>
@@ -56,6 +52,5 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
-    </Shell>
   );
 }

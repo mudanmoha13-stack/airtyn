@@ -34,6 +34,7 @@ async function fetchUsers(tenantId: string) {
     const data = doc.data();
     return {
       id: doc.id,
+      tenantId: String(data.tenantId ?? tenantId), // always include so client can filter
       name: String(data.name ?? ''),
       email: String(data.email ?? ''),
       avatarUrl: data.avatarUrl ? String(data.avatarUrl) : undefined,

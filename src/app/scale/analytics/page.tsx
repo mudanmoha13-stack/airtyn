@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,6 @@ export default function AdvancedAnalyticsScalePage() {
   }, [tasks]);
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Advanced Analytics</h1>
@@ -117,6 +115,5 @@ export default function AdvancedAnalyticsScalePage() {
           </CardContent>
         </Card>
       </div>
-    </Shell>
   );
 }

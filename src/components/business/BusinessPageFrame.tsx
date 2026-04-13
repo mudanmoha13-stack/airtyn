@@ -36,7 +36,7 @@ export function BusinessPageFrame({
 }) {
   return (
     <Shell>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
+      <div className="space-y-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <Badge className="w-fit rounded-full border-primary/20 bg-primary/10 px-3 py-1 text-primary hover:bg-primary/10">

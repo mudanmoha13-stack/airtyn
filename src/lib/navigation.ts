@@ -26,12 +26,15 @@ import {
   Shield,
   ShieldCheck,
   ShoppingCart,
+  Star,
+  Target,
   TrendingUp,
   Users,
   UsersRound,
   Wallet,
   Webhook,
   Workflow,
+  Zap,
 } from 'lucide-react';
 import { buildBusinessWorkspaceHref } from '@/lib/business-navigation';
 
@@ -60,6 +63,7 @@ export const PRODUCT_SWITCH_ITEMS: Record<AppProduct, NavItemConfig> = {
 
 export const PROJECT_MENU_ITEMS: NavItemConfig[] = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/', group: 'General' },
+  { icon: Star, label: 'My Tasks', href: '/my-tasks', group: 'General' },
   { icon: Activity, label: 'Activity', href: '/activity', group: 'General' },
   { icon: Users, label: 'Teams', href: '/teams', group: 'General' },
 ];
@@ -69,6 +73,8 @@ export const PROJECT_VIEW_ITEMS: NavItemConfig[] = [
   { icon: GanttChartSquare, label: 'Timeline', href: '/timeline', group: 'Views' },
   { icon: UsersRound, label: 'Workload', href: '/workload', group: 'Views' },
   { icon: BarChart3, label: 'Reports', href: '/reports', group: 'Views' },
+  { icon: Zap, label: 'Sprints', href: '/sprints', group: 'Views' },
+  { icon: Target, label: 'Goals & OKRs', href: '/goals', group: 'Views' },
 ];
 
 export const PROJECT_SCALE_ITEMS: NavItemConfig[] = [
@@ -151,4 +157,7 @@ export const buildQuickNavItems = ({
   ...BUSINESS_FINANCE_ITEMS,
   ...(canManageMembers ? [{ label: 'Admin', href: '/admin', icon: ShieldCheck, group: 'General' }] : []),
   ...projects.map((project) => ({ label: project.name, href: `/projects/${project.id}`, icon: Hash, group: 'Projects' })),
+  { label: 'Sprints', href: '/sprints', icon: Zap, group: 'PM' },
+  { label: 'Goals & OKRs', href: '/goals', icon: Target, group: 'PM' },
+  { label: 'My Tasks', href: '/my-tasks', icon: Star, group: 'PM' },
 ];

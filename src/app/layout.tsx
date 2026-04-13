@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AppProviders } from '@/components/AppProviders';
+import { Shell } from '@/components/layout/Shell';
 
 export const metadata: Metadata = {
   title: 'Airtyn | Advanced Project Management',
@@ -31,7 +32,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body suppressHydrationWarning className="font-body antialiased selection:bg-primary/30 selection:text-white min-h-screen overflow-x-hidden">
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          {/* Shell lives here — mounts once and persists across all navigations.
+              Each page file renders only its own content (no <Shell> wrapper needed). */}
+          <Shell>{children}</Shell>
+        </AppProviders>
       </body>
     </html>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -72,7 +71,6 @@ export default function CalendarPage() {
   while (cells.length % 7 !== 0) cells.push(null);
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -218,6 +216,5 @@ export default function CalendarPage() {
           </Card>
         </div>
       </div>
-    </Shell>
   );
 }

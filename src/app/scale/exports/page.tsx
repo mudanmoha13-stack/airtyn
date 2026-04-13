@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,6 @@ export default function ExportsScalePage() {
   const [dataset, setDataset] = useState('airtyn_prod.workspace_metrics');
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Data Warehouse Export</h1>
@@ -79,6 +77,5 @@ export default function ExportsScalePage() {
           {warehouseExports.length === 0 && <p className="text-sm text-muted-foreground">No warehouse export jobs configured yet.</p>}
         </div>
       </div>
-    </Shell>
   );
 }

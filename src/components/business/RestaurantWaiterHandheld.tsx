@@ -109,7 +109,7 @@ export function RestaurantWaiterHandheld() {
 
   return (
     <Shell>
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-300">
+      <div className="space-y-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <Badge className="mb-2 w-fit rounded-full border-primary/20 bg-primary/10 px-3 py-1 text-primary hover:bg-primary/10">Restaurant Waiter</Badge>

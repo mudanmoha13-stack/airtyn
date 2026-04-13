@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -67,7 +66,6 @@ export default function ActivityPage() {
   }, [auditLog, auditSearch]);
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Activity & Audit</h1>
@@ -223,6 +221,5 @@ export default function ActivityPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </Shell>
   );
 }

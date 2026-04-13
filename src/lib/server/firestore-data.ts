@@ -14,6 +14,7 @@ export const col = {
   coreTenants: 'core_tenants',
   coreWorkspaces: 'core_workspaces',
   coreOnboardingTokens: 'core_onboarding_tokens',
+  coreInviteTokens: 'core_invite_tokens',
 
   bizUsers: 'biz_users',
   bizEmployees: 'biz_employees',

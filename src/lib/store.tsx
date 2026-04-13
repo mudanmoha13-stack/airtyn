@@ -8,28 +8,37 @@ import type {
   AuditLogEntry,
   Comment,
   ComplianceControl,
+  CustomField,
   CustomRole,
   Department,
   DeliveryRiskAlert,
+  Doc,
   EmailNotification,
   EventStreamStat,
   FileAttachment,
+  Goal,
   IntelligentPriorityResult,
   Invitation,
+  KeyResult,
   Milestone,
   NaturalLanguageReport,
+  Notification,
   Portfolio,
   Project,
   ProjectTemplate,
   RegionConfig,
+  SavedView,
   ScimConfig,
+  Sprint,
   SsoConfig,
   Task,
+  TaskList,
   TimeEntry,
   WebhookConfig,
   WarehouseExportJob,
   WorkflowAutomation,
   TaskStatus,
+  TaskPriority,
   Tenant,
   User,
   UserRole,
@@ -166,6 +175,15 @@ interface AppState {
   }) => void;
   inviteUser: (email: string, role: UserRole) => void;
   acceptInvitation: (invitationId: string, payload: { name: string; password: string }) => { ok: boolean; message?: string };
+  acceptEmailInvitation: (payload: {
+    email: string;
+    name: string;
+    password: string;
+    role: UserRole;
+    tenantId: string;
+    tenantName: string;
+    workspaceName: string;
+  }) => void;
   updateUserRole: (userId: string, role: UserRole) => void;
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'tenantId'>) => void;
   updateProject: (projectId: string, updates: Partial<Pick<Project, 'name' | 'description' | 'status' | 'progress'>>) => void;
@@ -243,6 +261,48 @@ interface AppState {
   runIntelligentPrioritization: () => void;
   canManageMembers: boolean;
   canManageProjects: boolean;
+  // Phase 5 — Sprints
+  sprints: Sprint[];
+  addSprint: (sprint: Omit<Sprint, 'id' | 'createdAt'>) => void;
+  updateSprint: (sprintId: string, updates: Partial<Sprint>) => void;
+  startSprint: (sprintId: string) => void;
+  completeSprint: (sprintId: string) => void;
+  // Phase 5 — Goals / OKRs
+  goals: Goal[];
+  addGoal: (goal: Omit<Goal, 'id' | 'createdAt' | 'tenantId'>) => void;
+  updateGoal: (goalId: string, updates: Partial<Goal>) => void;
+  deleteGoal: (goalId: string) => void;
+  addKeyResult: (goalId: string, kr: Omit<KeyResult, 'id' | 'goalId' | 'createdAt' | 'progress'>) => void;
+  updateKeyResult: (goalId: string, krId: string, currentValue: number) => void;
+  // Phase 5 — Task Lists
+  lists: TaskList[];
+  addList: (list: Omit<TaskList, 'id' | 'createdAt'>) => void;
+  updateList: (listId: string, updates: Partial<TaskList>) => void;
+  deleteList: (listId: string) => void;
+  // Phase 5 — Notifications
+  notifications: Notification[];
+  markNotificationRead: (notificationId: string) => void;
+  markAllNotificationsRead: () => void;
+  addNotification: (notif: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
+  // Phase 5 — Custom Fields
+  customFields: CustomField[];
+  addCustomField: (field: Omit<CustomField, 'id' | 'createdAt'>) => void;
+  deleteCustomField: (fieldId: string) => void;
+  updateTaskCustomField: (taskId: string, fieldId: string, value: import('./types').CustomFieldValue) => void;
+  // Phase 5 — Docs
+  docs: Doc[];
+  addDoc: (doc: Omit<Doc, 'id' | 'createdAt' | 'tenantId' | 'authorId' | 'authorName'>) => void;
+  updateDoc: (docId: string, updates: Partial<Doc>) => void;
+  deleteDoc: (docId: string) => void;
+  // Phase 5 — Saved Views
+  savedViews: SavedView[];
+  addSavedView: (view: Omit<SavedView, 'id' | 'createdAt'>) => void;
+  deleteSavedView: (viewId: string) => void;
+  // Phase 5 — Enhanced Task ops
+  updateTask: (taskId: string, updates: Partial<Task>) => void;
+  deleteTask: (taskId: string) => void;
+  deleteProject: (projectId: string) => void;
+  moveTask: (taskId: string, targetProjectId: string, targetListId?: string) => void;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -282,6 +342,14 @@ type PersistedState = {
   riskAlerts: DeliveryRiskAlert[];
   nlReports: NaturalLanguageReport[];
   priorityChanges: IntelligentPriorityResult[];
+  // Phase 5
+  sprints: Sprint[];
+  goals: Goal[];
+  lists: TaskList[];
+  notifications: Notification[];
+  customFields: CustomField[];
+  docs: Doc[];
+  savedViews: SavedView[];
 };
 
 const INITIAL_STATE: PersistedState = {
@@ -321,6 +389,14 @@ const INITIAL_STATE: PersistedState = {
   riskAlerts: [],
   nlReports: [],
   priorityChanges: [],
+  // Phase 5
+  sprints: [],
+  goals: [],
+  lists: [],
+  notifications: [],
+  customFields: [],
+  docs: [],
+  savedViews: [],
 };
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -584,7 +660,17 @@ function loadInitialState(): PersistedState {
         tags: t.tags ?? [],
         timeEntries: t.timeEntries ?? [],
         attachments: t.attachments ?? [],
+        subtasks: t.subtasks ?? [],
+        comments: t.comments ?? [],
       })),
+      // Phase 5
+      sprints: parsed.sprints ?? [],
+      goals: parsed.goals ?? [],
+      lists: parsed.lists ?? [],
+      notifications: parsed.notifications ?? [],
+      customFields: parsed.customFields ?? [],
+      docs: parsed.docs ?? [],
+      savedViews: parsed.savedViews ?? [],
     };
   } catch {
     return INITIAL_STATE;
@@ -647,12 +733,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       usersResponse.json() as Promise<{ users?: User[] }>,
     ]);
 
-    setState((prev) => ({
-      ...prev,
-      projects: projectsPayload.projects && projectsPayload.projects.length > 0 ? projectsPayload.projects : prev.projects,
-      tasks: tasksPayload.tasks && tasksPayload.tasks.length > 0 ? tasksPayload.tasks : prev.tasks,
-      users: usersPayload.users && usersPayload.users.length > 0 ? usersPayload.users : prev.users,
-    }));
+    const currentTenantId = state.currentTenant?.id;
+    setState((prev) => {
+      // Stamp tenantId on API-returned users (server already filtered by tenant but older
+      // cached entries might not carry the field). Then merge: keep users from OTHER tenants
+      // in local state, replace only users from THIS tenant with the fresh API list.
+      const freshUsers: User[] = (usersPayload.users ?? []).map(u => ({
+        ...u,
+        tenantId: u.tenantId ?? currentTenantId,
+      }));
+      const otherTenantUsers = prev.users.filter(u => u.tenantId && u.tenantId !== currentTenantId);
+      const mergedUsers = freshUsers.length > 0
+        ? [...otherTenantUsers, ...freshUsers]
+        : prev.users;
+
+      return {
+        ...prev,
+        projects: projectsPayload.projects && projectsPayload.projects.length > 0 ? projectsPayload.projects : prev.projects,
+        tasks: tasksPayload.tasks && tasksPayload.tasks.length > 0 ? tasksPayload.tasks : prev.tasks,
+        users: mergedUsers,
+      };
+    });
   };
 
   useEffect(() => {
@@ -735,7 +836,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const signIn = (email: string, password: string) => {
     const savedPassword = state.credentials[email.toLowerCase()];
-    const user = state.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    // Only match users that belong to the current tenant (tenantId matches) OR legacy users
+    // that predate tenantId tagging (tenantId is undefined). Never sign in a user from a
+    // different organisation even if they share the same localStorage.
+    const currentTenantId = state.currentTenant?.id;
+    const user = state.users.find((u) => {
+      if (u.email.toLowerCase() !== email.toLowerCase()) return false;
+      if (u.tenantId && currentTenantId && u.tenantId !== currentTenantId) return false;
+      return true;
+    });
     if (!savedPassword || !user) {
       return { ok: false, message: 'Account not found. Complete onboarding or accept an invite first.' };
     }
@@ -777,6 +886,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const owner: User = {
       id: ownerId,
+      tenantId,
       name,
       email,
       role: 'owner',
@@ -913,6 +1023,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date().toISOString();
     const user: User = {
       id: uid('user'),
+      tenantId: state.currentTenant.id,
       name: payload.name,
       email: invitation.email,
       role: invitation.role,
@@ -943,6 +1054,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Keep local invite acceptance functional even without the backend.
     });
     return { ok: true };
+  };
+
+  /**
+   * Bootstrap a full session for a user who accepted an email invitation.
+   * Called from /invite/accept page — the invited user arrives on a fresh browser
+   * with no localStorage, so we create the tenant/workspace/user from the token data.
+   */
+  const acceptEmailInvitation = ({
+    email, name, password, role, tenantId, tenantName, workspaceName,
+  }: {
+    email: string;
+    name: string;
+    password: string;
+    role: UserRole;
+    tenantId: string;
+    tenantName: string;
+    workspaceName: string;
+  }) => {
+    const now = new Date().toISOString();
+    const userId = uid('user');
+    const tenant: Tenant = {
+      id: tenantId,
+      name: tenantName,
+      slug: tenantName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      plan: 'free',
+    };
+    const workspace: Workspace = {
+      id: uid('ws'),
+      tenantId,
+      name: workspaceName,
+      createdAt: now,
+    };
+    const newUser: User = {
+      id: userId,
+      tenantId,
+      name,
+      email,
+      role,
+      avatarUrl: `https://picsum.photos/seed/${userId}/100/100`,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      isAuthenticated: true,
+      currentUser: newUser,
+      currentTenant: tenant,
+      currentWorkspace: workspace,
+      // Keep any existing users from other tenants; add this new user
+      users: [...prev.users.filter((u) => u.tenantId && u.tenantId !== tenantId), newUser],
+      credentials: {
+        ...prev.credentials,
+        [email.toLowerCase()]: password,
+      },
+      activity: [
+        {
+          id: uid('evt'),
+          type: 'invitation_accepted' as const,
+          actorName: name,
+          message: `${name} joined ${workspaceName} as ${role}.`,
+          createdAt: now,
+        },
+        ...prev.activity,
+      ],
+    }));
+
+    void upsertUserToApi(newUser, tenantId).catch(() => {});
   };
 
   const updateUserRole = (userId: string, role: UserRole) => {
@@ -1592,6 +1769,247 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logAudit('ai.prioritize', 'Task', 'bulk', `Reprioritized ${changes.length} tasks`);
   };
 
+  // ── Phase 5: Enhanced task operations ───────────────────────────────────────
+  const updateTask = (taskId: string, updates: Partial<Task>) => {
+    if (!state.currentUser) return;
+    setState((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)),
+    }));
+    logActivity(state.currentUser.name, 'task_status_changed', `${state.currentUser.name} updated a task.`);
+    void postJson(`/api/tasks/${taskId}`, updates, 'PATCH').catch(() => {});
+  };
+
+  const deleteTask = (taskId: string) => {
+    setState((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== taskId) }));
+    logAudit('task.delete', 'Task', taskId, 'Deleted task');
+  };
+
+  const deleteProject = (projectId: string) => {
+    setState((prev) => ({
+      ...prev,
+      projects: prev.projects.filter((p) => p.id !== projectId),
+      tasks: prev.tasks.filter((t) => t.projectId !== projectId),
+    }));
+    logAudit('project.delete', 'Project', projectId, 'Deleted project and all its tasks');
+  };
+
+  const moveTask = (taskId: string, targetProjectId: string, targetListId?: string) => {
+    setState((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((t) =>
+        t.id === taskId ? { ...t, projectId: targetProjectId, listId: targetListId, updatedAt: new Date().toISOString() } : t
+      ),
+    }));
+  };
+
+  // ── Phase 5: Sprints ────────────────────────────────────────────────────────
+  const addSprint = (sprint: Omit<Sprint, 'id' | 'createdAt'>) => {
+    if (!state.currentUser) return;
+    const newSprint: Sprint = { ...sprint, id: uid('sprint'), createdAt: new Date().toISOString() };
+    setState((prev) => ({ ...prev, sprints: [...prev.sprints, newSprint] }));
+    logActivity(state.currentUser.name, 'sprint_created', `${state.currentUser.name} created sprint "${newSprint.name}".`);
+  };
+
+  const updateSprint = (sprintId: string, updates: Partial<Sprint>) => {
+    setState((prev) => ({
+      ...prev,
+      sprints: prev.sprints.map((s) => (s.id === sprintId ? { ...s, ...updates } : s)),
+    }));
+  };
+
+  const startSprint = (sprintId: string) => {
+    if (!state.currentUser) return;
+    setState((prev) => ({
+      ...prev,
+      sprints: prev.sprints.map((s) => (s.id === sprintId ? { ...s, status: 'active' } : s)),
+    }));
+    logActivity(state.currentUser.name, 'sprint_started', `${state.currentUser.name} started a sprint.`);
+  };
+
+  const completeSprint = (sprintId: string) => {
+    if (!state.currentUser) return;
+    const sprint = state.sprints.find((s) => s.id === sprintId);
+    if (!sprint) return;
+    const completed = state.tasks.filter((t) => t.sprintId === sprintId && t.status === 'done').length;
+    setState((prev) => ({
+      ...prev,
+      sprints: prev.sprints.map((s) =>
+        s.id === sprintId ? { ...s, status: 'completed', completedPoints: completed } : s
+      ),
+    }));
+    logActivity(state.currentUser!.name, 'sprint_completed', `Sprint "${sprint.name}" completed.`);
+  };
+
+  // ── Phase 5: Goals / OKRs ────────────────────────────────────────────────────
+  const addGoal = (goal: Omit<Goal, 'id' | 'createdAt' | 'tenantId'>) => {
+    if (!state.currentUser || !state.currentTenant) return;
+    const newGoal: Goal = {
+      ...goal,
+      id: uid('goal'),
+      tenantId: state.currentTenant.id,
+      createdAt: new Date().toISOString(),
+    };
+    setState((prev) => ({ ...prev, goals: [...prev.goals, newGoal] }));
+    logActivity(state.currentUser.name, 'goal_created', `${state.currentUser.name} created goal "${newGoal.title}".`);
+  };
+
+  const updateGoal = (goalId: string, updates: Partial<Goal>) => {
+    if (!state.currentUser) return;
+    setState((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) => (g.id === goalId ? { ...g, ...updates, updatedAt: new Date().toISOString() } : g)),
+    }));
+    logActivity(state.currentUser.name, 'goal_updated', `${state.currentUser.name} updated a goal.`);
+  };
+
+  const deleteGoal = (goalId: string) => {
+    setState((prev) => ({ ...prev, goals: prev.goals.filter((g) => g.id !== goalId) }));
+  };
+
+  const addKeyResult = (goalId: string, kr: Omit<KeyResult, 'id' | 'goalId' | 'createdAt' | 'progress'>) => {
+    const newKr: KeyResult = {
+      ...kr,
+      id: uid('kr'),
+      goalId,
+      progress: 0,
+      createdAt: new Date().toISOString(),
+    };
+    setState((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) =>
+        g.id === goalId
+          ? { ...g, keyResults: [...(g.keyResults ?? []), newKr] }
+          : g
+      ),
+    }));
+  };
+
+  const updateKeyResult = (goalId: string, krId: string, currentValue: number) => {
+    setState((prev) => ({
+      ...prev,
+      goals: prev.goals.map((g) => {
+        if (g.id !== goalId) return g;
+        const keyResults = (g.keyResults ?? []).map((kr) => {
+          if (kr.id !== krId) return kr;
+          const progress = kr.targetValue > kr.startValue
+            ? Math.round(((currentValue - kr.startValue) / (kr.targetValue - kr.startValue)) * 100)
+            : 0;
+          return { ...kr, currentValue, progress: Math.min(100, Math.max(0, progress)) };
+        });
+        const totalProgress = keyResults.length > 0
+          ? Math.round(keyResults.reduce((s, kr) => s + kr.progress, 0) / keyResults.length)
+          : 0;
+        return { ...g, keyResults, progress: totalProgress };
+      }),
+    }));
+  };
+
+  // ── Phase 5: Task Lists ──────────────────────────────────────────────────────
+  const addList = (list: Omit<TaskList, 'id' | 'createdAt'>) => {
+    if (!state.currentUser) return;
+    const newList: TaskList = { ...list, id: uid('list'), createdAt: new Date().toISOString() };
+    setState((prev) => ({ ...prev, lists: [...prev.lists, newList] }));
+    logActivity(state.currentUser.name, 'list_created', `${state.currentUser.name} created list "${newList.name}".`);
+  };
+
+  const updateList = (listId: string, updates: Partial<TaskList>) => {
+    setState((prev) => ({
+      ...prev,
+      lists: prev.lists.map((l) => (l.id === listId ? { ...l, ...updates } : l)),
+    }));
+  };
+
+  const deleteList = (listId: string) => {
+    setState((prev) => ({
+      ...prev,
+      lists: prev.lists.filter((l) => l.id !== listId),
+      tasks: prev.tasks.map((t) => (t.listId === listId ? { ...t, listId: undefined } : t)),
+    }));
+  };
+
+  // ── Phase 5: Notifications ───────────────────────────────────────────────────
+  const addNotification = (notif: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
+    const newNotif: Notification = {
+      ...notif,
+      id: uid('notif'),
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    setState((prev) => ({ ...prev, notifications: [newNotif, ...prev.notifications].slice(0, 100) }));
+  };
+
+  const markNotificationRead = (notificationId: string) => {
+    setState((prev) => ({
+      ...prev,
+      notifications: prev.notifications.map((n) => (n.id === notificationId ? { ...n, read: true } : n)),
+    }));
+  };
+
+  const markAllNotificationsRead = () => {
+    setState((prev) => ({
+      ...prev,
+      notifications: prev.notifications.map((n) => ({ ...n, read: true })),
+    }));
+  };
+
+  // ── Phase 5: Custom Fields ───────────────────────────────────────────────────
+  const addCustomField = (field: Omit<CustomField, 'id' | 'createdAt'>) => {
+    const newField: CustomField = { ...field, id: uid('cf'), createdAt: new Date().toISOString() };
+    setState((prev) => ({ ...prev, customFields: [...prev.customFields, newField] }));
+  };
+
+  const deleteCustomField = (fieldId: string) => {
+    setState((prev) => ({ ...prev, customFields: prev.customFields.filter((f) => f.id !== fieldId) }));
+  };
+
+  const updateTaskCustomField = (taskId: string, fieldId: string, value: import('./types').CustomFieldValue) => {
+    setState((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((t) =>
+        t.id === taskId
+          ? { ...t, customFields: { ...(t.customFields ?? {}), [fieldId]: value } }
+          : t
+      ),
+    }));
+  };
+
+  // ── Phase 5: Docs ────────────────────────────────────────────────────────────
+  const addDoc = (doc: Omit<Doc, 'id' | 'createdAt' | 'tenantId' | 'authorId' | 'authorName'>) => {
+    if (!state.currentUser || !state.currentTenant) return;
+    const newDoc: Doc = {
+      ...doc,
+      id: uid('doc'),
+      tenantId: state.currentTenant.id,
+      authorId: state.currentUser.id,
+      authorName: state.currentUser.name,
+      createdAt: new Date().toISOString(),
+    };
+    setState((prev) => ({ ...prev, docs: [...prev.docs, newDoc] }));
+    logActivity(state.currentUser.name, 'doc_created', `${state.currentUser.name} created doc "${newDoc.title}".`);
+  };
+
+  const updateDoc = (docId: string, updates: Partial<Doc>) => {
+    setState((prev) => ({
+      ...prev,
+      docs: prev.docs.map((d) => (d.id === docId ? { ...d, ...updates, updatedAt: new Date().toISOString() } : d)),
+    }));
+  };
+
+  const deleteDoc = (docId: string) => {
+    setState((prev) => ({ ...prev, docs: prev.docs.filter((d) => d.id !== docId) }));
+  };
+
+  // ── Phase 5: Saved Views ─────────────────────────────────────────────────────
+  const addSavedView = (view: Omit<SavedView, 'id' | 'createdAt'>) => {
+    const newView: SavedView = { ...view, id: uid('view'), createdAt: new Date().toISOString() };
+    setState((prev) => ({ ...prev, savedViews: [...prev.savedViews, newView] }));
+  };
+
+  const deleteSavedView = (viewId: string) => {
+    setState((prev) => ({ ...prev, savedViews: prev.savedViews.filter((v) => v.id !== viewId) }));
+  };
+
   const canManageMembers = state.currentUser?.role === 'owner' || state.currentUser?.role === 'admin';
   const canManageProjects = state.currentUser?.role === 'owner' || state.currentUser?.role === 'admin';
 
@@ -1603,7 +2021,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     currentWorkspace: state.currentWorkspace,
     projects: state.projects,
     tasks: state.tasks,
-    users: state.users,
+    // Only expose users that belong to the current tenant — never leak other tenants' data
+    users: state.currentTenant
+      ? state.users.filter(u => !u.tenantId || u.tenantId === state.currentTenant!.id)
+      : [],
     invitations: state.invitations,
     emailNotifications: state.emailNotifications,
     activity: state.activity,
@@ -1612,6 +2033,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     completeOnboarding,
     inviteUser,
     acceptInvitation,
+    acceptEmailInvitation,
     updateUserRole,
     addProject,
     updateProject,
@@ -1681,6 +2103,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     runIntelligentPrioritization,
     canManageMembers,
     canManageProjects,
+    // Phase 5
+    sprints: state.sprints,
+    addSprint,
+    updateSprint,
+    startSprint,
+    completeSprint,
+    goals: state.goals,
+    addGoal,
+    updateGoal,
+    deleteGoal,
+    addKeyResult,
+    updateKeyResult,
+    lists: state.lists,
+    addList,
+    updateList,
+    deleteList,
+    notifications: state.notifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    addNotification,
+    customFields: state.customFields,
+    addCustomField,
+    deleteCustomField,
+    updateTaskCustomField,
+    docs: state.docs,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    savedViews: state.savedViews,
+    addSavedView,
+    deleteSavedView,
+    updateTask,
+    deleteTask,
+    deleteProject,
+    moveTask,
   }), [isHydrated, state]);
 
   return (

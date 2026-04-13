@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -74,7 +73,6 @@ export default function TemplatesPage() {
   };
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -263,6 +261,5 @@ export default function TemplatesPage() {
           ))}
         </div>
       </div>
-    </Shell>
   );
 }

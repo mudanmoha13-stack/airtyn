@@ -1,12 +1,10 @@
 "use client";
 
 import React from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 export default function BillingPage() {
   return (
-    <Shell>
       <div className="max-w-3xl">
         <Card className="glass-card">
           <CardHeader>
@@ -21,6 +19,5 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       </div>
-    </Shell>
   );
 }

@@ -1299,7 +1299,7 @@ export function BusinessModulePage({
 
   return (
     <Shell>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
+      <div className="space-y-8">
         {hiddenSectionIds.length > 0 ? (
           <style>{hiddenSectionIds.map((id) => `#${id}{display:none !important;}`).join('\n')}</style>
         ) : null}

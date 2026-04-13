@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useMemo } from 'react';
-import { Shell } from '@/components/layout/Shell';
 import { useAppState } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -51,7 +50,6 @@ export default function WorkloadPage() {
   const unassigned = useMemo(() => tasks.filter((t) => !t.assigneeId && t.status !== 'done'), [tasks]);
 
   return (
-    <Shell>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Team Workload</h1>
@@ -200,6 +198,5 @@ export default function WorkloadPage() {
           </Card>
         )}
       </div>
-    </Shell>
   );
 }
