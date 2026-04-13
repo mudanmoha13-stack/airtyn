@@ -25,6 +25,29 @@ function getBaseUrl(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   try {
     const payload = requestSchema.parse(await request.json());
+    const emailLower = payload.email.toLowerCase();
+
+    // ── Server-side duplicate email guard ─────────────────────────────────
+    // Check if this email already has a completed/consumed onboarding token
+    // in Firestore. If so, reject the new signup attempt.
+    const existingTokensSnap = await adminFirestore
+      .collection(col.coreOnboardingTokens)
+      .where('email', '==', emailLower)
+      .where('status', '==', 'consumed')
+      .limit(1)
+      .get();
+
+    if (!existingTokensSnap.empty) {
+      return NextResponse.json(
+        {
+          ok: false,
+          emailExists: true,
+          error:
+            'An account already exists for this email address. Please sign in instead of creating a new workspace.',
+        },
+        { status: 409 }
+      );
+    }
 
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -41,7 +64,7 @@ export async function POST(request: NextRequest) {
     await tokenRef.set({
       id: tokenRef.id,
       tokenHash,
-      email: payload.email.toLowerCase(),
+      email: emailLower,
       mode: payload.mode,
       status: 'pending',
       createdAt,
@@ -55,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     const { error } = await resend.emails.send({
       from: 'Airtyn <noreply@airtyn.com>',
-      to: payload.email,
+      to: emailLower,
       subject: `Confirm your Airtyn ${productLabel} account`,
       html: `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111"><h2>Confirm your email to continue</h2><p>You started creating an Airtyn account for <strong>${productLabel}</strong>.</p><p><a href="${confirmLink}" style="display:inline-block;background:#111;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Confirm email</a></p><p>If the button does not work, open this link:</p><p>${confirmLink}</p><p>This link expires in 30 minutes.</p></div>`,
     });

@@ -164,6 +164,7 @@ interface AppState {
   activity: ActivityEvent[];
   signIn: (email: string, password: string) => { ok: boolean; message?: string };
   signOut: () => void;
+  emailExists: (email: string) => boolean;
   completeOnboarding: (payload: {
     tenantName: string;
     workspaceName: string;
@@ -858,6 +859,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const signOut = () => {
     setState((prev) => ({ ...prev, isAuthenticated: false, currentUser: null }));
+  };
+
+  // Returns true if the email already has a registered account in localStorage
+  const emailExists = (email: string): boolean => {
+    return email.toLowerCase() in state.credentials;
   };
 
   const completeOnboarding = ({ tenantName, workspaceName, name, email, password, mode, businessType }: {
@@ -2030,6 +2036,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     activity: state.activity,
     signIn,
     signOut,
+    emailExists,
     completeOnboarding,
     inviteUser,
     acceptInvitation,

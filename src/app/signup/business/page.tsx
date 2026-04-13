@@ -33,7 +33,7 @@ const FEATURES = [
 const MODULES = ['CRM', 'Finance', 'HR', 'Inventory', 'Restaurant', 'Support', 'Analytics'];
 
 export default function BusinessSignupPage() {
-  const { signIn } = useAppState();
+  const { signIn, emailExists } = useAppState();
   const router = useRouter();
 
   const [mode, setMode] = useState<Mode>('choose');
@@ -54,15 +54,28 @@ export default function BusinessSignupPage() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSending(true);
     setError('');
+
+    // ── Duplicate email guard ─────────────────────────────────────────────
+    if (emailExists(email)) {
+      setError(
+        'An account already exists for this email address. Please sign in instead, or use a different email to create a new workspace.'
+      );
+      return;
+    }
+
+    setSending(true);
     try {
       const res = await fetch('/api/onboarding/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, mode: 'business' }),
       });
-      const data = await res.json() as { ok: boolean; error?: string };
+      const data = await res.json() as { ok: boolean; error?: string; emailExists?: boolean };
+      if (data.emailExists) {
+        setError('An account already exists for this email address. Please sign in instead.');
+        return;
+      }
       if (!res.ok || !data.ok) throw new Error(data.error ?? 'Failed');
       setSent(true);
     } catch (err) {
@@ -265,7 +278,20 @@ export default function BusinessSignupPage() {
                       className="w-full bg-neutral-800 border border-neutral-700 rounded-full px-4 py-3 text-white text-sm placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-amber-500/40"
                     />
                   </div>
-                  {error && <p className="text-sm text-rose-400">{error}</p>}
+                  {error && (
+                    <div className="bg-rose-500/10 border border-rose-500/20 rounded-[16px] p-3.5">
+                      <p className="text-sm text-rose-400 mb-2">{error}</p>
+                      {emailExists(email) && (
+                        <button
+                          type="button"
+                          onClick={() => { setError(''); setMode('signin'); }}
+                          className="text-xs font-semibold text-white underline underline-offset-2 hover:text-neutral-300"
+                        >
+                          Sign in to existing account →
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="submit"
                     disabled={sending}
