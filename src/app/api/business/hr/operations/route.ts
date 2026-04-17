@@ -28,6 +28,9 @@ const createSchema = z.discriminatedUnion('entityType', [
     unitType: z.string().min(1),
     parentName: z.string().optional(),
     branch: z.string().optional(),
+    hqLocation: z.string().optional(),
+    region: z.string().optional(),
+    businessType: z.string().optional(),
     costCenter: z.string().optional(),
     headcountPlan: z.number().int().nonnegative().optional(),
     unitCode: z.string().optional(),
@@ -498,7 +501,7 @@ export async function POST(request: NextRequest) {
       : payload.entityType === 'attendance'
         ? { id, tenantId, employeeId: payload.employeeId, checkIn: payload.checkIn ?? createdAt, checkOut: payload.checkOut ?? null, shiftLabel: payload.shiftLabel ?? null, createdAt, updatedAt: createdAt }
         : payload.entityType === 'organization'
-          ? { id, tenantId, name: payload.name.trim(), unitType: payload.unitType.trim().toLowerCase(), parentName: payload.parentName?.trim() || null, branch: payload.branch?.trim() || null, costCenter: payload.costCenter?.trim() || null, headcountPlan: payload.headcountPlan ?? 0, unitCode: payload.unitCode?.trim() || null, managerName: payload.managerName?.trim() || null, status: payload.status?.trim() || 'active', effectiveDate: payload.effectiveDate ?? null, description: payload.description?.trim() || null, createdAt, updatedAt: createdAt }
+          ? { id, tenantId, name: payload.name.trim(), unitType: payload.unitType.trim().toLowerCase(), parentName: payload.parentName?.trim() || null, branch: payload.branch?.trim() || null, hqLocation: payload.hqLocation?.trim() || null, region: payload.region?.trim() || null, businessType: payload.businessType?.trim() || null, costCenter: payload.costCenter?.trim() || null, headcountPlan: payload.headcountPlan ?? 0, unitCode: payload.unitCode?.trim() || null, managerName: payload.managerName?.trim() || null, status: payload.status?.trim() || 'active', effectiveDate: payload.effectiveDate ?? null, description: payload.description?.trim() || null, createdAt, updatedAt: createdAt }
         : payload.entityType === 'attendance_correction'
           ? { id, tenantId, ...payload, status: 'requested', createdAt, updatedAt: createdAt }
           : payload.entityType === 'overtime'

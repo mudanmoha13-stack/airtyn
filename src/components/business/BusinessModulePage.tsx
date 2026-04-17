@@ -155,6 +155,7 @@ const MODULE_TABS: Record<BusinessModuleKey, ModuleTab[]> = {
     { id: 'operations', label: 'Operations', sectionIds: ['operations'] },
     { id: 'manager', label: 'Manager', sectionIds: ['governance'] },
     { id: 'reference', label: 'Reference', sectionIds: ['core-objects', 'features'] },
+    { id: 'organization', label: 'Organisational structure', sectionIds: ['operations'] },
   ],
   inventory: [
     { id: 'stock', label: 'Stock Control', sectionIds: ['new-inventory-entry', 'stock-tracking', 'live-transactions'], default: true },
