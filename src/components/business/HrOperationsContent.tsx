@@ -557,7 +557,15 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
                   <Input placeholder="First name" value={employeeFirstName} onChange={(event) => setEmployeeFirstName(event.target.value)} />
                   <Input placeholder="Middle name" value={employeeMiddleName} onChange={(event) => setEmployeeMiddleName(event.target.value)} />
                   <Input placeholder="Last name" value={employeeLastName} onChange={(event) => setEmployeeLastName(event.target.value)} />
-                  <Input placeholder="Gender" value={employeeGender} onChange={(event) => setEmployeeGender(event.target.value)} />
+                  <select
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    value={employeeGender}
+                    onChange={(event) => setEmployeeGender(event.target.value)}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
                 </div>
               </div>
               <div className="space-y-3">
