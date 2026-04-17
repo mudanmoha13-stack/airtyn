@@ -8,6 +8,10 @@ const createSchema = z.discriminatedUnion('entityType', [
   z.object({
     entityType: z.literal('employee'),
     name: z.string().min(1),
+    firstName: z.string().optional(),
+    middleName: z.string().optional(),
+    lastName: z.string().optional(),
+    gender: z.string().optional(),
     email: z.string().email(),
     title: z.string().min(1),
     department: z.string().default('General'),
@@ -19,6 +23,9 @@ const createSchema = z.discriminatedUnion('entityType', [
     employmentType: z.string().optional(),
     phone: z.string().optional(),
     emergencyContact: z.string().optional(),
+    nextOfKin: z.string().optional(),
+    referenceEmail: z.string().email().optional(),
+    education: z.string().optional(),
     joiningDate: z.string().datetime().optional(),
     nationalityType: z.enum(['local', 'international']).default('local'),
     nationalityCountry: z.string().optional(),
@@ -47,6 +54,7 @@ const createSchema = z.discriminatedUnion('entityType', [
     status: z.string().optional(),
     effectiveDate: z.string().datetime().optional(),
     description: z.string().optional(),
+    departmentNames: z.array(z.string().min(1)).optional(),
   }),
   z.object({
     entityType: z.literal('candidate'),
@@ -414,6 +422,10 @@ export async function GET(request: NextRequest) {
           department: String(employee.departmentId ?? 'General'),
           email: String(user?.email ?? employee.email ?? 'unknown@local'),
           status: String(employee.status ?? user?.status ?? 'active'),
+          firstName: String(employee.firstName ?? ''),
+          middleName: String(employee.middleName ?? ''),
+          lastName: String(employee.lastName ?? ''),
+          gender: String(employee.gender ?? ''),
           role: String(employee.role ?? ''),
           orgUnit: String(employee.orgUnit ?? ''),
           skills: String(employee.skills ?? ''),
@@ -422,6 +434,9 @@ export async function GET(request: NextRequest) {
           employmentType: String(employee.employmentType ?? ''),
           phone: String(employee.phone ?? ''),
           emergencyContact: String(employee.emergencyContact ?? ''),
+          nextOfKin: String(employee.nextOfKin ?? ''),
+          referenceEmail: String(employee.referenceEmail ?? ''),
+          education: String(employee.education ?? ''),
           joiningDate: String(employee.joiningDate ?? ''),
           nationalityType: String(employee.nationalityType ?? 'local') as 'local' | 'international',
           nationalityCountry: String(employee.nationalityCountry ?? ''),
@@ -522,6 +537,15 @@ export async function POST(request: NextRequest) {
           throw new HrValidationError(`Branch "${payload.branch}" does not exist. Add the branch first or use an existing branch name.`);
         }
       }
+      if (unitType === 'branch' && (payload.departmentNames?.length ?? 0) > 0) {
+        const missingDepartments = payload.departmentNames
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .filter((name) => !units.some((unit) => normalize(String(unit.unitType ?? '')) === 'department' && normalize(String(unit.name ?? '')) === normalize(name)));
+        if (missingDepartments.length > 0) {
+          throw new HrValidationError(`Department(s) not found: ${missingDepartments.join(', ')}. Create departments first.`);
+        }
+      }
     }
 
     if (payload.entityType === 'employee') {
@@ -548,8 +572,9 @@ export async function POST(request: NextRequest) {
       if (!payload.cvAttachment?.trim()) throw new HrValidationError('Employee CV/resume attachment reference is required.');
       if (!payload.criminalClearanceAttachment?.trim()) throw new HrValidationError('Employee criminal clearance attachment reference is required.');
 
-      const [firstName, ...rest] = payload.name.trim().split(' ');
-      const lastName = rest.join(' ');
+      const [nameFirst, ...nameRest] = payload.name.trim().split(' ');
+      const firstName = payload.firstName?.trim() || nameFirst;
+      const lastName = payload.lastName?.trim() || nameRest.join(' ');
       const email = payload.email.toLowerCase();
       const existingUser = await adminFirestore.collection(col.bizUsers).where('tenantId', '==', tenantId).where('email', '==', email).limit(1).get();
       const userId = existingUser.empty ? makeId(col.bizUsers) : existingUser.docs[0].id;
@@ -557,7 +582,7 @@ export async function POST(request: NextRequest) {
 
       const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).where('userId', '==', userId).limit(1).get();
       const employeeId = existingEmployee.empty ? makeId(col.bizEmployees) : existingEmployee.docs[0].id;
-      await adminFirestore.collection(col.bizEmployees).doc(employeeId).set({ id: employeeId, tenantId, userId, name: payload.name.trim(), email, title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, branch: payload.branch ?? null, managerName: payload.managerName ?? null, employmentType: payload.employmentType ?? null, phone: payload.phone ?? null, emergencyContact: payload.emergencyContact ?? null, joiningDate: payload.joiningDate ?? null, nationalityType: payload.nationalityType, nationalityCountry: payload.nationalityCountry ?? null, cvAttachment: payload.cvAttachment ?? null, passportAttachment: payload.passportAttachment ?? null, criminalClearanceAttachment: payload.criminalClearanceAttachment ?? null, nationalIdAttachment: payload.nationalIdAttachment ?? null, workPermitAttachment: payload.workPermitAttachment ?? null, visaAttachment: payload.visaAttachment ?? null, certificatesAttachment: payload.certificatesAttachment ?? null, referenceLettersAttachment: payload.referenceLettersAttachment ?? null, employeeCode: `EMP-${employeeId.slice(-6).toUpperCase()}`, status: 'active', createdAt, updatedAt: createdAt }, { merge: true });
+      await adminFirestore.collection(col.bizEmployees).doc(employeeId).set({ id: employeeId, tenantId, userId, name: payload.name.trim(), firstName: payload.firstName?.trim() || firstName, middleName: payload.middleName?.trim() || null, lastName: payload.lastName?.trim() || (lastName || null), gender: payload.gender?.trim() || null, email, title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, branch: payload.branch ?? null, managerName: payload.managerName ?? null, employmentType: payload.employmentType ?? null, phone: payload.phone ?? null, emergencyContact: payload.emergencyContact ?? null, nextOfKin: payload.nextOfKin ?? null, referenceEmail: payload.referenceEmail ? payload.referenceEmail.toLowerCase() : null, education: payload.education ?? null, joiningDate: payload.joiningDate ?? null, nationalityType: payload.nationalityType, nationalityCountry: payload.nationalityCountry ?? null, cvAttachment: payload.cvAttachment ?? null, passportAttachment: payload.passportAttachment ?? null, criminalClearanceAttachment: payload.criminalClearanceAttachment ?? null, nationalIdAttachment: payload.nationalIdAttachment ?? null, workPermitAttachment: payload.workPermitAttachment ?? null, visaAttachment: payload.visaAttachment ?? null, certificatesAttachment: payload.certificatesAttachment ?? null, referenceLettersAttachment: payload.referenceLettersAttachment ?? null, employeeCode: `EMP-${employeeId.slice(-6).toUpperCase()}`, status: 'active', createdAt, updatedAt: createdAt }, { merge: true });
       await logHrAudit(tenantId, 'employee', employeeId, 'employee_created', { email, title: payload.title });
       return NextResponse.json({ ok: true, id: employeeId }, { status: 201 });
     }
@@ -715,7 +740,7 @@ export async function POST(request: NextRequest) {
       : payload.entityType === 'attendance'
         ? { id, tenantId, employeeId: payload.employeeId, checkIn: payload.checkIn ?? createdAt, checkOut: payload.checkOut ?? null, shiftLabel: payload.shiftLabel ?? null, createdAt, updatedAt: createdAt }
         : payload.entityType === 'organization'
-          ? { id, tenantId, name: payload.name.trim(), unitType: payload.unitType.trim().toLowerCase(), parentName: payload.parentName?.trim() || null, branch: payload.branch?.trim() || null, hqLocation: payload.hqLocation?.trim() || null, region: payload.region?.trim() || null, businessType: payload.businessType?.trim() || null, costCenter: payload.costCenter?.trim() || null, headcountPlan: payload.headcountPlan ?? 0, unitCode: payload.unitCode?.trim() || null, managerName: payload.managerName?.trim() || null, status: payload.status?.trim() || 'active', effectiveDate: payload.effectiveDate ?? null, description: payload.description?.trim() || null, createdAt, updatedAt: createdAt }
+          ? { id, tenantId, name: payload.name.trim(), unitType: payload.unitType.trim().toLowerCase(), parentName: payload.parentName?.trim() || null, branch: payload.branch?.trim() || null, hqLocation: payload.hqLocation?.trim() || null, region: payload.region?.trim() || null, businessType: payload.businessType?.trim() || null, costCenter: payload.costCenter?.trim() || null, headcountPlan: payload.headcountPlan ?? 0, unitCode: payload.unitCode?.trim() || null, managerName: payload.managerName?.trim() || null, status: payload.status?.trim() || 'active', effectiveDate: payload.effectiveDate ?? null, description: payload.description?.trim() || null, departmentNames: payload.departmentNames?.map((name) => name.trim()).filter(Boolean) ?? [], createdAt, updatedAt: createdAt }
         : payload.entityType === 'attendance_correction'
           ? { id, tenantId, ...payload, status: 'requested', createdAt, updatedAt: createdAt }
           : payload.entityType === 'overtime'
@@ -735,6 +760,23 @@ export async function POST(request: NextRequest) {
                 : { id, tenantId, ...payload, createdAt, updatedAt: createdAt };
 
     await adminFirestore.collection(collectionName).doc(id).set(data);
+    if (payload.entityType === 'organization' && payload.unitType.trim().toLowerCase() === 'branch' && (payload.departmentNames?.length ?? 0) > 0) {
+      const normalizedDeptNames = payload.departmentNames.map((name) => normalize(name));
+      const units = await loadTenantOrgUnits(tenantId);
+      const matchingDepartments = units.filter((unit) => normalize(String(unit.unitType ?? '')) === 'department' && normalizedDeptNames.includes(normalize(String(unit.name ?? ''))));
+      await Promise.all(
+        matchingDepartments.map((department) =>
+          adminFirestore.collection(col.bizHrOrgUnits).doc(department.id).set(
+            {
+              branch: payload.name.trim(),
+              parentName: payload.name.trim(),
+              updatedAt: createdAt,
+            },
+            { merge: true },
+          ),
+        ),
+      );
+    }
     await logHrAudit(tenantId, payload.entityType, id, `${payload.entityType}_created`);
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (error) {

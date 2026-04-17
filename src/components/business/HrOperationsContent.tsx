@@ -7,27 +7,59 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { BusinessModuleSpec } from '@/lib/business-os';
+import { Paperclip, Upload, X } from 'lucide-react';
 
 type EmployeeStatus = 'active' | 'suspended' | 'deactive';
-type Employee = { id: string; employeeCode?: string; name: string; title: string; department: string; email: string; status: string; role?: string; orgUnit?: string; skills?: string; branch?: string; managerName?: string; employmentType?: string; phone?: string; emergencyContact?: string; joiningDate?: string; nationalityType?: 'local' | 'international'; nationalityCountry?: string; cvAttachment?: string; passportAttachment?: string; criminalClearanceAttachment?: string; nationalIdAttachment?: string; workPermitAttachment?: string; visaAttachment?: string; certificatesAttachment?: string; referenceLettersAttachment?: string };
+type Employee = { id: string; employeeCode?: string; name: string; title: string; department: string; email: string; status: string; firstName?: string; middleName?: string; lastName?: string; gender?: string; role?: string; orgUnit?: string; skills?: string; branch?: string; managerName?: string; employmentType?: string; phone?: string; emergencyContact?: string; nextOfKin?: string; referenceEmail?: string; education?: string; joiningDate?: string; nationalityType?: 'local' | 'international'; nationalityCountry?: string; cvAttachment?: string; passportAttachment?: string; criminalClearanceAttachment?: string; nationalIdAttachment?: string; workPermitAttachment?: string; visaAttachment?: string; certificatesAttachment?: string; referenceLettersAttachment?: string };
 type Contract = { id: string; employeeId: string; employeeName: string; type: string; startDate: string; endDate: string | null; salaryStructure?: string; probationEndDate?: string };
 type Attendance = { id: string; employeeId: string; employeeName: string; checkIn: string; checkOut: string | null; shiftLabel?: string };
 type LeaveRow = { id: string; employeeId: string; employeeName: string; type: string; status: string; startDate: string; endDate: string };
 type PayrollSlip = { id: string; employeeId: string; employeeName: string; netPay: number };
 type PayrollRun = { id: string; periodStart: string; periodEnd: string; createdAt: string; approvalStatus: string; inputsSummary?: string; payslips: PayrollSlip[] };
 type Candidate = { id: string; name: string; roleTitle: string; stage: string; source?: string; recruiter?: string; createdAt: string };
-type OrganizationUnit = { id: string; name?: string; unitType?: string; parentName?: string; branch?: string; costCenter?: string; headcountPlan?: number; unitCode?: string; managerName?: string; status?: string; effectiveDate?: string; description?: string; hqLocation?: string; region?: string; businessType?: string };
+type OrganizationUnit = { id: string; name?: string; unitType?: string; parentName?: string; branch?: string; costCenter?: string; headcountPlan?: number; unitCode?: string; managerName?: string; status?: string; effectiveDate?: string; description?: string; hqLocation?: string; region?: string; businessType?: string; departmentNames?: string[] };
 type NamedRecord = { id: string; employeeId?: string; employeeName?: string; status?: string; [key: string]: unknown };
 type HrApiErrorPayload = { ok?: boolean; error?: string; description?: string; code?: string; indexUrl?: string };
 type HrPayload = { ok: boolean; employees?: Employee[]; organizationUnits?: OrganizationUnit[]; contracts?: Contract[]; attendance?: Attendance[]; shifts?: NamedRecord[]; attendanceCorrections?: NamedRecord[]; overtime?: NamedRecord[]; leaves?: LeaveRow[]; payrollRuns?: PayrollRun[]; candidates?: Candidate[]; requisitions?: NamedRecord[]; interviews?: NamedRecord[]; offers?: NamedRecord[]; onboarding?: NamedRecord[]; expenses?: NamedRecord[]; travel?: NamedRecord[]; performance?: NamedRecord[]; goals?: NamedRecord[]; learning?: NamedRecord[]; certifications?: NamedRecord[]; assets?: NamedRecord[]; documents?: NamedRecord[]; incidents?: NamedRecord[]; discipline?: NamedRecord[]; offboarding?: NamedRecord[] };
+type HrUploadPayload = HrApiErrorPayload & { attachmentRef?: string };
+type DocUploadRule = { accept: string; helpText: string; allowedExtensions: string[]; allowedMimeTypes: string[] };
 
 const CANDIDATE_FLOW = ['applied', 'screened', 'shortlisted', 'interview stage 1', 'interview stage 2', 'assessment', 'offer pending', 'hired', 'rejected', 'talent pool'];
 const PEOPLE_PILLARS = ['Employee master and organization structure', 'Recruitment, onboarding, and lifecycle', 'Attendance, shifts, leave, payroll, and approvals', 'Claims, travel, learning, assets, compliance, incidents, and offboarding'];
+const EMPLOYEE_ATTACHMENT_RULES: Record<string, DocUploadRule> = {
+  cv: { accept: '.pdf,.doc,.docx', helpText: 'Allowed: PDF, DOC, DOCX', allowedExtensions: ['pdf', 'doc', 'docx'], allowedMimeTypes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'] },
+  national_id: { accept: '.pdf,.jpg,.jpeg,.png', helpText: 'Allowed: PDF, JPG, PNG', allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+  passport: { accept: '.pdf,.jpg,.jpeg,.png', helpText: 'Allowed: PDF, JPG, PNG', allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+  work_permit: { accept: '.pdf,.jpg,.jpeg,.png', helpText: 'Allowed: PDF, JPG, PNG', allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+  visa: { accept: '.pdf,.jpg,.jpeg,.png', helpText: 'Allowed: PDF, JPG, PNG', allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+  criminal_clearance: { accept: '.pdf', helpText: 'Allowed: PDF only', allowedExtensions: ['pdf'], allowedMimeTypes: ['application/pdf'] },
+  certificates: { accept: '.pdf,.jpg,.jpeg,.png', helpText: 'Allowed: PDF, JPG, PNG', allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'], allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+  reference_letters: { accept: '.pdf,.doc,.docx', helpText: 'Allowed: PDF, DOC, DOCX', allowedExtensions: ['pdf', 'doc', 'docx'], allowedMimeTypes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'] },
+};
 
 async function parseApiPayload(response: Response): Promise<HrApiErrorPayload | null> { try { return (await response.json()) as HrApiErrorPayload; } catch { return null; } }
 function formatApiError(payload: HrApiErrorPayload | null, fallback: string): string { if (!payload) return fallback; const parts = [payload.error, payload.description, payload.code].filter(Boolean); return parts.length > 0 ? parts.join(' | ') : fallback; }
 function asDate(value?: string | null) { if (!value) return 'n/a'; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(); }
 function asDateTime(value?: string | null) { if (!value) return 'n/a'; const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString(); }
+function isFileAllowed(file: File, rule: DocUploadRule) {
+  const extension = (file.name.split('.').pop() ?? '').toLowerCase();
+  const contentType = String(file.type || '').toLowerCase();
+  const extensionAllowed = rule.allowedExtensions.includes(extension);
+  const typeAllowed = !contentType || rule.allowedMimeTypes.includes(contentType);
+  return extensionAllowed && typeAllowed;
+}
+function resolveRuleByLabel(label: string): DocUploadRule | null {
+  const normalized = label.trim().toLowerCase();
+  if (normalized.includes('criminal clearance')) return EMPLOYEE_ATTACHMENT_RULES.criminal_clearance;
+  if (normalized.includes('passport')) return EMPLOYEE_ATTACHMENT_RULES.passport;
+  if (normalized.includes('work permit')) return EMPLOYEE_ATTACHMENT_RULES.work_permit;
+  if (normalized.includes('national id')) return EMPLOYEE_ATTACHMENT_RULES.national_id;
+  if (normalized.includes('cv') || normalized.includes('resume')) return EMPLOYEE_ATTACHMENT_RULES.cv;
+  if (normalized.includes('reference')) return EMPLOYEE_ATTACHMENT_RULES.reference_letters;
+  if (normalized.includes('certificate')) return EMPLOYEE_ATTACHMENT_RULES.certificates;
+  if (normalized.includes('visa')) return EMPLOYEE_ATTACHMENT_RULES.visa;
+  return null;
+}
 
 function MiniBar({ value, max, color = '#1D9E75' }: { value: number; max: number; color?: string }) {
   const pct = max === 0 ? 0 : Math.min(100, Math.round((value / max) * 100));
@@ -44,6 +76,72 @@ function KpiCard({ label, value, sub }: { label: string; value: string | number;
       <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader>
       <CardContent><div className="text-3xl font-semibold">{value}</div>{sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}</CardContent>
     </Card>
+  );
+}
+
+function AttachmentField({
+  label,
+  value,
+  required,
+  accept,
+  helpText,
+  isUploading,
+  onUpload,
+  onClear,
+}: {
+  label: string;
+  value: string;
+  required?: boolean;
+  accept?: string;
+  helpText?: string;
+  isUploading?: boolean;
+  onUpload: (file: File) => Promise<void>;
+  onClear: () => void;
+}) {
+  const inputId = React.useId();
+  const fileName = value ? value.split('/').pop() ?? value : 'No file attached';
+  const inferredRule = resolveRuleByLabel(label);
+  const effectiveAccept = accept ?? inferredRule?.accept;
+  const effectiveHelpText = helpText ?? inferredRule?.helpText;
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-card/40 p-3 space-y-2">
+      <div className="text-sm font-medium">
+        {label}
+        {required ? <span className="text-destructive"> *</span> : null}
+      </div>
+      <div className="text-xs text-muted-foreground flex items-center gap-2">
+        <Paperclip className="h-3.5 w-3.5" />
+        <span className="inline-flex max-w-full items-center rounded-full border border-white/15 bg-card/60 px-2 py-0.5 text-[11px] truncate">{fileName}</span>
+      </div>
+      {effectiveHelpText ? <div className="text-[11px] text-muted-foreground/90">{effectiveHelpText}</div> : null}
+      <div className="flex items-center gap-2">
+        <input
+          id={inputId}
+          type="file"
+          accept={effectiveAccept}
+          className="hidden"
+          onChange={(event) => {
+            const selected = event.target.files?.[0];
+            if (!selected) return;
+            void onUpload(selected);
+            event.currentTarget.value = '';
+          }}
+        />
+        <label
+          htmlFor={inputId}
+          className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-white/15 px-3 py-1.5 text-xs font-medium hover:bg-muted/40"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {isUploading ? 'Uploading...' : 'Attach file'}
+        </label>
+        {value ? (
+          <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -75,16 +173,45 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
   const [offboarding, setOffboarding] = useState<NamedRecord[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiErrorLink, setApiErrorLink] = useState<string | null>(null);
-  // Job roles and grades â€” local state (extend API entityType to persist)
+  const [uploadingByField, setUploadingByField] = useState<Record<string, boolean>>({});
+  // Job roles and grades Ã¢â‚¬â€ local state (extend API entityType to persist)
   const [jobRoles, setJobRoles] = useState<{id:string;title:string;code:string;dept:string;grade:string;skills:string}[]>([]);
   const [jobGrades, setJobGrades] = useState<{id:string;name:string;level:number;minSalary:number;maxSalary:number}[]>([]);
   const [jrTitle, setJrTitle] = useState(''); const [jrCode, setJrCode] = useState(''); const [jrDept, setJrDept] = useState(''); const [jrGrade, setJrGrade] = useState(''); const [jrSkills, setJrSkills] = useState('');
   const [jgName, setJgName] = useState(''); const [jgLevel, setJgLevel] = useState(''); const [jgMin, setJgMin] = useState(''); const [jgMax, setJgMax] = useState('');
 
-  const [employeeName, setEmployeeName] = useState(''); const [employeeTitle, setEmployeeTitle] = useState(''); const [employeeDepartment, setEmployeeDepartment] = useState(''); const [employeeEmail, setEmployeeEmail] = useState(''); const [employeeRole, setEmployeeRole] = useState(''); const [employeeOrgUnit, setEmployeeOrgUnit] = useState(''); const [employeeSkills, setEmployeeSkills] = useState(''); const [employeeBranch, setEmployeeBranch] = useState(''); const [employeeManager, setEmployeeManager] = useState(''); const [employmentType, setEmploymentType] = useState('full-time'); const [employeePhone, setEmployeePhone] = useState(''); const [emergencyContact, setEmergencyContact] = useState(''); const [joiningDate, setJoiningDate] = useState(''); const [nationalityType, setNationalityType] = useState<'local' | 'international'>('local'); const [nationalityCountry, setNationalityCountry] = useState(''); const [cvAttachment, setCvAttachment] = useState(''); const [passportAttachment, setPassportAttachment] = useState(''); const [criminalClearanceAttachment, setCriminalClearanceAttachment] = useState(''); const [nationalIdAttachment, setNationalIdAttachment] = useState(''); const [workPermitAttachment, setWorkPermitAttachment] = useState(''); const [visaAttachment, setVisaAttachment] = useState(''); const [certificatesAttachment, setCertificatesAttachment] = useState(''); const [referenceLettersAttachment, setReferenceLettersAttachment] = useState('');
+  const [employeeFirstName, setEmployeeFirstName] = useState('');
+  const [employeeMiddleName, setEmployeeMiddleName] = useState('');
+  const [employeeLastName, setEmployeeLastName] = useState('');
+  const [employeeGender, setEmployeeGender] = useState('');
+  const [employeeTitle, setEmployeeTitle] = useState('');
+  const [employeeDepartment, setEmployeeDepartment] = useState('');
+  const [employeeEmail, setEmployeeEmail] = useState('');
+  const [employeeRole, setEmployeeRole] = useState('');
+  const [employeeOrgUnit, setEmployeeOrgUnit] = useState('');
+  const [employeeSkills, setEmployeeSkills] = useState('');
+  const [employeeBranch, setEmployeeBranch] = useState('');
+  const [employeeManager, setEmployeeManager] = useState('');
+  const [employmentType, setEmploymentType] = useState('full-time');
+  const [employeePhone, setEmployeePhone] = useState('');
+  const [emergencyContact, setEmergencyContact] = useState('');
+  const [employeeNextOfKin, setEmployeeNextOfKin] = useState('');
+  const [employeeReferenceEmail, setEmployeeReferenceEmail] = useState('');
+  const [employeeEducation, setEmployeeEducation] = useState('');
+  const [joiningDate, setJoiningDate] = useState('');
+  const [nationalityType, setNationalityType] = useState<'local' | 'international'>('local');
+  const [nationalityCountry, setNationalityCountry] = useState('');
+  const [cvAttachment, setCvAttachment] = useState('');
+  const [passportAttachment, setPassportAttachment] = useState('');
+  const [criminalClearanceAttachment, setCriminalClearanceAttachment] = useState('');
+  const [nationalIdAttachment, setNationalIdAttachment] = useState('');
+  const [workPermitAttachment, setWorkPermitAttachment] = useState('');
+  const [visaAttachment, setVisaAttachment] = useState('');
+  const [certificatesAttachment, setCertificatesAttachment] = useState('');
+  const [referenceLettersAttachment, setReferenceLettersAttachment] = useState('');
   const [orgProfileName, setOrgProfileName] = useState(''); const [orgHqLocation, setOrgHqLocation] = useState(''); const [orgRegion, setOrgRegion] = useState(''); const [orgBusinessType, setOrgBusinessType] = useState('');
   const [orgName, setOrgName] = useState(''); const [orgUnitType, setOrgUnitType] = useState('department'); const [orgParentName, setOrgParentName] = useState(''); const [orgBranch, setOrgBranch] = useState(''); const [orgCostCenter, setOrgCostCenter] = useState(''); const [orgHeadcountPlan, setOrgHeadcountPlan] = useState('0'); const [orgUnitCode, setOrgUnitCode] = useState(''); const [orgManagerName, setOrgManagerName] = useState(''); const [orgStatus, setOrgStatus] = useState('active'); const [orgEffectiveDate, setOrgEffectiveDate] = useState(''); const [orgDescription, setOrgDescription] = useState('');
-  const [branchName, setBranchName] = useState(''); const [branchCode, setBranchCode] = useState(''); const [branchAddress, setBranchAddress] = useState(''); const [branchHeadcount, setBranchHeadcount] = useState('0'); const [branchStatus, setBranchStatus] = useState('active');
+  const [branchName, setBranchName] = useState(''); const [branchCode, setBranchCode] = useState(''); const [branchAddress, setBranchAddress] = useState(''); const [branchHeadcount, setBranchHeadcount] = useState('0'); const [branchStatus, setBranchStatus] = useState('active'); const [branchLinkDepartments, setBranchLinkDepartments] = useState(false); const [branchDepartmentSelections, setBranchDepartmentSelections] = useState<string[]>([]);
   const [departmentName, setDepartmentName] = useState(''); const [departmentCode, setDepartmentCode] = useState(''); const [departmentBranch, setDepartmentBranch] = useState(''); const [departmentManager, setDepartmentManager] = useState(''); const [departmentHeadcount, setDepartmentHeadcount] = useState('0');
   const [contractEmployeeId, setContractEmployeeId] = useState(''); const [contractType, setContractType] = useState('full-time'); const [contractStart, setContractStart] = useState(''); const [contractEnd, setContractEnd] = useState(''); const [salaryStructure, setSalaryStructure] = useState('');
   const [attendanceEmployeeId, setAttendanceEmployeeId] = useState(''); const [shiftLabel, setShiftLabel] = useState('day'); const [shiftDate, setShiftDate] = useState(''); const [shiftStartTime, setShiftStartTime] = useState(''); const [shiftEndTime, setShiftEndTime] = useState('');
@@ -177,11 +304,125 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
 
   const submitEntity = async (body: Record<string, unknown>, fallback: string) => { setApiError(null); setApiErrorLink(null); const response = await fetch('/api/business/hr/operations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const payload = await parseApiPayload(response); if (!response.ok || payload?.ok === false) { if (payload?.indexUrl) setApiErrorLink(payload.indexUrl); throw new Error(formatApiError(payload, fallback)); } await load(); };
   const patchEntity = async (body: Record<string, unknown>, fallback: string) => { setApiError(null); setApiErrorLink(null); const response = await fetch('/api/business/hr/operations', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const payload = await parseApiPayload(response); if (!response.ok || payload?.ok === false) { if (payload?.indexUrl) setApiErrorLink(payload.indexUrl); throw new Error(formatApiError(payload, fallback)); } await load(); };
+  const uploadHrAttachment = async (documentType: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('documentType', documentType);
+    const response = await fetch('/api/business/hr/upload', { method: 'POST', body: formData });
+    const payload = (await parseApiPayload(response)) as HrUploadPayload | null;
+    if (!response.ok || payload?.ok === false || !payload?.attachmentRef) {
+      throw new Error(formatApiError(payload, 'Failed to upload attachment.'));
+    }
+    return payload.attachmentRef;
+  };
+  const withAttachmentUpload = async (fieldKey: string, documentType: string, setter: (value: string) => void, file: File) => {
+    setApiError(null);
+    const resolvedRule = EMPLOYEE_ATTACHMENT_RULES[documentType] ?? null;
+    if (resolvedRule && !isFileAllowed(file, resolvedRule)) {
+      setApiError(`Invalid file type for ${fieldKey}. ${resolvedRule.helpText}`);
+      return;
+    }
+    setUploadingByField((state) => ({ ...state, [fieldKey]: true }));
+    try {
+      const attachmentRef = await uploadHrAttachment(documentType, file);
+      setter(attachmentRef);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Failed to upload attachment.');
+    } finally {
+      setUploadingByField((state) => ({ ...state, [fieldKey]: false }));
+    }
+  };
 
-  const addEmployee = async () => { if (!employeeName.trim() || !employeeTitle.trim() || !employeeEmail.trim()) return; const selectedUnit = organizationUnits.find((unit) => String(unit.name ?? '').trim().toLowerCase() === employeeOrgUnit.trim().toLowerCase()); const selectedUnitName = String(selectedUnit?.name ?? '').trim(); const resolvedDepartment = employeeDepartment.trim() || (String(selectedUnit?.unitType ?? '').toLowerCase() === 'department' ? selectedUnitName : String(selectedUnit?.parentName ?? '').trim()) || 'General'; const resolvedBranch = employeeBranch.trim() || String(selectedUnit?.branch ?? '').trim() || undefined; try { await submitEntity({ entityType: 'employee', name: employeeName.trim(), email: employeeEmail.trim().toLowerCase(), title: employeeTitle.trim(), department: resolvedDepartment, role: employeeRole.trim() || undefined, orgUnit: selectedUnitName || employeeOrgUnit.trim() || undefined, skills: employeeSkills.trim() || undefined, branch: resolvedBranch, managerName: employeeManager.trim() || undefined, employmentType, phone: employeePhone.trim() || undefined, emergencyContact: emergencyContact.trim() || undefined, joiningDate: joiningDate ? new Date(joiningDate).toISOString() : undefined, nationalityType, nationalityCountry: nationalityCountry.trim() || undefined, cvAttachment: cvAttachment.trim() || undefined, passportAttachment: passportAttachment.trim() || undefined, criminalClearanceAttachment: criminalClearanceAttachment.trim() || undefined, nationalIdAttachment: nationalIdAttachment.trim() || undefined, workPermitAttachment: workPermitAttachment.trim() || undefined, visaAttachment: visaAttachment.trim() || undefined, certificatesAttachment: certificatesAttachment.trim() || undefined, referenceLettersAttachment: referenceLettersAttachment.trim() || undefined }, 'Failed to add employee.'); setEmployeeName(''); setEmployeeTitle(''); setEmployeeDepartment(''); setEmployeeEmail(''); setEmployeeRole(''); setEmployeeOrgUnit(''); setEmployeeSkills(''); setEmployeeBranch(''); setEmployeeManager(''); setEmploymentType('full-time'); setEmployeePhone(''); setEmergencyContact(''); setJoiningDate(''); setNationalityType('local'); setNationalityCountry(''); setCvAttachment(''); setPassportAttachment(''); setCriminalClearanceAttachment(''); setNationalIdAttachment(''); setWorkPermitAttachment(''); setVisaAttachment(''); setCertificatesAttachment(''); setReferenceLettersAttachment(''); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to add employee.'); } };
+  const addEmployee = async () => {
+    const firstName = employeeFirstName.trim();
+    const middleName = employeeMiddleName.trim();
+    const lastName = employeeLastName.trim();
+    const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+    if (!firstName || !lastName || !employeeTitle.trim() || !employeeEmail.trim()) return;
+
+    const selectedUnit = organizationUnits.find(
+      (unit) => String(unit.name ?? '').trim().toLowerCase() === employeeOrgUnit.trim().toLowerCase()
+    );
+    const selectedUnitName = String(selectedUnit?.name ?? '').trim();
+    const resolvedDepartment =
+      employeeDepartment.trim() ||
+      (String(selectedUnit?.unitType ?? '').toLowerCase() === 'department' ? selectedUnitName : String(selectedUnit?.parentName ?? '').trim()) ||
+      'General';
+    const resolvedBranch = employeeBranch.trim() || String(selectedUnit?.branch ?? '').trim() || undefined;
+
+    try {
+      await submitEntity(
+        {
+          entityType: 'employee',
+          name: fullName,
+          firstName,
+          middleName: middleName || undefined,
+          lastName,
+          gender: employeeGender.trim() || undefined,
+          email: employeeEmail.trim().toLowerCase(),
+          title: employeeTitle.trim(),
+          department: resolvedDepartment,
+          role: employeeRole.trim() || undefined,
+          orgUnit: selectedUnitName || employeeOrgUnit.trim() || undefined,
+          skills: employeeSkills.trim() || undefined,
+          branch: resolvedBranch,
+          managerName: employeeManager.trim() || undefined,
+          employmentType,
+          phone: employeePhone.trim() || undefined,
+          emergencyContact: emergencyContact.trim() || undefined,
+          nextOfKin: employeeNextOfKin.trim() || undefined,
+          referenceEmail: employeeReferenceEmail.trim().toLowerCase() || undefined,
+          education: employeeEducation.trim() || undefined,
+          joiningDate: joiningDate ? new Date(joiningDate).toISOString() : undefined,
+          nationalityType,
+          nationalityCountry: nationalityCountry.trim() || undefined,
+          cvAttachment: cvAttachment.trim() || undefined,
+          passportAttachment: passportAttachment.trim() || undefined,
+          criminalClearanceAttachment: criminalClearanceAttachment.trim() || undefined,
+          nationalIdAttachment: nationalIdAttachment.trim() || undefined,
+          workPermitAttachment: workPermitAttachment.trim() || undefined,
+          visaAttachment: visaAttachment.trim() || undefined,
+          certificatesAttachment: certificatesAttachment.trim() || undefined,
+          referenceLettersAttachment: referenceLettersAttachment.trim() || undefined,
+        },
+        'Failed to add employee.'
+      );
+      setEmployeeFirstName('');
+      setEmployeeMiddleName('');
+      setEmployeeLastName('');
+      setEmployeeGender('');
+      setEmployeeTitle('');
+      setEmployeeDepartment('');
+      setEmployeeEmail('');
+      setEmployeeRole('');
+      setEmployeeOrgUnit('');
+      setEmployeeSkills('');
+      setEmployeeBranch('');
+      setEmployeeManager('');
+      setEmploymentType('full-time');
+      setEmployeePhone('');
+      setEmergencyContact('');
+      setEmployeeNextOfKin('');
+      setEmployeeReferenceEmail('');
+      setEmployeeEducation('');
+      setJoiningDate('');
+      setNationalityType('local');
+      setNationalityCountry('');
+      setCvAttachment('');
+      setPassportAttachment('');
+      setCriminalClearanceAttachment('');
+      setNationalIdAttachment('');
+      setWorkPermitAttachment('');
+      setVisaAttachment('');
+      setCertificatesAttachment('');
+      setReferenceLettersAttachment('');
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Failed to add employee.');
+    }
+  };
   const setupOrganizationProfile = async () => { if (!orgProfileName.trim() || !orgHqLocation.trim() || !orgRegion.trim() || !orgBusinessType.trim()) return; try { await submitEntity({ entityType: 'organization', name: orgProfileName.trim(), unitType: 'organization', branch: orgHqLocation.trim(), hqLocation: orgHqLocation.trim(), region: orgRegion.trim(), businessType: orgBusinessType.trim(), status: 'active' }, 'Failed to setup organization profile.'); setOrgProfileName(''); setOrgHqLocation(''); setOrgRegion(''); setOrgBusinessType(''); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to setup organization profile.'); } };
   const addOrganizationUnit = async () => { if (!orgName.trim()) return; const normalizedType = orgUnitType.trim().toLowerCase(); if (normalizedType !== 'organization' && orgProfiles.length === 0) { setApiError('Set up the organization profile first (name, HQ, region, business type) before adding departments, branches, teams, or cost centers.'); return; } try { await submitEntity({ entityType: 'organization', name: orgName.trim(), unitType: normalizedType || 'department', parentName: orgParentName.trim() || undefined, branch: orgBranch.trim() || undefined, costCenter: orgCostCenter.trim() || undefined, headcountPlan: Number(orgHeadcountPlan || 0), unitCode: orgUnitCode.trim() || undefined, managerName: orgManagerName.trim() || undefined, status: orgStatus || 'active', effectiveDate: orgEffectiveDate ? new Date(orgEffectiveDate).toISOString() : undefined, description: orgDescription.trim() || undefined, region: orgRegion.trim() || undefined, businessType: orgBusinessType.trim() || undefined }, 'Failed to add organization unit.'); setOrgName(''); setOrgParentName(''); setOrgBranch(''); setOrgCostCenter(''); setOrgHeadcountPlan('0'); setOrgUnitCode(''); setOrgManagerName(''); setOrgStatus('active'); setOrgEffectiveDate(''); setOrgDescription(''); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to add organization unit.'); } };
-  const addBranchRecord = async () => { if (!branchName.trim()) return; if (orgProfiles.length === 0) { setApiError('Set up the organization profile first, then add branches.'); return; } try { await submitEntity({ entityType: 'organization', name: branchName.trim(), unitType: 'branch', branch: branchAddress.trim() || undefined, headcountPlan: Number(branchHeadcount || 0), unitCode: branchCode.trim() || undefined, status: branchStatus.trim() || 'active', parentName: primaryOrganization?.name ?? undefined }, 'Failed to add branch.'); setBranchName(''); setBranchCode(''); setBranchAddress(''); setBranchHeadcount('0'); setBranchStatus('active'); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to add branch.'); } };
+  const addBranchRecord = async () => { if (!branchName.trim()) return; if (orgProfiles.length === 0) { setApiError('Set up the organization profile first, then add branches.'); return; } try { await submitEntity({ entityType: 'organization', name: branchName.trim(), unitType: 'branch', branch: branchAddress.trim() || undefined, headcountPlan: Number(branchHeadcount || 0), unitCode: branchCode.trim() || undefined, status: branchStatus.trim() || 'active', parentName: primaryOrganization?.name ?? undefined, departmentNames: branchLinkDepartments ? branchDepartmentSelections : undefined }, 'Failed to add branch.'); setBranchName(''); setBranchCode(''); setBranchAddress(''); setBranchHeadcount('0'); setBranchStatus('active'); setBranchLinkDepartments(false); setBranchDepartmentSelections([]); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to add branch.'); } };
   const addDepartmentRecord = async () => { if (!departmentName.trim()) return; if (orgProfiles.length === 0) { setApiError('Set up the organization profile first, then add departments.'); return; } try { await submitEntity({ entityType: 'organization', name: departmentName.trim(), unitType: 'department', branch: departmentBranch.trim() || undefined, managerName: departmentManager.trim() || undefined, headcountPlan: Number(departmentHeadcount || 0), unitCode: departmentCode.trim() || undefined, parentName: (departmentBranch.trim() || primaryOrganization?.name || undefined) }, 'Failed to add department.'); setDepartmentName(''); setDepartmentCode(''); setDepartmentBranch(''); setDepartmentManager(''); setDepartmentHeadcount('0'); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to add department.'); } };
   const addContract = async () => { if (!contractEmployeeId || !contractStart) return; try { await submitEntity({ entityType: 'contract', employeeId: contractEmployeeId, contractType, startDate: new Date(contractStart).toISOString(), endDate: contractEnd ? new Date(contractEnd).toISOString() : undefined, salaryStructure: salaryStructure.trim() || undefined }, 'Failed to add contract.'); setContractType('full-time'); setContractStart(''); setContractEnd(''); setSalaryStructure(''); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to add contract.'); } };
   const clockIn = async () => { if (!attendanceEmployeeId) return; try { await submitEntity({ entityType: 'attendance', employeeId: attendanceEmployeeId, checkIn: new Date().toISOString(), shiftLabel }, 'Failed to log attendance.'); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to log attendance.'); } };
@@ -209,6 +450,7 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
 
   const addJobRole = () => { if (!jrTitle.trim()) return; setJobRoles(r => [...r, { id: `jr-${Date.now()}`, title: jrTitle.trim(), code: jrCode.trim(), dept: jrDept.trim(), grade: jrGrade.trim(), skills: jrSkills.trim() }]); setJrTitle(''); setJrCode(''); setJrDept(''); setJrGrade(''); setJrSkills(''); void submitEntity({ entityType: 'job_role', title: jrTitle.trim(), code: jrCode.trim(), department: jrDept.trim(), grade: jrGrade.trim(), skills: jrSkills.trim() }, 'Failed to save job role.').catch(() => null); };
   const addJobGrade = () => { if (!jgName.trim()) return; setJobGrades(g => [...g, { id: `jg-${Date.now()}`, name: jgName.trim(), level: Number(jgLevel)||0, minSalary: Number(jgMin)||0, maxSalary: Number(jgMax)||0 }]); setJgName(''); setJgLevel(''); setJgMin(''); setJgMax(''); void submitEntity({ entityType: 'job_grade', name: jgName.trim(), level: Number(jgLevel)||0, minSalary: Number(jgMin)||0, maxSalary: Number(jgMax)||0 }, 'Failed to save job grade.').catch(() => null); };
+  const toggleBranchDepartmentSelection = (name: string) => { setBranchDepartmentSelections((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name]); };
 
   const updateLeaveStatus = async (recordId: string, status: string) => { try { await patchEntity({ entityType: 'leave', id: recordId, status }, 'Failed to update leave request.'); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to update leave request.'); } };
   const updateEmployeeStatus = async (recordId: string, status: EmployeeStatus) => { try { await patchEntity({ entityType: 'employee', id: recordId, status }, 'Failed to update employee status.'); } catch (error) { setApiError(error instanceof Error ? error.message : 'Failed to update employee status.'); } };
@@ -258,23 +500,23 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
 
                     {/* Branches + Departments quick tables */}
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Branches &amp; locations</CardTitle><CardDescription>Top-level legal entities and offices.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Branch name" value={branchName} onChange={(event) => setBranchName(event.target.value)} /><Input placeholder="Code" value={branchCode} onChange={(event) => setBranchCode(event.target.value)} /><Input placeholder="Country / Address" value={branchAddress} onChange={(event) => setBranchAddress(event.target.value)} /><Input placeholder="HC Plan" value={branchHeadcount} onChange={(event) => setBranchHeadcount(event.target.value)} /><Input placeholder="Status" value={branchStatus} onChange={(event) => setBranchStatus(event.target.value)} /><div /><div className="md:col-span-2"><Button variant="secondary" onClick={() => void addBranchRecord()}>Add branch</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-muted-foreground"><tr><th className="pb-3">Branch</th><th className="pb-3">Code</th><th className="pb-3">Country / Address</th><th className="pb-3">HC Plan</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{orgBranches.length === 0 ? <tr><td colSpan={5} className="py-3 text-muted-foreground">No branches yet — add your first branch above.</td></tr> : orgBranches.map(b => <tr key={b.id}><td className="py-3 font-medium">{b.name ?? 'Branch'}</td><td className="py-3">{b.unitCode ?? '—'}</td><td className="py-3 text-muted-foreground">{b.branch ?? '—'}</td><td className="py-3">{b.headcountPlan ?? 0}</td><td className="py-3"><Badge variant="outline">{b.status ?? 'active'}</Badge></td></tr>)}</tbody></table></div></CardContent></Card>
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Departments</CardTitle><CardDescription>Functional divisions linked to branches.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Department name" value={departmentName} onChange={(event) => setDepartmentName(event.target.value)} /><Input placeholder="Code" value={departmentCode} onChange={(event) => setDepartmentCode(event.target.value)} /><Input placeholder="Branch" value={departmentBranch} onChange={(event) => setDepartmentBranch(event.target.value)} list="hr-branch-options" /><Input placeholder="Manager" value={departmentManager} onChange={(event) => setDepartmentManager(event.target.value)} /><Input placeholder="HC Plan" value={departmentHeadcount} onChange={(event) => setDepartmentHeadcount(event.target.value)} /><div /><div className="md:col-span-2"><Button variant="secondary" onClick={() => void addDepartmentRecord()}>Add department</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-muted-foreground"><tr><th className="pb-3">Department</th><th className="pb-3">Code</th><th className="pb-3">Branch</th><th className="pb-3">Manager</th><th className="pb-3">HC Plan</th></tr></thead><tbody className="divide-y">{orgDepts.length === 0 ? <tr><td colSpan={5} className="py-3 text-muted-foreground">No departments yet — add your first department above.</td></tr> : orgDepts.map(d => <tr key={d.id}><td className="py-3 font-medium">{d.name ?? 'Dept'}</td><td className="py-3">{d.unitCode ?? '—'}</td><td className="py-3 text-muted-foreground">{d.branch ?? d.parentName ?? '—'}</td><td className="py-3">{d.managerName ?? '—'}</td><td className="py-3">{d.headcountPlan ?? 0}</td></tr>)}</tbody></table></div></CardContent></Card>
+            <Card className="glass-card border-white/5 order-2"><CardHeader><CardTitle>Branches &amp; locations</CardTitle><CardDescription>Top-level legal entities and offices. Branch can have many departments (optional).</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Branch name" value={branchName} onChange={(event) => setBranchName(event.target.value)} /><Input placeholder="Code" value={branchCode} onChange={(event) => setBranchCode(event.target.value)} /><Input placeholder="Country / Address" value={branchAddress} onChange={(event) => setBranchAddress(event.target.value)} /><Input placeholder="HC Plan" value={branchHeadcount} onChange={(event) => setBranchHeadcount(event.target.value)} /><Input placeholder="Status" value={branchStatus} onChange={(event) => setBranchStatus(event.target.value)} /><div className="flex items-center gap-2 rounded-md border border-white/10 px-3"><input id="branch-link-departments" type="checkbox" checked={branchLinkDepartments} onChange={(event) => { setBranchLinkDepartments(event.target.checked); if (!event.target.checked) setBranchDepartmentSelections([]); }} /><label htmlFor="branch-link-departments" className="text-sm text-muted-foreground">Link departments to this branch</label></div>{branchLinkDepartments ? <div className="md:col-span-2 rounded-lg border border-white/10 p-3 space-y-2">{orgDepts.length === 0 ? <div className="text-sm text-muted-foreground">No departments available yet. Add departments first.</div> : orgDepts.map((department) => { const deptName = String(department.name ?? "").trim(); return <label key={department.id} className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={branchDepartmentSelections.includes(deptName)} onChange={() => toggleBranchDepartmentSelection(deptName)} /><span>{deptName || "Department"}</span></label>; })}</div> : null}<div className="md:col-span-2"><Button variant="secondary" onClick={() => void addBranchRecord()}>Add branch</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-muted-foreground"><tr><th className="pb-3">Branch</th><th className="pb-3">Code</th><th className="pb-3">Country / Address</th><th className="pb-3">HC Plan</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{orgBranches.length === 0 ? <tr><td colSpan={5} className="py-3 text-muted-foreground">No branches yet â€” add your first branch above.</td></tr> : orgBranches.map(b => <tr key={b.id}><td className="py-3 font-medium">{b.name ?? 'Branch'}</td><td className="py-3">{b.unitCode ?? 'â€”'}</td><td className="py-3 text-muted-foreground">{b.branch ?? 'â€”'}</td><td className="py-3">{b.headcountPlan ?? 0}</td><td className="py-3"><Badge variant="outline">{b.status ?? 'active'}</Badge></td></tr>)}</tbody></table></div></CardContent></Card>
+            <Card className="glass-card border-white/5 order-1"><CardHeader><CardTitle>Departments</CardTitle><CardDescription>Functional divisions. Create departments first; branch is optional.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Department name" value={departmentName} onChange={(event) => setDepartmentName(event.target.value)} /><Input placeholder="Code" value={departmentCode} onChange={(event) => setDepartmentCode(event.target.value)} /><Input placeholder="Branch (optional)" value={departmentBranch} onChange={(event) => setDepartmentBranch(event.target.value)} list="hr-branch-options" /><Input placeholder="Manager" value={departmentManager} onChange={(event) => setDepartmentManager(event.target.value)} /><Input placeholder="HC Plan" value={departmentHeadcount} onChange={(event) => setDepartmentHeadcount(event.target.value)} /><div /><div className="md:col-span-2"><Button variant="secondary" onClick={() => void addDepartmentRecord()}>Add department</Button></div></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-muted-foreground"><tr><th className="pb-3">Department</th><th className="pb-3">Code</th><th className="pb-3">Branch</th><th className="pb-3">Manager</th><th className="pb-3">HC Plan</th></tr></thead><tbody className="divide-y">{orgDepts.length === 0 ? <tr><td colSpan={5} className="py-3 text-muted-foreground">No departments yet â€” add your first department above.</td></tr> : orgDepts.map(d => <tr key={d.id}><td className="py-3 font-medium">{d.name ?? 'Dept'}</td><td className="py-3">{d.unitCode ?? 'â€”'}</td><td className="py-3 text-muted-foreground">{d.branch ?? d.parentName ?? 'â€”'}</td><td className="py-3">{d.managerName ?? 'â€”'}</td><td className="py-3">{d.headcountPlan ?? 0}</td></tr>)}</tbody></table></div></CardContent></Card>
           </div>
 
           {/* Create unit + guidance */}
           <div className="grid gap-4 xl:grid-cols-2">
             <Card className="glass-card border-white/5"><CardHeader><CardTitle>Add organization unit (Step 2+)</CardTitle><CardDescription>Departments, branches, teams, and cost centers.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><Input placeholder="Unit name" value={orgName} onChange={(e) => setOrgName(e.target.value)} /><Input placeholder="Type: department / branch / team / cost-center" value={orgUnitType} onChange={(e) => setOrgUnitType(e.target.value)} /><Input placeholder="Department (select)" value={orgParentName} onChange={(e) => setOrgParentName(e.target.value)} list="hr-department-options" /><Input placeholder="Branch / location" value={orgBranch} onChange={(e) => setOrgBranch(e.target.value)} list="hr-branch-options" /><Input placeholder="Cost center" value={orgCostCenter} onChange={(e) => setOrgCostCenter(e.target.value)} list="hr-cost-center-options" /><Input placeholder="Headcount plan" value={orgHeadcountPlan} onChange={(e) => setOrgHeadcountPlan(e.target.value)} /><Input placeholder="Unit code (e.g. IT-001)" value={orgUnitCode} onChange={(e) => setOrgUnitCode(e.target.value)} /><Input placeholder="Unit manager" value={orgManagerName} onChange={(e) => setOrgManagerName(e.target.value)} /><Input placeholder="Status: active / inactive" value={orgStatus} onChange={(e) => setOrgStatus(e.target.value)} /><Input type="date" value={orgEffectiveDate} onChange={(e) => setOrgEffectiveDate(e.target.value)} /><Input className="md:col-span-2" placeholder="Description / notes" value={orgDescription} onChange={(e) => setOrgDescription(e.target.value)} /><div className="md:col-span-2"><Button variant="secondary" onClick={() => void addOrganizationUnit()}>Add unit</Button></div></CardContent></Card>
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Setup notes</CardTitle><CardDescription>Hierarchy checks and standards.</CardDescription></CardHeader><CardContent className="space-y-2 text-sm text-muted-foreground"><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">1. Create departments first (type: department)</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">2. Add branches or locations and map them where needed</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">3. Add teams and squads with parent unit set (type: team)</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">4. Assign cost centers and headcount plans per unit</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">5. Define job grades, then job roles mapped to grades</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">6. Onboard employees â€” org units, grades, and roles apply automatically</div></CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Setup notes</CardTitle><CardDescription>Hierarchy checks and standards.</CardDescription></CardHeader><CardContent className="space-y-2 text-sm text-muted-foreground"><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">1. Create departments first (type: department)</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">2. Add branches or locations and map them where needed</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">3. Add teams and squads with parent unit set (type: team)</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">4. Assign cost centers and headcount plans per unit</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">5. Define job grades, then job roles mapped to grades</div><div className="rounded-lg border border-dashed border-white/10 px-3 py-2">6. Onboard employees Ã¢â‚¬â€ org units, grades, and roles apply automatically</div></CardContent></Card>
           </div>
 
           {/* Full units table */}
-          <Card className="glass-card border-white/5"><CardHeader><CardTitle>All organization units</CardTitle><CardDescription>Complete hierarchy â€” branches, departments, teams, cost centers.</CardDescription></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="text-muted-foreground"><tr><th className="pb-3">Unit</th><th className="pb-3">Type</th><th className="pb-3">Parent</th><th className="pb-3">Branch</th><th className="pb-3">Cost center</th><th className="pb-3">HC Plan</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{organizationUnits.length === 0 ? <tr><td className="py-3 text-muted-foreground" colSpan={7}>No organization units yet.</td></tr> : organizationUnits.map((unit) => <tr key={unit.id}><td className="py-3"><div className="font-medium">{unit.name ?? 'Unit'}</div><div className="text-xs text-muted-foreground/80">{unit.unitCode ?? unit.id}</div></td><td className="py-3"><Badge variant="outline">{unit.unitType ?? 'n/a'}</Badge></td><td className="py-3">{unit.parentName ?? 'root'}</td><td className="py-3">{unit.branch ?? 'â€”'}</td><td className="py-3">{unit.costCenter ?? 'â€”'}</td><td className="py-3">{unit.headcountPlan ?? 0}</td><td className="py-3"><Badge variant="outline">{unit.status ?? 'active'}</Badge></td></tr>)}</tbody></table></CardContent></Card>
+          <Card className="glass-card border-white/5"><CardHeader><CardTitle>All organization units</CardTitle><CardDescription>Complete hierarchy Ã¢â‚¬â€ branches, departments, teams, cost centers.</CardDescription></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="text-muted-foreground"><tr><th className="pb-3">Unit</th><th className="pb-3">Type</th><th className="pb-3">Parent</th><th className="pb-3">Branch</th><th className="pb-3">Cost center</th><th className="pb-3">HC Plan</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{organizationUnits.length === 0 ? <tr><td className="py-3 text-muted-foreground" colSpan={7}>No organization units yet.</td></tr> : organizationUnits.map((unit) => <tr key={unit.id}><td className="py-3"><div className="font-medium">{unit.name ?? 'Unit'}</div><div className="text-xs text-muted-foreground/80">{unit.unitCode ?? unit.id}</div></td><td className="py-3"><Badge variant="outline">{unit.unitType ?? 'n/a'}</Badge></td><td className="py-3">{unit.parentName ?? 'root'}</td><td className="py-3">{unit.branch ?? 'Ã¢â‚¬â€'}</td><td className="py-3">{unit.costCenter ?? 'Ã¢â‚¬â€'}</td><td className="py-3">{unit.headcountPlan ?? 0}</td><td className="py-3"><Badge variant="outline">{unit.status ?? 'active'}</Badge></td></tr>)}</tbody></table></CardContent></Card>
 
           {/* Job Roles + Job Grades */}
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Job roles / Positions</CardTitle><CardDescription>Standardised titles, job codes, grades, and required skills.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Job title (e.g. Software Engineer)" value={jrTitle} onChange={e => setJrTitle(e.target.value)} /><Input placeholder="Job code (e.g. SE-L2)" value={jrCode} onChange={e => setJrCode(e.target.value)} /><Input placeholder="Department" value={jrDept} onChange={e => setJrDept(e.target.value)} list="hr-department-options" /><Input placeholder="Grade (e.g. Mid-Level)" value={jrGrade} onChange={e => setJrGrade(e.target.value)} /><Input className="md:col-span-2" placeholder="Required skills (comma-separated)" value={jrSkills} onChange={e => setJrSkills(e.target.value)} /><div className="md:col-span-2"><Button variant="secondary" onClick={addJobRole}>Add job role</Button></div></div>{jobRoles.length > 0 && <div className="space-y-2 pt-2 border-t border-white/10">{jobRoles.map(r => <div key={r.id} className="rounded-lg border p-3 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{r.title}</span><Badge variant="outline">{r.grade || 'No grade'}</Badge></div><div className="text-muted-foreground text-xs mt-1">{r.code} Â· {r.dept}</div>{r.skills && <div className="text-muted-foreground/70 text-xs">{r.skills}</div>}</div>)}</div>}</CardContent></Card>
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Grades &amp; salary bands</CardTitle><CardDescription>Seniority levels with min/max salary ranges for comp benchmarking.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Grade name (e.g. Senior)" value={jgName} onChange={e => setJgName(e.target.value)} /><Input placeholder="Level number (e.g. 3)" value={jgLevel} onChange={e => setJgLevel(e.target.value)} /><Input placeholder="Min salary" value={jgMin} onChange={e => setJgMin(e.target.value)} /><Input placeholder="Max salary" value={jgMax} onChange={e => setJgMax(e.target.value)} /><div className="md:col-span-2"><Button variant="secondary" onClick={addJobGrade}>Add grade</Button></div></div>{jobGrades.length > 0 && <div className="space-y-2 pt-2 border-t border-white/10">{jobGrades.sort((a,b) => a.level - b.level).map(g => <div key={g.id} className="flex items-center justify-between rounded-lg border p-3 text-sm"><div><div className="font-medium">{g.name}</div><div className="text-muted-foreground text-xs">Level {g.level}</div></div><div className="text-right text-muted-foreground text-xs">{g.minSalary.toLocaleString()} â€“ {g.maxSalary.toLocaleString()}</div></div>)}</div>}</CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Job roles / Positions</CardTitle><CardDescription>Standardised titles, job codes, grades, and required skills.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Job title (e.g. Software Engineer)" value={jrTitle} onChange={e => setJrTitle(e.target.value)} /><Input placeholder="Job code (e.g. SE-L2)" value={jrCode} onChange={e => setJrCode(e.target.value)} /><Input placeholder="Department" value={jrDept} onChange={e => setJrDept(e.target.value)} list="hr-department-options" /><Input placeholder="Grade (e.g. Mid-Level)" value={jrGrade} onChange={e => setJrGrade(e.target.value)} /><Input className="md:col-span-2" placeholder="Required skills (comma-separated)" value={jrSkills} onChange={e => setJrSkills(e.target.value)} /><div className="md:col-span-2"><Button variant="secondary" onClick={addJobRole}>Add job role</Button></div></div>{jobRoles.length > 0 && <div className="space-y-2 pt-2 border-t border-white/10">{jobRoles.map(r => <div key={r.id} className="rounded-lg border p-3 text-sm"><div className="flex items-center justify-between"><span className="font-medium">{r.title}</span><Badge variant="outline">{r.grade || 'No grade'}</Badge></div><div className="text-muted-foreground text-xs mt-1">{r.code} Ã‚Â· {r.dept}</div>{r.skills && <div className="text-muted-foreground/70 text-xs">{r.skills}</div>}</div>)}</div>}</CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Grades &amp; salary bands</CardTitle><CardDescription>Seniority levels with min/max salary ranges for comp benchmarking.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-2"><Input placeholder="Grade name (e.g. Senior)" value={jgName} onChange={e => setJgName(e.target.value)} /><Input placeholder="Level number (e.g. 3)" value={jgLevel} onChange={e => setJgLevel(e.target.value)} /><Input placeholder="Min salary" value={jgMin} onChange={e => setJgMin(e.target.value)} /><Input placeholder="Max salary" value={jgMax} onChange={e => setJgMax(e.target.value)} /><div className="md:col-span-2"><Button variant="secondary" onClick={addJobGrade}>Add grade</Button></div></div>{jobGrades.length > 0 && <div className="space-y-2 pt-2 border-t border-white/10">{jobGrades.sort((a,b) => a.level - b.level).map(g => <div key={g.id} className="flex items-center justify-between rounded-lg border p-3 text-sm"><div><div className="font-medium">{g.name}</div><div className="text-muted-foreground text-xs">Level {g.level}</div></div><div className="text-right text-muted-foreground text-xs">{g.minSalary.toLocaleString()} Ã¢â‚¬â€œ {g.maxSalary.toLocaleString()}</div></div>)}</div>}</CardContent></Card>
           </div>
         </div>
         </TabsContent>
@@ -303,8 +545,68 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
 
         <TabsContent value="people" className="space-y-6">
         <div className="space-y-6">
-          <Card className="glass-card border-white/5"><CardHeader><CardTitle>Employee master</CardTitle><CardDescription>Create employee records with lifecycle details and assign saved organization units.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><Input placeholder="Employee name" value={employeeName} onChange={(event) => setEmployeeName(event.target.value)} /><Input placeholder="Job title" value={employeeTitle} onChange={(event) => setEmployeeTitle(event.target.value)} /><Input placeholder="Department (from organization)" value={employeeDepartment} onChange={(event) => setEmployeeDepartment(event.target.value)} list="hr-department-options" /><Input placeholder="Work email" value={employeeEmail} onChange={(event) => setEmployeeEmail(event.target.value)} /><Input placeholder="Role" value={employeeRole} onChange={(event) => setEmployeeRole(event.target.value)} /><Input placeholder="Org unit (from organization)" value={employeeOrgUnit} onChange={(event) => setEmployeeOrgUnit(event.target.value)} list="hr-org-unit-options" /><Input placeholder="Branch / location" value={employeeBranch} onChange={(event) => setEmployeeBranch(event.target.value)} list="hr-branch-options" /><Input placeholder="Manager name" value={employeeManager} onChange={(event) => setEmployeeManager(event.target.value)} /><Input placeholder="Employment type" value={employmentType} onChange={(event) => setEmploymentType(event.target.value)} /><Input placeholder="Phone" value={employeePhone} onChange={(event) => setEmployeePhone(event.target.value)} /><Input placeholder="Emergency contact" value={emergencyContact} onChange={(event) => setEmergencyContact(event.target.value)} /><Input placeholder="Skills / tags" value={employeeSkills} onChange={(event) => setEmployeeSkills(event.target.value)} /><Input type="date" value={joiningDate} onChange={(event) => setJoiningDate(event.target.value)} /><Input placeholder="Nationality type (local/international)" value={nationalityType} onChange={(event) => setNationalityType(event.target.value === 'international' ? 'international' : 'local')} list="hr-nationality-type-options" /><Input placeholder="Nationality country" value={nationalityCountry} onChange={(event) => setNationalityCountry(event.target.value)} /><Input placeholder="CV / Resume attachment URL or ID" value={cvAttachment} onChange={(event) => setCvAttachment(event.target.value)} /><Input placeholder="National ID attachment URL or ID (local)" value={nationalIdAttachment} onChange={(event) => setNationalIdAttachment(event.target.value)} /><Input placeholder="Passport attachment URL or ID" value={passportAttachment} onChange={(event) => setPassportAttachment(event.target.value)} /><Input placeholder="Work permit attachment URL or ID (international)" value={workPermitAttachment} onChange={(event) => setWorkPermitAttachment(event.target.value)} /><Input placeholder="Visa attachment URL or ID (if applicable)" value={visaAttachment} onChange={(event) => setVisaAttachment(event.target.value)} /><Input placeholder="Criminal clearance attachment URL or ID" value={criminalClearanceAttachment} onChange={(event) => setCriminalClearanceAttachment(event.target.value)} /><Input placeholder="Certificates attachment URL or ID" value={certificatesAttachment} onChange={(event) => setCertificatesAttachment(event.target.value)} /><Input placeholder="Reference letters attachment URL or ID" value={referenceLettersAttachment} onChange={(event) => setReferenceLettersAttachment(event.target.value)} /><div className="md:col-span-2"><Button onClick={() => void addEmployee()}>Add employee</Button></div></CardContent></Card>
-          <Card className="glass-card border-white/5"><CardHeader><CardTitle>Employee directory</CardTitle><CardDescription>Live employee master with lifecycle controls and context.</CardDescription></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="text-muted-foreground"><tr><th className="pb-3">Employee</th><th className="pb-3">Org</th><th className="pb-3">Employment</th><th className="pb-3">Manager</th><th className="pb-3">Contacts</th><th className="pb-3">Joined</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{employees.map((employee) => <tr key={employee.id}><td className="py-3"><div className="font-medium">{employee.name}</div><div className="text-muted-foreground">{employee.title}</div><div className="text-xs text-muted-foreground/80">{employee.employeeCode ?? employee.id}</div></td><td className="py-3">{employee.department}<div className="text-muted-foreground">{employee.branch ?? employee.orgUnit ?? 'n/a'}</div></td><td className="py-3">{employee.employmentType ?? 'n/a'}<div className="text-muted-foreground">{employee.role ?? 'n/a'}</div><div className="text-muted-foreground/80">Nationality: {employee.nationalityType ?? 'n/a'}{employee.nationalityCountry ? ` (${employee.nationalityCountry})` : ''}</div></td><td className="py-3">{employee.managerName ?? 'n/a'}</td><td className="py-3">{employee.email}<div className="text-muted-foreground">{employee.phone ?? 'No phone'}</div><div className="text-muted-foreground/80">{employee.emergencyContact ?? 'No emergency contact'}</div><div className="text-muted-foreground/80">Docs: {[employee.cvAttachment, employee.passportAttachment, employee.criminalClearanceAttachment, employee.nationalIdAttachment, employee.workPermitAttachment, employee.visaAttachment, employee.certificatesAttachment, employee.referenceLettersAttachment].filter(Boolean).length}</div></td><td className="py-3">{asDate(employee.joiningDate)}</td><td className="py-3"><Badge variant="outline">{employee.status}</Badge><div className="mt-2 flex gap-2"><Button size="sm" variant="outline" onClick={() => void updateEmployeeStatus(employee.id, 'active')}>Activate</Button><Button size="sm" variant="outline" onClick={() => void updateEmployeeStatus(employee.id, 'suspended')}>Suspend</Button><Button size="sm" variant="outline" onClick={() => void updateEmployeeStatus(employee.id, 'deactive')}>Deactivate</Button></div></td></tr>)}</tbody></table></CardContent></Card>
+          <Card className="glass-card border-white/5">
+            <CardHeader>
+              <CardTitle>Employee master</CardTitle>
+              <CardDescription>Create employee records with grouped details and assign saved organization units.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Personal information</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Input placeholder="First name" value={employeeFirstName} onChange={(event) => setEmployeeFirstName(event.target.value)} />
+                  <Input placeholder="Middle name" value={employeeMiddleName} onChange={(event) => setEmployeeMiddleName(event.target.value)} />
+                  <Input placeholder="Last name" value={employeeLastName} onChange={(event) => setEmployeeLastName(event.target.value)} />
+                  <Input placeholder="Gender" value={employeeGender} onChange={(event) => setEmployeeGender(event.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Contacts</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Input placeholder="Work email" value={employeeEmail} onChange={(event) => setEmployeeEmail(event.target.value)} />
+                  <Input placeholder="Phone" value={employeePhone} onChange={(event) => setEmployeePhone(event.target.value)} />
+                  <Input placeholder="Emergency contact" value={emergencyContact} onChange={(event) => setEmergencyContact(event.target.value)} />
+                  <Input placeholder="Next of kin" value={employeeNextOfKin} onChange={(event) => setEmployeeNextOfKin(event.target.value)} />
+                  <Input placeholder="Reference email" value={employeeReferenceEmail} onChange={(event) => setEmployeeReferenceEmail(event.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Education</div>
+                <Input placeholder="Highest education / qualification" value={employeeEducation} onChange={(event) => setEmployeeEducation(event.target.value)} />
+              </div>
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Employment and organization</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Input placeholder="Job title" value={employeeTitle} onChange={(event) => setEmployeeTitle(event.target.value)} />
+                  <Input placeholder="Role" value={employeeRole} onChange={(event) => setEmployeeRole(event.target.value)} />
+                  <Input placeholder="Department (from organization)" value={employeeDepartment} onChange={(event) => setEmployeeDepartment(event.target.value)} list="hr-department-options" />
+                  <Input placeholder="Org unit (from organization)" value={employeeOrgUnit} onChange={(event) => setEmployeeOrgUnit(event.target.value)} list="hr-org-unit-options" />
+                  <Input placeholder="Branch / location" value={employeeBranch} onChange={(event) => setEmployeeBranch(event.target.value)} list="hr-branch-options" />
+                  <Input placeholder="Manager name" value={employeeManager} onChange={(event) => setEmployeeManager(event.target.value)} />
+                  <Input placeholder="Employment type" value={employmentType} onChange={(event) => setEmploymentType(event.target.value)} />
+                  <Input placeholder="Skills / tags" value={employeeSkills} onChange={(event) => setEmployeeSkills(event.target.value)} />
+                  <Input type="date" value={joiningDate} onChange={(event) => setJoiningDate(event.target.value)} />
+                  <Input placeholder="Nationality type (local/international)" value={nationalityType} onChange={(event) => setNationalityType(event.target.value === 'international' ? 'international' : 'local')} list="hr-nationality-type-options" />
+                  <Input placeholder="Nationality country" value={nationalityCountry} onChange={(event) => setNationalityCountry(event.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="text-sm font-semibold">Required and supporting attachments</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <AttachmentField label="CV / Resume" value={cvAttachment} required isUploading={uploadingByField.cvAttachment} onUpload={(file) => withAttachmentUpload('cvAttachment', 'cv', setCvAttachment, file)} onClear={() => setCvAttachment('')} />
+                  <AttachmentField label="National ID (Local)" value={nationalIdAttachment} required={nationalityType === 'local'} isUploading={uploadingByField.nationalIdAttachment} onUpload={(file) => withAttachmentUpload('nationalIdAttachment', 'national_id', setNationalIdAttachment, file)} onClear={() => setNationalIdAttachment('')} />
+                  <AttachmentField label="Passport" value={passportAttachment} required={nationalityType === 'international'} isUploading={uploadingByField.passportAttachment} onUpload={(file) => withAttachmentUpload('passportAttachment', 'passport', setPassportAttachment, file)} onClear={() => setPassportAttachment('')} />
+                  <AttachmentField label="Work permit" value={workPermitAttachment} required={nationalityType === 'international'} isUploading={uploadingByField.workPermitAttachment} onUpload={(file) => withAttachmentUpload('workPermitAttachment', 'work_permit', setWorkPermitAttachment, file)} onClear={() => setWorkPermitAttachment('')} />
+                  <AttachmentField label="Visa (if applicable)" value={visaAttachment} isUploading={uploadingByField.visaAttachment} onUpload={(file) => withAttachmentUpload('visaAttachment', 'visa', setVisaAttachment, file)} onClear={() => setVisaAttachment('')} />
+                  <AttachmentField label="Criminal clearance" value={criminalClearanceAttachment} required isUploading={uploadingByField.criminalClearanceAttachment} onUpload={(file) => withAttachmentUpload('criminalClearanceAttachment', 'criminal_clearance', setCriminalClearanceAttachment, file)} onClear={() => setCriminalClearanceAttachment('')} />
+                  <AttachmentField label="Certificates" value={certificatesAttachment} isUploading={uploadingByField.certificatesAttachment} onUpload={(file) => withAttachmentUpload('certificatesAttachment', 'certificates', setCertificatesAttachment, file)} onClear={() => setCertificatesAttachment('')} />
+                  <AttachmentField label="Reference letters" value={referenceLettersAttachment} isUploading={uploadingByField.referenceLettersAttachment} onUpload={(file) => withAttachmentUpload('referenceLettersAttachment', 'reference_letters', setReferenceLettersAttachment, file)} onClear={() => setReferenceLettersAttachment('')} />
+                </div>
+              </div>
+              <div><Button onClick={() => void addEmployee()}>Add employee</Button></div>
+            </CardContent>
+          </Card>
+          <Card className="glass-card border-white/5"><CardHeader><CardTitle>Employee directory</CardTitle><CardDescription>Live employee master with lifecycle controls and context.</CardDescription></CardHeader><CardContent className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="text-muted-foreground"><tr><th className="pb-3">Employee</th><th className="pb-3">Org</th><th className="pb-3">Employment</th><th className="pb-3">Manager</th><th className="pb-3">Contacts</th><th className="pb-3">Joined</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{employees.map((employee) => <tr key={employee.id}><td className="py-3"><div className="font-medium">{employee.name}</div><div className="text-muted-foreground">{employee.title}</div><div className="text-xs text-muted-foreground/80">{employee.employeeCode ?? employee.id}</div></td><td className="py-3">{employee.department}<div className="text-muted-foreground">{employee.branch ?? employee.orgUnit ?? 'n/a'}</div></td><td className="py-3">{employee.employmentType ?? 'n/a'}<div className="text-muted-foreground">{employee.role ?? 'n/a'}</div><div className="text-muted-foreground/80">Nationality: {employee.nationalityType ?? 'n/a'}{employee.nationalityCountry ? ` (${employee.nationalityCountry})` : ''}</div><div className="text-muted-foreground/80">Education: {employee.education ?? 'n/a'}</div></td><td className="py-3">{employee.managerName ?? 'n/a'}</td><td className="py-3">{employee.email}<div className="text-muted-foreground">{employee.phone ?? 'No phone'}</div><div className="text-muted-foreground/80">{employee.emergencyContact ?? 'No emergency contact'}</div><div className="text-muted-foreground/80">Next of kin: {employee.nextOfKin ?? 'n/a'}</div><div className="text-muted-foreground/80">Reference: {employee.referenceEmail ?? 'n/a'}</div><div className="text-muted-foreground/80">Docs: {[employee.cvAttachment, employee.passportAttachment, employee.criminalClearanceAttachment, employee.nationalIdAttachment, employee.workPermitAttachment, employee.visaAttachment, employee.certificatesAttachment, employee.referenceLettersAttachment].filter(Boolean).length}</div></td><td className="py-3">{asDate(employee.joiningDate)}</td><td className="py-3"><Badge variant="outline">{employee.status}</Badge><div className="mt-2 flex gap-2"><Button size="sm" variant="outline" onClick={() => void updateEmployeeStatus(employee.id, 'active')}>Activate</Button><Button size="sm" variant="outline" onClick={() => void updateEmployeeStatus(employee.id, 'suspended')}>Suspend</Button><Button size="sm" variant="outline" onClick={() => void updateEmployeeStatus(employee.id, 'deactive')}>Deactivate</Button></div></td></tr>)}</tbody></table></CardContent></Card>
         </div>
         </TabsContent>
 
@@ -379,14 +681,14 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
           {currentEmployee ? (
             <>
               {/* Profile banner */}
-              <Card className="glass-card border-white/5"><CardContent className="pt-5"><div className="flex flex-wrap gap-4 items-start"><div className="flex items-center justify-center h-14 w-14 rounded-full bg-primary/10 text-primary text-lg font-semibold shrink-0">{currentEmployee.name.split(' ').map(n=>n[0]).join('')}</div><div><div className="text-lg font-semibold">{currentEmployee.name}</div><div className="text-muted-foreground">{currentEmployee.title} Â· {currentEmployee.department}</div><div className="text-sm text-muted-foreground">{currentEmployee.email} Â· {currentEmployee.phone ?? 'No phone'}</div></div><div className="ml-auto flex gap-2 flex-wrap"><Badge variant="outline">{currentEmployee.status}</Badge><Badge variant="outline">{currentEmployee.employmentType ?? 'full-time'}</Badge></div></div></CardContent></Card>
+              <Card className="glass-card border-white/5"><CardContent className="pt-5"><div className="flex flex-wrap gap-4 items-start"><div className="flex items-center justify-center h-14 w-14 rounded-full bg-primary/10 text-primary text-lg font-semibold shrink-0">{currentEmployee.name.split(' ').map(n=>n[0]).join('')}</div><div><div className="text-lg font-semibold">{currentEmployee.name}</div><div className="text-muted-foreground">{currentEmployee.title} Ã‚Â· {currentEmployee.department}</div><div className="text-sm text-muted-foreground">{currentEmployee.email} Ã‚Â· {currentEmployee.phone ?? 'No phone'}</div></div><div className="ml-auto flex gap-2 flex-wrap"><Badge variant="outline">{currentEmployee.status}</Badge><Badge variant="outline">{currentEmployee.employmentType ?? 'full-time'}</Badge></div></div></CardContent></Card>
               <div className="grid gap-4 xl:grid-cols-3">
                 {/* Leave */}
-                <Card className="glass-card border-white/5"><CardHeader><CardTitle>My leave</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{leaves.filter(l=>l.employeeId===currentEmployee.id).length === 0 ? <div className="text-muted-foreground">No leave requests.</div> : leaves.filter(l=>l.employeeId===currentEmployee.id).map(l => <div key={l.id} className="rounded-lg border p-3"><div className="flex justify-between"><span className="font-medium">{l.type}</span><Badge variant="outline">{l.status}</Badge></div><div className="text-muted-foreground">{asDate(l.startDate)} â€“ {asDate(l.endDate)}</div></div>)}<div className="pt-2 space-y-2 border-t border-white/10"><Input placeholder="Leave type" value={leaveType} onChange={e=>setLeaveType(e.target.value)} /><Input type="date" value={leaveStart} onChange={e=>setLeaveStart(e.target.value)} /><Input type="date" value={leaveEnd} onChange={e=>setLeaveEnd(e.target.value)} /><Button size="sm" variant="secondary" onClick={() => { setLeaveEmployeeId(currentEmployee.id); void requestLeave(); }}>Request leave</Button></div></CardContent></Card>
+                <Card className="glass-card border-white/5"><CardHeader><CardTitle>My leave</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{leaves.filter(l=>l.employeeId===currentEmployee.id).length === 0 ? <div className="text-muted-foreground">No leave requests.</div> : leaves.filter(l=>l.employeeId===currentEmployee.id).map(l => <div key={l.id} className="rounded-lg border p-3"><div className="flex justify-between"><span className="font-medium">{l.type}</span><Badge variant="outline">{l.status}</Badge></div><div className="text-muted-foreground">{asDate(l.startDate)} Ã¢â‚¬â€œ {asDate(l.endDate)}</div></div>)}<div className="pt-2 space-y-2 border-t border-white/10"><Input placeholder="Leave type" value={leaveType} onChange={e=>setLeaveType(e.target.value)} /><Input type="date" value={leaveStart} onChange={e=>setLeaveStart(e.target.value)} /><Input type="date" value={leaveEnd} onChange={e=>setLeaveEnd(e.target.value)} /><Button size="sm" variant="secondary" onClick={() => { setLeaveEmployeeId(currentEmployee.id); void requestLeave(); }}>Request leave</Button></div></CardContent></Card>
                 {/* Training + certs */}
-                <Card className="glass-card border-white/5"><CardHeader><CardTitle>My learning</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{learning.filter(l=>String(l.employeeId??'')===currentEmployee.id).length === 0 ? <div className="text-muted-foreground">No courses assigned.</div> : learning.filter(l=>String(l.employeeId??'')===currentEmployee.id).slice(0,5).map(l => <div key={l.id} className="rounded-lg border p-3"><div className="font-medium">{String(l.courseName??'Course')}</div><div className="text-muted-foreground">{String(l.provider??'â€”')} Â· {String(l.status??'assigned')}</div></div>)}{certifications.filter(c=>String(c.employeeId??'')===currentEmployee.id).length > 0 && <div className="pt-2 border-t border-white/10 space-y-1"><div className="text-xs text-muted-foreground font-medium uppercase">Certifications</div>{certifications.filter(c=>String(c.employeeId??'')===currentEmployee.id).map(c => <div key={c.id} className="flex justify-between text-xs"><span>{String(c.certificationName??'Cert')}</span><span className="text-muted-foreground">Exp: {asDate(String(c.expiryDate??''))}</span></div>)}</div>}</CardContent></Card>
+                <Card className="glass-card border-white/5"><CardHeader><CardTitle>My learning</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{learning.filter(l=>String(l.employeeId??'')===currentEmployee.id).length === 0 ? <div className="text-muted-foreground">No courses assigned.</div> : learning.filter(l=>String(l.employeeId??'')===currentEmployee.id).slice(0,5).map(l => <div key={l.id} className="rounded-lg border p-3"><div className="font-medium">{String(l.courseName??'Course')}</div><div className="text-muted-foreground">{String(l.provider??'Ã¢â‚¬â€')} Ã‚Â· {String(l.status??'assigned')}</div></div>)}{certifications.filter(c=>String(c.employeeId??'')===currentEmployee.id).length > 0 && <div className="pt-2 border-t border-white/10 space-y-1"><div className="text-xs text-muted-foreground font-medium uppercase">Certifications</div>{certifications.filter(c=>String(c.employeeId??'')===currentEmployee.id).map(c => <div key={c.id} className="flex justify-between text-xs"><span>{String(c.certificationName??'Cert')}</span><span className="text-muted-foreground">Exp: {asDate(String(c.expiryDate??''))}</span></div>)}</div>}</CardContent></Card>
                 {/* Assets + docs */}
-                <Card className="glass-card border-white/5"><CardHeader><CardTitle>My assets &amp; documents</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{assets.filter(a=>String(a.employeeId??'')===currentEmployee.id).length === 0 && documents.filter(d=>String(d.employeeId??'')===currentEmployee.id).length === 0 ? <div className="text-muted-foreground">No records.</div> : null}{assets.filter(a=>String(a.employeeId??'')===currentEmployee.id).map(a => <div key={a.id} className="rounded-lg border p-3"><div className="font-medium">{String(a.assetName??'Asset')}</div><div className="text-muted-foreground">{String(a.assetTag??a.id)} Â· {String(a.status??'assigned')}</div></div>)}{documents.filter(d=>String(d.employeeId??'')===currentEmployee.id).map(d => <div key={d.id} className="rounded-lg border p-3"><div className="font-medium">{String(d.documentName??'Document')}</div><div className="text-muted-foreground">Status: {String(d.status??'valid')} Â· Exp: {asDate(String(d.expiryDate??''))}</div></div>)}</CardContent></Card>
+                <Card className="glass-card border-white/5"><CardHeader><CardTitle>My assets &amp; documents</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{assets.filter(a=>String(a.employeeId??'')===currentEmployee.id).length === 0 && documents.filter(d=>String(d.employeeId??'')===currentEmployee.id).length === 0 ? <div className="text-muted-foreground">No records.</div> : null}{assets.filter(a=>String(a.employeeId??'')===currentEmployee.id).map(a => <div key={a.id} className="rounded-lg border p-3"><div className="font-medium">{String(a.assetName??'Asset')}</div><div className="text-muted-foreground">{String(a.assetTag??a.id)} Ã‚Â· {String(a.status??'assigned')}</div></div>)}{documents.filter(d=>String(d.employeeId??'')===currentEmployee.id).map(d => <div key={d.id} className="rounded-lg border p-3"><div className="font-medium">{String(d.documentName??'Document')}</div><div className="text-muted-foreground">Status: {String(d.status??'valid')} Ã‚Â· Exp: {asDate(String(d.expiryDate??''))}</div></div>)}</CardContent></Card>
               </div>
               {/* Expense + travel self-service */}
               <div className="grid gap-4 xl:grid-cols-2">
@@ -408,16 +710,16 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
             <KpiCard label="Active goals" value={goals.length} sub={`${performance.length} reviews in progress`} />
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Team roster</CardTitle><CardDescription>All employees with status and reporting line.</CardDescription></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-muted-foreground"><tr><th className="pb-3">Employee</th><th className="pb-3">Department</th><th className="pb-3">Type</th><th className="pb-3">Manager</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{employees.length === 0 ? <tr><td colSpan={5} className="py-3 text-muted-foreground">No employees yet.</td></tr> : employees.map(e => <tr key={e.id}><td className="py-3"><div className="font-medium">{e.name}</div><div className="text-xs text-muted-foreground">{e.title}</div></td><td className="py-3 text-muted-foreground">{e.department}</td><td className="py-3"><Badge variant="outline">{e.employmentType ?? 'n/a'}</Badge></td><td className="py-3 text-muted-foreground">{e.managerName ?? 'â€”'}</td><td className="py-3"><Badge variant="outline">{e.status}</Badge></td></tr>)}</tbody></table></CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Team roster</CardTitle><CardDescription>All employees with status and reporting line.</CardDescription></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-muted-foreground"><tr><th className="pb-3">Employee</th><th className="pb-3">Department</th><th className="pb-3">Type</th><th className="pb-3">Manager</th><th className="pb-3">Status</th></tr></thead><tbody className="divide-y">{employees.length === 0 ? <tr><td colSpan={5} className="py-3 text-muted-foreground">No employees yet.</td></tr> : employees.map(e => <tr key={e.id}><td className="py-3"><div className="font-medium">{e.name}</div><div className="text-xs text-muted-foreground">{e.title}</div></td><td className="py-3 text-muted-foreground">{e.department}</td><td className="py-3"><Badge variant="outline">{e.employmentType ?? 'n/a'}</Badge></td><td className="py-3 text-muted-foreground">{e.managerName ?? 'Ã¢â‚¬â€'}</td><td className="py-3"><Badge variant="outline">{e.status}</Badge></td></tr>)}</tbody></table></CardContent></Card>
             <div className="space-y-4">
-              <Card className="glass-card border-white/5"><CardHeader><CardTitle>Leave approvals</CardTitle></CardHeader><CardContent className="space-y-2">{requestedLeaves.length === 0 ? <div className="text-sm text-muted-foreground">No pending requests.</div> : requestedLeaves.map(item => <div key={item.id} className="rounded-lg border p-3 text-sm"><div className="font-medium">{item.employeeName}</div><div className="text-muted-foreground">{item.type} Â· {asDate(item.startDate)} â€“ {asDate(item.endDate)}</div><div className="flex gap-2 mt-2"><Button size="sm" onClick={() => void updateLeaveStatus(item.id, 'approved')}>Approve</Button><Button size="sm" variant="outline" onClick={() => void updateLeaveStatus(item.id, 'rejected')}>Reject</Button></div></div>)}</CardContent></Card>
+              <Card className="glass-card border-white/5"><CardHeader><CardTitle>Leave approvals</CardTitle></CardHeader><CardContent className="space-y-2">{requestedLeaves.length === 0 ? <div className="text-sm text-muted-foreground">No pending requests.</div> : requestedLeaves.map(item => <div key={item.id} className="rounded-lg border p-3 text-sm"><div className="font-medium">{item.employeeName}</div><div className="text-muted-foreground">{item.type} Ã‚Â· {asDate(item.startDate)} Ã¢â‚¬â€œ {asDate(item.endDate)}</div><div className="flex gap-2 mt-2"><Button size="sm" onClick={() => void updateLeaveStatus(item.id, 'approved')}>Approve</Button><Button size="sm" variant="outline" onClick={() => void updateLeaveStatus(item.id, 'rejected')}>Reject</Button></div></div>)}</CardContent></Card>
               <Card className="glass-card border-white/5"><CardHeader><CardTitle>Overtime &amp; correction approvals</CardTitle></CardHeader><CardContent className="space-y-2">{pendingOvertime.length === 0 && pendingCorrections.length === 0 ? <div className="text-sm text-muted-foreground">No pending items.</div> : [...pendingOvertime.slice(0,3), ...pendingCorrections.slice(0,3)].map(item => <div key={item.id} className="rounded-lg border p-3 text-sm"><div className="font-medium">{String(item.employeeName ?? 'Employee')}</div><div className="text-muted-foreground">{String(item.reason ?? `${Number(item.hours??0)}h overtime`)}</div><Button size="sm" className="mt-2" onClick={() => void updateRecordStatus(item.reason ? 'attendance_correction' : 'overtime', item.id, 'approved')}>Approve</Button></div>)}</CardContent></Card>
             </div>
           </div>
           <div className="grid gap-4 xl:grid-cols-3">
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Goals &amp; objectives</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{goals.length === 0 ? <div className="text-muted-foreground">No goals set.</div> : goals.slice(0,5).map(g => <div key={g.id} className="rounded-lg border p-3"><div className="font-medium">{String(g.title ?? 'Goal')}</div><div className="text-muted-foreground">{String(g.employeeName ?? 'â€”')} Â· {String(g.status ?? 'open')}</div></div>)}</CardContent></Card>
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Performance reviews</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{performance.length === 0 ? <div className="text-muted-foreground">No reviews in progress.</div> : performance.slice(0,5).map(p => <div key={p.id} className="rounded-lg border p-3"><div className="font-medium">{String(p.employeeName ?? 'Employee')}</div><div className="text-muted-foreground">{String(p.cycleName ?? 'Cycle')} Â· Rating: {String(p.rating ?? 'â€”')}</div></div>)}</CardContent></Card>
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Upcoming shifts</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{shifts.length === 0 ? <div className="text-muted-foreground">No shifts scheduled.</div> : shifts.slice(0,5).map(s => <div key={s.id} className="rounded-lg border p-3"><div className="font-medium">{String(s.employeeName ?? 'Employee')}</div><div className="text-muted-foreground">{String(s.shiftLabel ?? 'shift')} Â· {asDate(String(s.shiftDate ?? ''))}</div></div>)}</CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Goals &amp; objectives</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{goals.length === 0 ? <div className="text-muted-foreground">No goals set.</div> : goals.slice(0,5).map(g => <div key={g.id} className="rounded-lg border p-3"><div className="font-medium">{String(g.title ?? 'Goal')}</div><div className="text-muted-foreground">{String(g.employeeName ?? 'Ã¢â‚¬â€')} Ã‚Â· {String(g.status ?? 'open')}</div></div>)}</CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Performance reviews</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{performance.length === 0 ? <div className="text-muted-foreground">No reviews in progress.</div> : performance.slice(0,5).map(p => <div key={p.id} className="rounded-lg border p-3"><div className="font-medium">{String(p.employeeName ?? 'Employee')}</div><div className="text-muted-foreground">{String(p.cycleName ?? 'Cycle')} Ã‚Â· Rating: {String(p.rating ?? 'Ã¢â‚¬â€')}</div></div>)}</CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Upcoming shifts</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{shifts.length === 0 ? <div className="text-muted-foreground">No shifts scheduled.</div> : shifts.slice(0,5).map(s => <div key={s.id} className="rounded-lg border p-3"><div className="font-medium">{String(s.employeeName ?? 'Employee')}</div><div className="text-muted-foreground">{String(s.shiftLabel ?? 'shift')} Ã‚Â· {asDate(String(s.shiftDate ?? ''))}</div></div>)}</CardContent></Card>
           </div>
         </div>
         </TabsContent>
@@ -444,8 +746,8 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
           </div>
           {/* Payroll + attendance + alerts */}
           <div className="grid gap-4 xl:grid-cols-3">
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Payroll summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{payrollRuns.length === 0 ? <div className="text-muted-foreground">No payroll runs yet.</div> : payrollRuns.map(run => <div key={run.id} className="rounded-lg border p-3"><div className="flex justify-between font-medium"><span>{asDate(run.periodStart)} â€“ {asDate(run.periodEnd)}</span><Badge variant="outline">{run.approvalStatus}</Badge></div><div className="text-muted-foreground mt-1">{run.payslips.length} payslips Â· Net {totalNetPayroll > 0 ? run.payslips.reduce((s,p)=>s+p.netPay,0).toLocaleString() : 'â€”'}</div></div>)}</CardContent></Card>
-            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Attendance snapshot</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{attendance.length === 0 ? <div className="text-muted-foreground">No attendance records yet.</div> : attendance.slice(0,6).map(a => <div key={a.id} className="flex justify-between items-center"><span className="font-medium">{a.employeeName}</span><span className="text-muted-foreground text-xs">{asDateTime(a.checkIn)}</span></div>)}<div className="text-muted-foreground pt-1 border-t border-white/10">{shifts.length} shifts Â· {overtimeHoursTotal}h overtime Â· {attendanceCorrections.length} corrections</div></CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Payroll summary</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{payrollRuns.length === 0 ? <div className="text-muted-foreground">No payroll runs yet.</div> : payrollRuns.map(run => <div key={run.id} className="rounded-lg border p-3"><div className="flex justify-between font-medium"><span>{asDate(run.periodStart)} Ã¢â‚¬â€œ {asDate(run.periodEnd)}</span><Badge variant="outline">{run.approvalStatus}</Badge></div><div className="text-muted-foreground mt-1">{run.payslips.length} payslips Ã‚Â· Net {totalNetPayroll > 0 ? run.payslips.reduce((s,p)=>s+p.netPay,0).toLocaleString() : 'Ã¢â‚¬â€'}</div></div>)}</CardContent></Card>
+            <Card className="glass-card border-white/5"><CardHeader><CardTitle>Attendance snapshot</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{attendance.length === 0 ? <div className="text-muted-foreground">No attendance records yet.</div> : attendance.slice(0,6).map(a => <div key={a.id} className="flex justify-between items-center"><span className="font-medium">{a.employeeName}</span><span className="text-muted-foreground text-xs">{asDateTime(a.checkIn)}</span></div>)}<div className="text-muted-foreground pt-1 border-t border-white/10">{shifts.length} shifts Ã‚Â· {overtimeHoursTotal}h overtime Ã‚Â· {attendanceCorrections.length} corrections</div></CardContent></Card>
             <Card className="glass-card border-white/5"><CardHeader><CardTitle>HR alerts</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{[...(expiringSoon.length > 0 ? [`${expiringSoon.length} certification(s) expiring in 30 days`] : []), ...(incidentOpen.length > 0 ? [`${incidentOpen.length} open incident(s)`] : []), ...(pendingClaims.length > 0 ? [`${pendingClaims.length} expense claim(s) pending`] : []), ...(pendingTravel.length > 0 ? [`${pendingTravel.length} travel request(s) pending`] : []), ...(openOffboarding.length > 0 ? [`${openOffboarding.length} active offboarding case(s)`] : []), ...(requestedLeaves.length > 0 ? [`${requestedLeaves.length} leave request(s) awaiting approval`] : [])].length === 0 ? [<div key="none" className="text-muted-foreground">No active alerts.</div>] : [...(expiringSoon.length > 0 ? [`${expiringSoon.length} certification(s) expiring in 30 days`] : []), ...(incidentOpen.length > 0 ? [`${incidentOpen.length} open incident(s)`] : []), ...(pendingClaims.length > 0 ? [`${pendingClaims.length} expense claim(s) pending`] : []), ...(pendingTravel.length > 0 ? [`${pendingTravel.length} travel request(s) pending`] : []), ...(openOffboarding.length > 0 ? [`${openOffboarding.length} active offboarding case(s)`] : []), ...(requestedLeaves.length > 0 ? [`${requestedLeaves.length} leave request(s) awaiting approval`] : [])].map(msg => <div key={msg} className="flex items-center gap-2 rounded-lg border px-3 py-2"><div className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />{msg}</div>)}</CardContent></Card>
           </div>
         </div>
@@ -468,5 +770,6 @@ export function HrOperationsContent({ module, moduleTab }: { module: BusinessMod
     </div>
   );
 }
+
 
 
