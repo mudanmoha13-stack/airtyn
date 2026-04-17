@@ -20,7 +20,16 @@ const createSchema = z.discriminatedUnion('entityType', [
     phone: z.string().optional(),
     emergencyContact: z.string().optional(),
     joiningDate: z.string().datetime().optional(),
-    probationEndDate: z.string().datetime().optional(),
+    nationalityType: z.enum(['local', 'international']).default('local'),
+    nationalityCountry: z.string().optional(),
+    cvAttachment: z.string().optional(),
+    passportAttachment: z.string().optional(),
+    criminalClearanceAttachment: z.string().optional(),
+    nationalIdAttachment: z.string().optional(),
+    workPermitAttachment: z.string().optional(),
+    visaAttachment: z.string().optional(),
+    certificatesAttachment: z.string().optional(),
+    referenceLettersAttachment: z.string().optional(),
   }),
   z.object({
     entityType: z.literal('organization'),
@@ -257,6 +266,14 @@ type EmployeeDoc = Record<string, unknown> & {
   createdAt?: string;
 };
 
+class HrValidationError extends Error {
+  status: number;
+  constructor(message: string, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 function extractIndexUrl(message: string): string | null {
   const match = /https:\/\/console\.firebase\.google\.com\/[^\s|]+/.exec(message);
   return match ? match[0].replace(/\s+$/, '') : null;
@@ -286,6 +303,22 @@ async function assertTenantOwnership(collectionName: string, id: string, tenantI
   const snap = await ref.get();
   if (!snap.exists || String(snap.data()?.tenantId ?? '') !== tenantId) return null;
   return ref;
+}
+
+async function loadTenantOrgUnits(tenantId: string): Promise<Array<{ id: string } & Record<string, unknown>>> {
+  const snap = await adminFirestore.collection(col.bizHrOrgUnits).where('tenantId', '==', tenantId).limit(1000).get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+}
+
+async function assertEmployeeExists(tenantId: string, employeeId: string) {
+  const ref = await assertTenantOwnership(col.bizEmployees, employeeId, tenantId);
+  if (!ref) throw new HrValidationError('Employee does not exist for this tenant.');
+  const snap = await ref.get();
+  return snap.data() as Record<string, unknown>;
+}
+
+function normalize(value: string | undefined | null) {
+  return String(value ?? '').trim().toLowerCase();
 }
 
 function mapNamedDocs(snapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>, employeeNameResolver?: (employeeId: string) => string): Array<Record<string, unknown> & { id: string; employeeName?: string }> {
@@ -390,7 +423,16 @@ export async function GET(request: NextRequest) {
           phone: String(employee.phone ?? ''),
           emergencyContact: String(employee.emergencyContact ?? ''),
           joiningDate: String(employee.joiningDate ?? ''),
-          probationEndDate: String(employee.probationEndDate ?? ''),
+          nationalityType: String(employee.nationalityType ?? 'local') as 'local' | 'international',
+          nationalityCountry: String(employee.nationalityCountry ?? ''),
+          cvAttachment: String(employee.cvAttachment ?? ''),
+          passportAttachment: String(employee.passportAttachment ?? ''),
+          criminalClearanceAttachment: String(employee.criminalClearanceAttachment ?? ''),
+          nationalIdAttachment: String(employee.nationalIdAttachment ?? ''),
+          workPermitAttachment: String(employee.workPermitAttachment ?? ''),
+          visaAttachment: String(employee.visaAttachment ?? ''),
+          certificatesAttachment: String(employee.certificatesAttachment ?? ''),
+          referenceLettersAttachment: String(employee.referenceLettersAttachment ?? ''),
         };
       }),
       organizationUnits: mapNamedDocs(orgSnap).sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''))),
@@ -442,7 +484,70 @@ export async function POST(request: NextRequest) {
     const payload = createSchema.parse(await request.json());
     const createdAt = nowIso();
 
+    if (payload.entityType === 'organization') {
+      const units = await loadTenantOrgUnits(tenantId);
+      const unitType = payload.unitType.trim().toLowerCase();
+      const parentName = payload.parentName?.trim();
+      const existingByName = units.find((unit) => normalize(String(unit.name ?? '')) === normalize(payload.name));
+      if (existingByName && normalize(String(existingByName.unitType ?? '')) === unitType) {
+        throw new HrValidationError(`An organization unit named "${payload.name}" with type "${unitType}" already exists.`);
+      }
+
+      const profileExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'organization');
+      if (unitType !== 'organization' && !profileExists) {
+        throw new HrValidationError('Create the organization profile first before adding branches, departments, teams, or cost centers.');
+      }
+      if (unitType === 'organization' && profileExists) {
+        throw new HrValidationError('Organization profile already exists. Update the existing profile instead of creating another.');
+      }
+      if (['team', 'unit', 'sub-team', 'cost-center'].includes(unitType) && !parentName) {
+        throw new HrValidationError(`${payload.unitType} requires a parent unit.`);
+      }
+
+      if (parentName) {
+        const parent = units.find((unit) => normalize(String(unit.name ?? '')) === normalize(parentName));
+        if (!parent) throw new HrValidationError(`Parent unit "${parentName}" does not exist.`);
+        const parentType = normalize(String(parent.unitType ?? ''));
+        if (unitType === 'department' && !['organization', 'branch'].includes(parentType)) {
+          throw new HrValidationError('Department parent must be an organization profile or branch.');
+        }
+        if (['team', 'unit', 'sub-team'].includes(unitType) && !['department', 'branch', 'team', 'unit', 'sub-team'].includes(parentType)) {
+          throw new HrValidationError('Team/unit parent must be a department, branch, or another team/unit.');
+        }
+      }
+
+      if (unitType === 'department' && payload.branch?.trim()) {
+        const branchExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'branch' && normalize(String(unit.name ?? '')) === normalize(payload.branch));
+        if (!branchExists) {
+          throw new HrValidationError(`Branch "${payload.branch}" does not exist. Add the branch first or use an existing branch name.`);
+        }
+      }
+    }
+
     if (payload.entityType === 'employee') {
+      const units = await loadTenantOrgUnits(tenantId);
+      const profileExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'organization');
+      if (!profileExists) throw new HrValidationError('Set up organization profile before creating employees.');
+      const departmentExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'department' && normalize(String(unit.name ?? '')) === normalize(payload.department));
+      if (!departmentExists) throw new HrValidationError(`Department "${payload.department}" does not exist in organization structure.`);
+      if (payload.orgUnit?.trim()) {
+        const orgUnitExists = units.some((unit) => normalize(String(unit.name ?? '')) === normalize(payload.orgUnit));
+        if (!orgUnitExists) throw new HrValidationError(`Org unit "${payload.orgUnit}" does not exist.`);
+      }
+      if (payload.branch?.trim()) {
+        const branchExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'branch' && normalize(String(unit.name ?? '')) === normalize(payload.branch));
+        if (!branchExists) throw new HrValidationError(`Branch "${payload.branch}" does not exist.`);
+      }
+      if (payload.nationalityType === 'local' && !payload.nationalIdAttachment?.trim()) {
+        throw new HrValidationError('Local employees require a national ID attachment reference.');
+      }
+      if (payload.nationalityType === 'international') {
+        if (!payload.passportAttachment?.trim()) throw new HrValidationError('International employees require a passport attachment reference.');
+        if (!payload.workPermitAttachment?.trim()) throw new HrValidationError('International employees require a work permit attachment reference.');
+      }
+      if (!payload.cvAttachment?.trim()) throw new HrValidationError('Employee CV/resume attachment reference is required.');
+      if (!payload.criminalClearanceAttachment?.trim()) throw new HrValidationError('Employee criminal clearance attachment reference is required.');
+
       const [firstName, ...rest] = payload.name.trim().split(' ');
       const lastName = rest.join(' ');
       const email = payload.email.toLowerCase();
@@ -452,18 +557,127 @@ export async function POST(request: NextRequest) {
 
       const existingEmployee = await adminFirestore.collection(col.bizEmployees).where('tenantId', '==', tenantId).where('userId', '==', userId).limit(1).get();
       const employeeId = existingEmployee.empty ? makeId(col.bizEmployees) : existingEmployee.docs[0].id;
-      await adminFirestore.collection(col.bizEmployees).doc(employeeId).set({ id: employeeId, tenantId, userId, name: payload.name.trim(), email, title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, branch: payload.branch ?? null, managerName: payload.managerName ?? null, employmentType: payload.employmentType ?? null, phone: payload.phone ?? null, emergencyContact: payload.emergencyContact ?? null, joiningDate: payload.joiningDate ?? null, probationEndDate: payload.probationEndDate ?? null, employeeCode: `EMP-${employeeId.slice(-6).toUpperCase()}`, status: 'active', createdAt, updatedAt: createdAt }, { merge: true });
+      await adminFirestore.collection(col.bizEmployees).doc(employeeId).set({ id: employeeId, tenantId, userId, name: payload.name.trim(), email, title: payload.title, departmentId: payload.department, role: payload.role ?? null, orgUnit: payload.orgUnit ?? null, skills: payload.skills ?? null, branch: payload.branch ?? null, managerName: payload.managerName ?? null, employmentType: payload.employmentType ?? null, phone: payload.phone ?? null, emergencyContact: payload.emergencyContact ?? null, joiningDate: payload.joiningDate ?? null, nationalityType: payload.nationalityType, nationalityCountry: payload.nationalityCountry ?? null, cvAttachment: payload.cvAttachment ?? null, passportAttachment: payload.passportAttachment ?? null, criminalClearanceAttachment: payload.criminalClearanceAttachment ?? null, nationalIdAttachment: payload.nationalIdAttachment ?? null, workPermitAttachment: payload.workPermitAttachment ?? null, visaAttachment: payload.visaAttachment ?? null, certificatesAttachment: payload.certificatesAttachment ?? null, referenceLettersAttachment: payload.referenceLettersAttachment ?? null, employeeCode: `EMP-${employeeId.slice(-6).toUpperCase()}`, status: 'active', createdAt, updatedAt: createdAt }, { merge: true });
       await logHrAudit(tenantId, 'employee', employeeId, 'employee_created', { email, title: payload.title });
       return NextResponse.json({ ok: true, id: employeeId }, { status: 201 });
     }
 
     if (payload.entityType === 'payroll') {
+      if (new Date(payload.periodEnd).getTime() < new Date(payload.periodStart).getTime()) {
+        throw new HrValidationError('Payroll period end date cannot be before period start date.');
+      }
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      const contractSnap = await adminFirestore.collection(col.bizContracts).where('tenantId', '==', tenantId).where('employeeId', '==', payload.employeeId).limit(200).get();
+      const hasCoveringContract = contractSnap.docs.some((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        const start = new Date(String(data.startDate ?? '')).getTime();
+        const endRaw = data.endDate ? new Date(String(data.endDate)).getTime() : Number.POSITIVE_INFINITY;
+        return !Number.isNaN(start) && start <= new Date(payload.periodEnd).getTime() && endRaw >= new Date(payload.periodStart).getTime();
+      });
+      if (!hasCoveringContract) throw new HrValidationError('No active contract found for employee in selected payroll period.');
+
+      const attendanceSnap = await adminFirestore.collection(col.bizAttendance).where('tenantId', '==', tenantId).where('employeeId', '==', payload.employeeId).limit(500).get();
+      const hasAttendanceInPeriod = attendanceSnap.docs.some((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        const checkIn = new Date(String(data.checkIn ?? '')).getTime();
+        return !Number.isNaN(checkIn) && checkIn >= new Date(payload.periodStart).getTime() && checkIn <= new Date(payload.periodEnd).getTime();
+      });
+      if (!hasAttendanceInPeriod) throw new HrValidationError('No attendance records found for employee in selected payroll period.');
+
       const runId = makeId(col.bizPayrollRuns);
       await adminFirestore.collection(col.bizPayrollRuns).doc(runId).set({ id: runId, tenantId, periodStart: payload.periodStart, periodEnd: payload.periodEnd, inputsSummary: payload.inputsSummary ?? null, createdAt, updatedAt: createdAt });
       const payslipId = makeId(col.bizPayslips);
       await adminFirestore.collection(col.bizPayslips).doc(payslipId).set({ id: payslipId, tenantId, payrollRunId: runId, employeeId: payload.employeeId, netPay: payload.netPay, createdAt });
       await logHrAudit(tenantId, 'payroll_run', runId, 'payroll_submitted', { source: 'hr-module' });
       return NextResponse.json({ ok: true, id: runId }, { status: 201 });
+    }
+
+    if (payload.entityType === 'contract') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      if (payload.endDate && new Date(payload.endDate).getTime() < new Date(payload.startDate).getTime()) {
+        throw new HrValidationError('Contract end date cannot be before start date.');
+      }
+    }
+
+    if (payload.entityType === 'attendance') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      if (payload.checkIn && payload.checkOut && new Date(payload.checkOut).getTime() < new Date(payload.checkIn).getTime()) {
+        throw new HrValidationError('Attendance check-out cannot be before check-in.');
+      }
+    }
+
+    if (payload.entityType === 'shift') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      if (payload.branch?.trim()) {
+        const units = await loadTenantOrgUnits(tenantId);
+        const branchExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'branch' && normalize(String(unit.name ?? '')) === normalize(payload.branch));
+        if (!branchExists) throw new HrValidationError(`Branch "${payload.branch}" does not exist.`);
+      }
+    }
+
+    if (payload.entityType === 'leave') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      if (new Date(payload.endDate).getTime() < new Date(payload.startDate).getTime()) {
+        throw new HrValidationError('Leave end date cannot be before start date.');
+      }
+    }
+
+    if (payload.entityType === 'attendance_correction') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      if (payload.attendanceId) {
+        const ref = await assertTenantOwnership(col.bizAttendance, payload.attendanceId, tenantId);
+        if (!ref) throw new HrValidationError('Referenced attendance record does not exist for this tenant.');
+      }
+    }
+
+    if (payload.entityType === 'overtime') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+      const contractSnap = await adminFirestore.collection(col.bizContracts).where('tenantId', '==', tenantId).where('employeeId', '==', payload.employeeId).limit(200).get();
+      if (contractSnap.empty) throw new HrValidationError('Create employee contract before adding overtime records.');
+    }
+
+    if (payload.entityType === 'onboarding') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+    }
+
+    if (payload.entityType === 'requisition') {
+      const units = await loadTenantOrgUnits(tenantId);
+      const deptExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'department' && normalize(String(unit.name ?? '')) === normalize(payload.department));
+      if (!deptExists) throw new HrValidationError(`Department "${payload.department}" does not exist in organization structure.`);
+      if (payload.branch?.trim()) {
+        const branchExists = units.some((unit) => normalize(String(unit.unitType ?? '')) === 'branch' && normalize(String(unit.name ?? '')) === normalize(payload.branch));
+        if (!branchExists) throw new HrValidationError(`Branch "${payload.branch}" does not exist.`);
+      }
+    }
+
+    if (payload.entityType === 'interview') {
+      const ref = await assertTenantOwnership(col.bizCandidates, payload.candidateId, tenantId);
+      if (!ref) throw new HrValidationError('Candidate does not exist for interview scheduling.');
+    }
+
+    if (payload.entityType === 'offer') {
+      const ref = await assertTenantOwnership(col.bizCandidates, payload.candidateId, tenantId);
+      if (!ref) throw new HrValidationError('Candidate does not exist for offer creation.');
+    }
+
+    if (payload.entityType === 'expense' || payload.entityType === 'travel' || payload.entityType === 'performance' || payload.entityType === 'goal' || payload.entityType === 'learning' || payload.entityType === 'certification' || payload.entityType === 'asset' || payload.entityType === 'document' || payload.entityType === 'incident' || payload.entityType === 'discipline' || payload.entityType === 'offboarding') {
+      await assertEmployeeExists(tenantId, payload.employeeId);
+    }
+
+    if (payload.entityType === 'travel' && new Date(payload.endDate).getTime() < new Date(payload.startDate).getTime()) {
+      throw new HrValidationError('Travel end date cannot be before start date.');
+    }
+
+    if (payload.entityType === 'offboarding') {
+      const employee = await assertEmployeeExists(tenantId, payload.employeeId);
+      const joinDateRaw = String(employee.joiningDate ?? '');
+      if (joinDateRaw) {
+        const joinDate = new Date(joinDateRaw).getTime();
+        const lwd = new Date(payload.lastWorkingDate).getTime();
+        if (!Number.isNaN(joinDate) && !Number.isNaN(lwd) && lwd < joinDate) {
+          throw new HrValidationError('Last working date cannot be before employee joining date.');
+        }
+      }
     }
 
     const collectionMap: Record<string, string> = {
@@ -524,6 +738,7 @@ export async function POST(request: NextRequest) {
     await logHrAudit(tenantId, payload.entityType, id, `${payload.entityType}_created`);
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (error) {
+    if (error instanceof HrValidationError) return NextResponse.json({ ok: false, error: error.message, code: 'HR_VALIDATION_FAILED' }, { status: error.status });
     if (error instanceof z.ZodError) return NextResponse.json({ ok: false, error: 'Invalid HR payload', issues: error.flatten() }, { status: 400 });
     const message = error instanceof Error ? error.message : 'Failed to save HR operation';
     const description = getFirestoreErrorDescription(message);
