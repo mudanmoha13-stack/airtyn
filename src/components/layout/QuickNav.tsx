@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { useNavigationFeedback } from './NavigationFeedback';
-import { buildQuickNavItems, getAppProduct, PRODUCT_SWITCH_ITEMS, type NavItemConfig } from '@/lib/navigation';
+import { buildQuickNavItems, filterBusinessNavItems, getAppProduct, PRODUCT_SWITCH_ITEMS, type NavItemConfig } from '@/lib/navigation';
 
 type QuickNavItem = NavItemConfig;
 
@@ -103,7 +103,7 @@ export const QuickNav = () => {
   const router = useRouter();
   const product = getAppProduct(pathname);
   const currentProduct = PRODUCT_SWITCH_ITEMS[product];
-  const { projects, canManageMembers } = useAppState();
+  const { projects, canManageMembers, currentTenant } = useAppState();
   const {
     quickNavOpen,
     closeQuickNav,
@@ -141,12 +141,16 @@ export const QuickNav = () => {
       canManageMembers,
     });
 
-    return baseItems.filter((item) => {
+    // Hide business quick-nav entries for modules the tenant hasn't enabled.
+    // Project-mode items don't carry a `gate`, so they default to 'always' and pass through.
+    const gatedItems = filterBusinessNavItems(baseItems, currentTenant?.enabledModules);
+
+    return gatedItems.filter((item) => {
       if (!query.trim()) return true;
       const target = `${item.label} ${item.group} ${item.href}`.toLowerCase();
       return target.includes(query.toLowerCase());
     });
-  }, [canManageMembers, projects, query]);
+  }, [canManageMembers, currentTenant?.enabledModules, projects, query]);
 
   const itemsByHref = useMemo(() => new Map(items.map((item) => [item.href, item])), [items]);
 

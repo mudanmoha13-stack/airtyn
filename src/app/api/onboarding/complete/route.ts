@@ -12,6 +12,7 @@ const completeSchema = z.object({
   businessName: z.string().min(2),
   workspaceName: z.string().optional(),
   businessType: z.string().optional(),
+  enabledModules: z.array(z.string()).optional(),
   password: z.string().min(10),
 });
 
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest) {
           businessName: payload.businessName,
           workspaceName: payload.workspaceName ?? null,
           businessType: payload.businessType ?? null,
+          enabledModules: payload.enabledModules ?? null,
         },
       },
       { merge: true }

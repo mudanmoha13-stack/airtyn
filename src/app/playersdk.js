@@ -1,0 +1,1 @@
+https://cloudfront.xp-assets.aiv-cdn.net/family/web/ATVWebPlayerSDKLoader-2.0/prod/WebPlayerSDK.js

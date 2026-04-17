@@ -41,11 +41,32 @@ import { buildBusinessWorkspaceHref } from '@/lib/business-navigation';
 
 export type AppProduct = 'projects' | 'business';
 
+/**
+ * Gate keys used to decide whether a business nav item should be visible based on the
+ * tenant's enabledModules. Items without a gate (or with gate 'always') are always shown.
+ * 'general' is an alias for 'always' used to label utility/common links (Business Settings,
+ * Integrations, Automations, Business HQ).
+ */
+export type BusinessNavGate =
+  | 'always'
+  | 'general'
+  | 'hr'
+  | 'crm'
+  | 'restaurant'
+  | 'cosmetics'
+  | 'finance'
+  | 'inventory'
+  | 'projects'
+  | 'procurement'
+  | 'support'
+  | 'analytics';
+
 export type NavItemConfig = {
   href: string;
   label: string;
   icon: LucideIcon;
   group: string;
+  gate?: BusinessNavGate;
 };
 
 export type NavSectionConfig = {
@@ -100,38 +121,55 @@ export const PROJECT_SETTING_ITEMS: NavItemConfig[] = [
 ];
 
 export const BUSINESS_OVERVIEW_ITEMS: NavItemConfig[] = [
-  { icon: Building2, label: 'Business HQ', href: '/business', group: 'Overview' },
-  { icon: Briefcase, label: 'Projects', href: buildBusinessWorkspaceHref('projects'), group: 'Overview' },
-  { icon: Workflow, label: 'Automations', href: '/business/automations', group: 'Overview' },
+  { icon: Building2, label: 'Business HQ', href: '/business', group: 'Overview', gate: 'general' },
+  { icon: Briefcase, label: 'Projects', href: buildBusinessWorkspaceHref('projects'), group: 'Overview', gate: 'projects' },
+  { icon: Workflow, label: 'Automations', href: '/business/automations', group: 'Overview', gate: 'general' },
 ];
 
 export const BUSINESS_COMMERCIAL_ITEMS: NavItemConfig[] = [
-  { icon: ShoppingCart, label: 'Sales & CRM', href: buildBusinessWorkspaceHref('sales'), group: 'Commercial' },
-  { icon: Headset, label: 'Support', href: buildBusinessWorkspaceHref('support'), group: 'Commercial' },
-  { icon: BarChart3, label: 'Analytics', href: buildBusinessWorkspaceHref('analytics'), group: 'Commercial' },
+  { icon: ShoppingCart, label: 'Sales & CRM', href: buildBusinessWorkspaceHref('sales'), group: 'Commercial', gate: 'crm' },
+  { icon: Headset, label: 'Support', href: buildBusinessWorkspaceHref('support'), group: 'Commercial', gate: 'support' },
+  { icon: BarChart3, label: 'Analytics', href: buildBusinessWorkspaceHref('analytics'), group: 'Commercial', gate: 'analytics' },
 ];
 
 export const BUSINESS_OPERATIONS_ITEMS: NavItemConfig[] = [
-  { icon: UtensilsCrossed, label: 'Restaurant', href: '/business/restaurant', group: 'Operations' },
-  { icon: Sparkles, label: 'Cosmetics', href: '/business/cosmetics', group: 'Operations' },
-  { icon: Package2, label: 'Inventory', href: buildBusinessWorkspaceHref('inventory'), group: 'Operations' },
-  { icon: ShoppingCart, label: 'Procurement', href: buildBusinessWorkspaceHref('procurement'), group: 'Operations' },
-  { icon: Wallet, label: 'HR', href: buildBusinessWorkspaceHref('hr'), group: 'Operations' },
+  { icon: UtensilsCrossed, label: 'Restaurant', href: '/business/restaurant', group: 'Operations', gate: 'restaurant' },
+  { icon: Sparkles, label: 'Cosmetics', href: '/business/cosmetics', group: 'Operations', gate: 'cosmetics' },
+  { icon: Package2, label: 'Inventory', href: buildBusinessWorkspaceHref('inventory'), group: 'Operations', gate: 'inventory' },
+  { icon: ShoppingCart, label: 'Procurement', href: buildBusinessWorkspaceHref('procurement'), group: 'Operations', gate: 'procurement' },
+  { icon: Wallet, label: 'HR', href: buildBusinessWorkspaceHref('hr'), group: 'Operations', gate: 'hr' },
 ];
 
 export const BUSINESS_FINANCE_ITEMS: NavItemConfig[] = [
-  { icon: CircleDollarSign, label: 'Accounting', href: buildBusinessWorkspaceHref('finance'), group: 'Finance' },
-  { icon: Webhook, label: 'Integrations', href: '/business/integrations', group: 'Finance' },
-  { icon: Settings, label: 'Business Settings', href: '/business/settings', group: 'Finance' },
+  { icon: CircleDollarSign, label: 'Accounting', href: buildBusinessWorkspaceHref('finance'), group: 'Finance', gate: 'finance' },
+  { icon: Webhook, label: 'Integrations', href: '/business/integrations', group: 'Finance', gate: 'general' },
+  { icon: Settings, label: 'Business Settings', href: '/business/settings', group: 'Finance', gate: 'general' },
 ];
 
 export const BUSINESS_BOTTOM_NAV_ITEMS: NavItemConfig[] = [
-  { href: '/business', label: 'HQ', icon: Building2, group: 'Overview' },
-  { href: buildBusinessWorkspaceHref('sales'), label: 'Sales', icon: ShoppingCart, group: 'Commercial' },
-  { href: buildBusinessWorkspaceHref('finance'), label: 'Accounting', icon: CircleDollarSign, group: 'Finance' },
-  { href: buildBusinessWorkspaceHref('inventory'), label: 'Stock', icon: Package2, group: 'Operations' },
-  { href: buildBusinessWorkspaceHref('hr'), label: 'HR', icon: Wallet, group: 'Operations' },
+  { href: '/business', label: 'HQ', icon: Building2, group: 'Overview', gate: 'general' },
+  { href: buildBusinessWorkspaceHref('sales'), label: 'Sales', icon: ShoppingCart, group: 'Commercial', gate: 'crm' },
+  { href: buildBusinessWorkspaceHref('finance'), label: 'Accounting', icon: CircleDollarSign, group: 'Finance', gate: 'finance' },
+  { href: buildBusinessWorkspaceHref('inventory'), label: 'Stock', icon: Package2, group: 'Operations', gate: 'inventory' },
+  { href: buildBusinessWorkspaceHref('hr'), label: 'HR', icon: Wallet, group: 'Operations', gate: 'hr' },
 ];
+
+/**
+ * Filter any flat nav item list (e.g. the mobile bottom nav) by the tenant's enabledModules.
+ * Same gating semantics as {@link filterBusinessSections}.
+ */
+export function filterBusinessNavItems(
+  items: NavItemConfig[],
+  enabledModules?: string[] | null,
+): NavItemConfig[] {
+  if (!enabledModules || enabledModules.length === 0) return items;
+  const enabledSet = new Set(enabledModules.map((m) => m.toLowerCase()));
+  return items.filter((item) => {
+    const gate = item.gate ?? 'always';
+    if (gate === 'always' || gate === 'general') return true;
+    return enabledSet.has(gate);
+  });
+}
 
 export const BUSINESS_SECTIONS: NavSectionConfig[] = [
   { title: 'Overview', items: BUSINESS_OVERVIEW_ITEMS },
@@ -139,6 +177,33 @@ export const BUSINESS_SECTIONS: NavSectionConfig[] = [
   { title: 'Operations', items: BUSINESS_OPERATIONS_ITEMS },
   { title: 'Finance', items: BUSINESS_FINANCE_ITEMS },
 ];
+
+/**
+ * Filter business sidebar sections so the tenant only sees:
+ *   - Items gated 'always' or 'general' (common links like Business HQ, Automations, Integrations, Business Settings).
+ *   - Items gated to a module that is in `enabledModules`.
+ * Sections that end up with no items are dropped entirely.
+ *
+ * If `enabledModules` is empty/undefined (legacy tenants or projects mode), no filtering is applied.
+ */
+export function filterBusinessSections(
+  sections: NavSectionConfig[],
+  enabledModules?: string[] | null,
+): NavSectionConfig[] {
+  if (!enabledModules || enabledModules.length === 0) return sections;
+  const enabledSet = new Set(enabledModules.map((m) => m.toLowerCase()));
+
+  return sections
+    .map((section) => {
+      const items = section.items.filter((item) => {
+        const gate = item.gate ?? 'always';
+        if (gate === 'always' || gate === 'general') return true;
+        return enabledSet.has(gate);
+      });
+      return { ...section, items };
+    })
+    .filter((section) => section.items.length > 0);
+}
 
 export const buildQuickNavItems = ({
   projects,

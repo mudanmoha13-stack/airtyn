@@ -30,6 +30,11 @@ const createSchema = z.discriminatedUnion('entityType', [
     branch: z.string().optional(),
     costCenter: z.string().optional(),
     headcountPlan: z.number().int().nonnegative().optional(),
+    unitCode: z.string().optional(),
+    managerName: z.string().optional(),
+    status: z.string().optional(),
+    effectiveDate: z.string().datetime().optional(),
+    description: z.string().optional(),
   }),
   z.object({
     entityType: z.literal('candidate'),
@@ -492,6 +497,8 @@ export async function POST(request: NextRequest) {
       ? { id, tenantId, employeeId: payload.employeeId, type: payload.contractType, startDate: payload.startDate, endDate: payload.endDate ?? null, salaryStructure: payload.salaryStructure ?? null, probationEndDate: payload.probationEndDate ?? null, createdAt, updatedAt: createdAt }
       : payload.entityType === 'attendance'
         ? { id, tenantId, employeeId: payload.employeeId, checkIn: payload.checkIn ?? createdAt, checkOut: payload.checkOut ?? null, shiftLabel: payload.shiftLabel ?? null, createdAt, updatedAt: createdAt }
+        : payload.entityType === 'organization'
+          ? { id, tenantId, name: payload.name.trim(), unitType: payload.unitType.trim().toLowerCase(), parentName: payload.parentName?.trim() || null, branch: payload.branch?.trim() || null, costCenter: payload.costCenter?.trim() || null, headcountPlan: payload.headcountPlan ?? 0, unitCode: payload.unitCode?.trim() || null, managerName: payload.managerName?.trim() || null, status: payload.status?.trim() || 'active', effectiveDate: payload.effectiveDate ?? null, description: payload.description?.trim() || null, createdAt, updatedAt: createdAt }
         : payload.entityType === 'attendance_correction'
           ? { id, tenantId, ...payload, status: 'requested', createdAt, updatedAt: createdAt }
           : payload.entityType === 'overtime'

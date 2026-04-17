@@ -173,6 +173,7 @@ interface AppState {
     password: string;
     mode?: 'projects' | 'business';
     businessType?: string;
+    enabledModules?: string[];
   }) => void;
   inviteUser: (email: string, role: UserRole) => void;
   acceptInvitation: (invitationId: string, payload: { name: string; password: string }) => { ok: boolean; message?: string };
@@ -866,7 +867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return email.toLowerCase() in state.credentials;
   };
 
-  const completeOnboarding = ({ tenantName, workspaceName, name, email, password, mode, businessType }: {
+  const completeOnboarding = ({ tenantName, workspaceName, name, email, password, mode, businessType, enabledModules }: {
     tenantName: string;
     workspaceName: string;
     name: string;
@@ -874,6 +875,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password: string;
     mode?: 'projects' | 'business';
     businessType?: string;
+    enabledModules?: string[];
   }) => {
     const now = new Date().toISOString();
     const tenantId = uid('tenant');
@@ -884,11 +886,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       name: workspaceName,
       createdAt: now,
     };
+    // Normalize: if a caller supplies enabledModules use it, otherwise derive from legacy businessType so
+    // existing flows keep working. Projects mode doesn't restrict dashboard modules.
+    const normalizedEnabled = (() => {
+      if (mode !== 'business') return undefined;
+      if (enabledModules && enabledModules.length > 0) {
+        return Array.from(new Set(enabledModules.map((m) => m.trim().toLowerCase()).filter(Boolean)));
+      }
+      const bt = (businessType ?? '').trim().toLowerCase();
+      if (!bt) return undefined;
+      if (bt === 'full') return undefined; // full access = no filter
+      return [bt];
+    })();
     const tenant: Tenant = {
       id: tenantId,
       name: tenantName,
       slug: slugify(tenantName),
       plan: 'free',
+      businessType: mode === 'business' ? (businessType ?? null) : null,
+      enabledModules: normalizedEnabled,
     };
     const owner: User = {
       id: ownerId,
@@ -998,6 +1014,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           workspace,
           owner,
           businessType: businessType ?? null,
+          enabledModules: normalizedEnabled ?? null,
         })
       );
     }

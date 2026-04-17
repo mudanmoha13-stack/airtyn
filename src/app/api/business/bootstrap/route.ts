@@ -23,6 +23,7 @@ const bootstrapSchema = z.object({
     avatarUrl: z.string().optional(),
   }),
   businessType: z.string().optional(),
+  enabledModules: z.array(z.string()).nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
           ...payload.tenant,
           ownerEmail,
           businessType: payload.businessType ?? null,
+          enabledModules: payload.enabledModules ?? null,
           status: 'active',
           updatedAt: nowIso(),
           createdAt: nowIso(),
@@ -80,6 +82,7 @@ export async function POST(request: NextRequest) {
         ownerEmail,
         ownerName: payload.owner.name,
         businessType: payload.businessType ?? 'unspecified',
+        enabledModules: payload.enabledModules ?? null,
       },
       createdAt: nowIso(),
     });

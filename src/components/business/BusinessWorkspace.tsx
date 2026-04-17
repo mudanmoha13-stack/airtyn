@@ -32,6 +32,19 @@ export function BusinessWorkspace() {
   const normalizedBusinessType = (currentTenant?.businessType ?? '').trim().toLowerCase();
   const isRestaurantWorkspace = normalizedBusinessType === 'restaurant' || normalizedBusinessType === 'coffee';
 
+  // Filter home cards to only modules the tenant enabled at onboarding (or via add-ons).
+  // 'crm' selection maps to the 'sales' module key in BUSINESS_MODULE_SUMMARIES.
+  const enabled = currentTenant?.enabledModules;
+  const hasRestriction = Array.isArray(enabled) && enabled.length > 0;
+  const enabledSet = new Set((enabled ?? []).map((m) => m.toLowerCase()));
+  const visibleHomeModules = hasRestriction
+    ? HOME_MODULES.filter((module) => {
+        // 'sales' card represents CRM selection.
+        if (module.key === 'sales') return enabledSet.has('crm') || enabledSet.has('sales');
+        return enabledSet.has(module.key);
+      })
+    : HOME_MODULES;
+
   useEffect(() => {
     if (!activeModule) return;
     setVisitedModules((current) => (current.includes(activeModule) ? current : [...current, activeModule]));
@@ -58,7 +71,7 @@ export function BusinessWorkspace() {
           {isRestaurantWorkspace ? <RestaurantOperatingSystemOverview businessType={currentTenant?.businessType} /> : null}
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {HOME_MODULES.map((module) => (
+            {visibleHomeModules.map((module) => (
               <Link key={module.key} href={buildBusinessWorkspaceHref(module.key === 'crm' ? 'sales' : module.key)} className="group block focus:outline-none">
                 <Card className="glass-card h-full border-white/5 transition-all duration-150 group-hover:border-primary/20 group-hover:bg-white/[0.05]">
                   <CardHeader>

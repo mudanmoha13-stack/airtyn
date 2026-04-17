@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppState } from '@/lib/store';
+import { Users, ShoppingCart, UtensilsCrossed, Sparkles, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type OnboardingMode = 'projects' | 'business';
 type Step = 'password' | 'details';
@@ -20,17 +21,48 @@ type SessionResponse = {
   error?: string;
 };
 
-const BUSINESS_TYPES = [
-  { value: 'restaurant', label: 'Restaurant (POS, Kitchen, Inventory, Procurement, Finance, HR, CRM)' },
-  { value: 'crm', label: 'Sales & CRM' },
-  { value: 'finance', label: 'Finance & Accounting' },
-  { value: 'hr', label: 'HR & Payroll' },
-  { value: 'inventory', label: 'Inventory & Supply Chain' },
-  { value: 'procurement', label: 'Procurement & Vendors' },
-  { value: 'support', label: 'Customer Support' },
-  { value: 'analytics', label: 'Analytics & BI' },
-  { value: 'full', label: 'Full Business OS (All Modules)' },
+type ModuleGroup = 'foundational' | 'vertical';
+
+type InitialModuleOption = {
+  value: 'hr' | 'crm' | 'restaurant' | 'cosmetics';
+  label: string;
+  summary: string;
+  icon: React.ComponentType<{ className?: string }>;
+  group: ModuleGroup;
+};
+
+// Only four modules are eligible at onboarding. Users can add more later from the dashboard as add-ons.
+// Selection rules:
+//   - HR and CRM are "foundational" — can be selected together.
+//   - Restaurant and Cosmetics are "vertical" — mutually exclusive, and cannot be mixed with foundational.
+const INITIAL_MODULE_OPTIONS: InitialModuleOption[] = [
+  { value: 'hr', label: 'HRM', summary: 'Employee records, payroll, attendance, and people ops.', icon: Users, group: 'foundational' },
+  { value: 'crm', label: 'CRM', summary: 'Leads, contacts, deals, pipelines, and sales activity.', icon: ShoppingCart, group: 'foundational' },
+  { value: 'restaurant', label: 'Restaurant POS', summary: 'POS, kitchen, tables, menus, and hospitality flows.', icon: UtensilsCrossed, group: 'vertical' },
+  { value: 'cosmetics', label: 'Cosmetics Shop', summary: 'Beauty retail POS, appointments, loyalty, and inventory.', icon: Sparkles, group: 'vertical' },
 ];
+
+function applyModuleToggle(
+  current: InitialModuleOption['value'][],
+  toggled: InitialModuleOption['value'],
+): InitialModuleOption['value'][] {
+  const option = INITIAL_MODULE_OPTIONS.find((opt) => opt.value === toggled);
+  if (!option) return current;
+  const hasToggled = current.includes(toggled);
+
+  if (option.group === 'vertical') {
+    // Verticals are mutually exclusive and clear any foundational picks.
+    return hasToggled ? [] : [toggled];
+  }
+  // Foundational: clear any vertical; toggle within the foundational set.
+  const withoutVerticals = current.filter((val) => {
+    const opt = INITIAL_MODULE_OPTIONS.find((o) => o.value === val);
+    return opt?.group === 'foundational';
+  });
+  return hasToggled
+    ? withoutVerticals.filter((val) => val !== toggled)
+    : Array.from(new Set([...withoutVerticals, toggled]));
+}
 
 function validatePassword(password: string): string[] {
   const errors: string[] = [];
@@ -62,9 +94,12 @@ export default function ConfirmOnboardingPage() {
   const [ownerName, setOwnerName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
-  const [businessType, setBusinessType] = useState('');
+  const [selectedModules, setSelectedModules] = useState<InitialModuleOption['value'][]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Primary businessType = the first selected module (kept for legacy template activation like 'restaurant').
+  const businessType = selectedModules[0] ?? '';
 
   const passwordIssues = useMemo(() => validatePassword(password), [password]);
 
@@ -129,6 +164,10 @@ export default function ConfirmOnboardingPage() {
         throw new Error('Workspace name is required.');
       }
 
+      if (mode === 'business' && selectedModules.length === 0) {
+        throw new Error('Please select at least one module to get started.');
+      }
+
       completeOnboarding({
         tenantName: businessName,
         workspaceName: finalWorkspaceName,
@@ -137,6 +176,7 @@ export default function ConfirmOnboardingPage() {
         password,
         mode,
         businessType: mode === 'business' ? businessType : undefined,
+        enabledModules: mode === 'business' ? selectedModules : undefined,
       });
 
       const response = await fetch('/api/onboarding/complete', {
@@ -149,6 +189,7 @@ export default function ConfirmOnboardingPage() {
           businessName,
           workspaceName: finalWorkspaceName,
           businessType: mode === 'business' ? businessType : undefined,
+          enabledModules: mode === 'business' ? selectedModules : undefined,
           password,
         }),
       });
@@ -232,18 +273,61 @@ export default function ConfirmOnboardingPage() {
                   <Input id="workspace-name" value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} required />
                 </div>
               ) : (
-                <div className="col-span-2 space-y-1.5">
-                  <Label htmlFor="business-type">Primary Business Focus</Label>
-                  <Select value={businessType} onValueChange={setBusinessType}>
-                    <SelectTrigger id="business-type">
-                      <SelectValue placeholder="Select your primary focus..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BUSINESS_TYPES.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="col-span-2 space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <Label>Which module do you want to start with?</Label>
+                    <span className="text-[11px] text-muted-foreground">
+                      HRM + CRM can be combined • Restaurant or Cosmetics only
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {INITIAL_MODULE_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const isSelected = selectedModules.includes(option.value);
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setSelectedModules((current) => applyModuleToggle(current, option.value))
+                          }
+                          aria-pressed={isSelected}
+                          className={cn(
+                            'group relative flex items-start gap-3 rounded-lg border p-3 text-left transition-all',
+                            isSelected
+                              ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40'
+                              : 'border-input bg-background hover:border-primary/30 hover:bg-accent/40',
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md transition-colors',
+                              isSelected
+                                ? 'bg-primary/15 text-primary'
+                                : 'bg-muted text-muted-foreground group-hover:text-foreground',
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold">{option.label}</span>
+                              <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                {option.group === 'foundational' ? 'Combinable' : 'Exclusive'}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{option.summary}</p>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    You can add other modules later from the dashboard as add-ons.
+                  </p>
                 </div>
               )}
 
@@ -253,7 +337,10 @@ export default function ConfirmOnboardingPage() {
                 <Button type="button" variant="outline" onClick={() => setStep('password')}>
                   Back
                 </Button>
-                <Button type="submit" disabled={submitting}>
+                <Button
+                  type="submit"
+                  disabled={submitting || (mode === 'business' && selectedModules.length === 0)}
+                >
                   {submitting ? 'Finishing onboarding...' : 'Finish onboarding'}
                 </Button>
               </div>

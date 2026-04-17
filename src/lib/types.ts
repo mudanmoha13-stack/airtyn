@@ -66,6 +66,14 @@ export interface Tenant {
   name: string;
   slug: string;
   plan: 'free' | 'pro' | 'enterprise';
+  /** Legacy: primary business type selected at onboarding ('restaurant' | 'crm' | 'hr' | 'cosmetics' | ...). */
+  businessType?: string | null;
+  /**
+   * Set of modules the tenant activated at onboarding (and via add-ons afterwards).
+   * Drives which modules appear on the Business dashboard and in the Business module dock.
+   * Valid values mirror BusinessModuleKey plus the 'restaurant' vertical.
+   */
+  enabledModules?: string[];
 }
 
 // ─── Projects & Spaces ───────────────────────────────────────────────────────

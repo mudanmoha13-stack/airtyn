@@ -6,7 +6,7 @@ import { BarChart3, Brain, Calendar, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppState } from '@/lib/store';
 import { useNavigationFeedback } from './NavigationFeedback';
-import { BUSINESS_BOTTOM_NAV_ITEMS, getAppProduct } from '@/lib/navigation';
+import { BUSINESS_BOTTOM_NAV_ITEMS, filterBusinessNavItems, getAppProduct } from '@/lib/navigation';
 import { matchesBusinessHref } from '@/lib/business-navigation';
 
 export const MobileBottomNav = () => {
@@ -14,7 +14,7 @@ export const MobileBottomNav = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { beginNavigation, registerRecentPage, pendingHref } = useNavigationFeedback();
-  const { projects } = useAppState();
+  const { projects, currentTenant } = useAppState();
   const product = getAppProduct(pathname);
 
   const primaryProjectHref = useMemo(() => {
@@ -24,7 +24,7 @@ export const MobileBottomNav = () => {
 
   const items = useMemo(
     () => product === 'business'
-      ? BUSINESS_BOTTOM_NAV_ITEMS
+      ? filterBusinessNavItems(BUSINESS_BOTTOM_NAV_ITEMS, currentTenant?.enabledModules)
       : [
           { href: '/', label: 'Home', icon: FolderKanban, group: 'General' },
           { href: primaryProjectHref, label: 'Projects', icon: FolderKanban, group: 'Projects' },
@@ -32,7 +32,7 @@ export const MobileBottomNav = () => {
           { href: '/reports', label: 'Reports', icon: BarChart3, group: 'Views' },
           { href: '/intelligence', label: 'AI', icon: Brain, group: 'Scale' },
         ],
-    [primaryProjectHref, product]
+    [primaryProjectHref, product, currentTenant?.enabledModules]
   );
 
   useEffect(() => {

@@ -150,7 +150,10 @@ const MODULE_TABS: Record<BusinessModuleKey, ModuleTab[]> = {
   hr: [
     { id: 'employees', label: 'Employees', sectionIds: ['operations'], default: true },
     { id: 'contracts-hiring', label: 'Contracts & Hiring', sectionIds: ['workflows'] },
+    { id: 'workforce', label: 'Workforce', sectionIds: ['operations'] },
     { id: 'payroll', label: 'Payroll', sectionIds: ['governance'] },
+    { id: 'operations', label: 'Operations', sectionIds: ['operations'] },
+    { id: 'manager', label: 'Manager', sectionIds: ['governance'] },
     { id: 'reference', label: 'Reference', sectionIds: ['core-objects', 'features'] },
   ],
   inventory: [
@@ -1492,7 +1495,7 @@ export function BusinessModulePage({
         ) : moduleKey === 'inventory' ? (
           <InventoryModuleContent module={module} />
         ) : moduleKey === 'hr' ? (
-          <HrOperationsContent module={module} />
+          <HrOperationsContent module={module} moduleTab={activeTab} />
         ) : (
           <GenericModuleContent module={module} moduleKey={moduleKey} labels={labels} />
         )}

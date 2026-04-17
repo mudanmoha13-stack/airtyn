@@ -39,6 +39,7 @@ import {
   PROJECT_SCALE_ITEMS,
   PROJECT_SETTING_ITEMS,
   PROJECT_VIEW_ITEMS,
+  filterBusinessSections,
   getAppProduct,
   type NavItemConfig,
   type NavSectionConfig,
@@ -274,16 +275,24 @@ export const AppSidebar = () => {
     return [];
   }, [currentBusinessModule, product]);
 
+  // Hide business sidebar items for modules the tenant has not enabled.
+  // Common/general links (Business HQ, Automations, Integrations, Business Settings) and the Products
+  // switcher stay visible regardless. Sections that end up empty are dropped entirely.
+  const businessSections = useMemo(
+    () => filterBusinessSections(BUSINESS_SECTIONS, currentTenant?.enabledModules),
+    [currentTenant?.enabledModules],
+  );
+
   const prefetchTargets = useMemo(() => {
     const staticTargets = [
       ...switcherItems.map((item) => item.href),
       ...projectSections.flatMap((section) => section.items.map((item) => item.href)),
-      ...BUSINESS_SECTIONS.flatMap((section) => section.items.map((item) => item.href)),
+      ...businessSections.flatMap((section) => section.items.map((item) => item.href)),
       ...projects.map((project) => `/projects/${project.id}`),
     ];
 
     return Array.from(new Set(staticTargets));
-  }, [projectSections, projects, switcherItems]);
+  }, [businessSections, projectSections, projects, switcherItems]);
 
   useEffect(() => {
     prefetchTargets.forEach((href) => {
@@ -307,7 +316,7 @@ export const AppSidebar = () => {
       <SidebarContent>
         <SidebarSection title="Products" items={switcherItems} pathname={pathname} searchParams={searchParams} />
 
-        {(product === 'business' ? BUSINESS_SECTIONS : projectSections).map((section) => (
+        {(product === 'business' ? businessSections : projectSections).map((section) => (
           <SidebarSection key={section.title || 'general'} title={section.title} items={section.items} pathname={pathname} searchParams={searchParams} />
         ))}
 
